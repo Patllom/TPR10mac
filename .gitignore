@@ -1,5 +1,6 @@
 .DS_Store
 .superpowers/
+.worktrees/
 tmp/
 node_modules/
 .next/
