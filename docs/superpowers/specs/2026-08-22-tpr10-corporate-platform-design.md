@@ -1,7 +1,7 @@
 # TPR-10 Corporate Website and Admin Platform Design
 
 Date: 2026-08-22  
-Status: Approved design draft, awaiting written-spec review
+Status: Approved
 
 ## 1. Objective
 
