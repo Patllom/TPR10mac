@@ -1,0 +1,14 @@
+.DS_Store
+.superpowers/
+tmp/
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+coverage/
+dist/
+uploads/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
