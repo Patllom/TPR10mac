@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-main: #F8FAFC;
+    --text-main: #0B0F19;
+    --text-muted: #4B5565;
+    --border-main: rgba(249, 115, 22, 0.15);
+  }
+
+  .dark {
+    --bg-main: #050811;
+    --text-main: #F9FAFB;
+    --text-muted: #94A3B8;
+    --border-main: rgba(249, 115, 22, 0.18);
+  }
+
+  html.dark, html.dark body, .dark {
+    background-color: #050811 !important;
+    color: #F9FAFB !important;
+  }
+
+  html:not(.dark), html:not(.dark) body {
+    background-color: #F8FAFC !important;
+    color: #0B0F19 !important;
+  }
+
+  body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden;
+  }
+}
+
+/* High-tech HUD Frosted Glass */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(249, 115, 22, 0.18);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06);
+}
+
+.dark .glass-panel {
+  background: rgba(8, 14, 28, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  box-shadow: 0 10px 35px -5px rgba(0, 0, 0, 0.7);
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.08);
+}
+
+.dark .glass-pill {
+  background: rgba(11, 20, 38, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(249, 115, 22, 0.35);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.6);
+}
