@@ -1,101 +1,77 @@
-# TPR10 Module 0 Architecture Baseline Design
+# เอกสารสถาปัตยกรรมพื้นฐาน Module 0 ของ TPR10
 
-Date: 2026-09-18
-Status: Proposed for user review
+วันที่: 2026-09-18
+สถานะ: รอผู้ใช้ตรวจทาน
+ภาษาเอกสาร: ภาษาไทย โดยคงชื่อเทคนิค, code, path, command และ identifier ที่จำเป็นเป็นภาษาอังกฤษ
 
-## 1. Purpose
+## 1. วัตถุประสงค์
 
-This document defines the technical baseline for TPR10's internal
-operational platform. It turns the approved module sequence into one
-coherent architecture before implementation begins.
+เอกสารนี้กำหนดสถาปัตยกรรมเชิงเทคนิคพื้นฐานสำหรับแพลตฟอร์มปฏิบัติการภายในของ TPR10 โดยเปลี่ยนลำดับการพัฒนาที่อนุมัติแล้วให้เป็นสถาปัตยกรรมเดียวที่สอดคล้องกัน ก่อนเริ่มพัฒนาระบบจริง
 
-The current repository is a Next.js corporate landing page. The platform
-described here adds an internal operational system without mixing protected
-business data into public routes. Its MVP business modules are Online
-Check-in, Field Disbursement, and Asset History. Authentication, scope
-control, files, workflow, notification, and audit are shared platform
-capabilities rather than separate MVP business modules.
+repository ปัจจุบันเป็น Corporate Landing Page ที่สร้างด้วย Next.js แพลตฟอร์มในเอกสารนี้จะเพิ่มระบบปฏิบัติการภายใน โดยไม่ผสมข้อมูลธุรกิจที่ต้องป้องกันเข้ากับเส้นทางสาธารณะ โมดูลธุรกิจของ MVP ได้แก่ Online Check-in, Field Disbursement และ Asset History ส่วน Authentication, การควบคุมขอบเขตข้อมูล, ไฟล์, Workflow, การแจ้งเตือน และ Audit เป็นความสามารถพื้นฐานร่วม ไม่ใช่โมดูลธุรกิจ MVP แยกต่างหาก
 
-This specification is authoritative for the new operational platform. The
-older, historical authentication proposal for public content and sales users
-does not define the roles, data model, or deployment of this platform.
+สเปกนี้เป็นเอกสารอ้างอิงหลักของแพลตฟอร์มปฏิบัติการใหม่ เอกสาร Authentication ในอดีตที่ออกแบบสำหรับผู้ใช้สายเนื้อหาและฝ่ายขายของเว็บไซต์สาธารณะ ไม่ได้กำหนด role, data model หรือ deployment ของแพลตฟอร์มนี้
 
-### A–N baseline map
+### แผนที่ Baseline A–N
 
-| Baseline area | This specification |
+| หัวข้อ Baseline | ส่วนที่อ้างอิงในเอกสารนี้ |
 | --- | --- |
-| A. Purpose and scope | Sections 1–2 |
-| B. Architecture decisions and components | Sections 3–5 |
-| C. Workspace/project isolation | Section 6 |
-| D. Data/ERD baseline | Section 7 |
-| E. Identity, permission, and audit | Section 8 |
-| F. File storage | Section 9 |
-| G. Workflow and notification | Section 10 |
-| H. API convention | Section 11 |
-| I. Online Check-in | Section 12 |
-| J. Field Disbursement | Section 13 |
-| K. Asset History | Section 14 |
-| L. Deployment and operations | Section 15 |
-| M. Delivery gates and production inputs | Sections 17–18 |
-| N. Approval criteria | Section 19 |
+| A. วัตถุประสงค์และขอบเขต | ส่วน 1–2 |
+| B. การตัดสินใจและองค์ประกอบสถาปัตยกรรม | ส่วน 3–5 |
+| C. การแยก Workspace/Project | ส่วน 6 |
+| D. โมเดลข้อมูลพื้นฐานและ ERD | ส่วน 7 |
+| E. ตัวตน สิทธิ์ และ Audit | ส่วน 8 |
+| F. การจัดเก็บไฟล์ | ส่วน 9 |
+| G. Workflow และการแจ้งเตือน | ส่วน 10 |
+| H. มาตรฐาน API | ส่วน 11 |
+| I. Online Check-in | ส่วน 12 |
+| J. Field Disbursement | ส่วน 13 |
+| K. Asset History | ส่วน 14 |
+| L. Deployment และการปฏิบัติการระบบ | ส่วน 15 |
+| M. เกณฑ์ผ่านงานและข้อมูลก่อนใช้งานจริง | ส่วน 17–18 |
+| N. เกณฑ์การอนุมัติ | ส่วน 19 |
 
-## 2. Confirmed Product Constraints
+## 2. ข้อจำกัดของผลิตภัณฑ์ที่ยืนยันแล้ว
 
-- The MVP is for internal users. There is no self-registration, customer
-  portal, social login, or native mobile application in this scope.
-- The first three business modules are Online Check-in, Field Disbursement,
-  and Asset History.
-- The first identity provider is local username/password. The design must
-  permit a future AD, LDAP, Entra ID, or Google provider without changing
-  domain modules.
-- MFA is mandatory for system administrators, approvers, accounting, and
-  finance-data roles. It is configurable for other staff.
-- A user may hold multiple roles and assignments across multiple projects
-  and sites. Access is deny-by-default.
-- Online Check-in is a Mobile Web/PWA experience. It must capture a
-  real-time camera image, GPS, date, and time; file-picker image uploads are
-  not permitted. Offline use requires a supervisor-approved grant scoped to
-  a person, project or site, and time window.
-- Field Disbursement supports Field Expense Advance, General Advance, and
-  Expense Reimbursement. It uses sequential electronic approval, but MVP
-  payment execution is recorded manual payment rather than a bank API.
-- Asset History includes asset master data, categories, relationships,
-  lifecycle events, restricted-event approvals, and optional images.
-- Files are stored on an on-premises NAS through SMB using a service account;
-  the database stores metadata, relationships, versions, and checksums.
-- Initial external email is Gmail through an adapter. The deployment may use
-  Gmail SMTP or the Gmail API without changing application-domain code.
-- The initial operating environment is on-premises with LAN, VPN, internet,
-  and mobile access protected by HTTPS, reverse proxy, and firewall rules.
-- The existing public landing page remains available. Its development port is
-  4000 and its production start port is 4001.
+- MVP ใช้สำหรับผู้ใช้ภายใน ไม่มีการสมัครสมาชิกเอง, customer portal, social login หรือ Native Mobile Application ในขอบเขตนี้
+- โมดูลธุรกิจ 3 โมดูลแรกคือ Online Check-in, Field Disbursement และ Asset History
+- Identity Provider แรกใช้ local username/password แต่การออกแบบต้องรองรับ AD, LDAP, Entra ID หรือ Google ในอนาคตโดยไม่ต้องแก้ domain module
+- MFA เป็นข้อบังคับสำหรับ System Administrator, ผู้อนุมัติ, ฝ่ายบัญชี และ role ที่เข้าถึงข้อมูลการเงิน ส่วนพนักงานกลุ่มอื่นเปิดใช้ได้ตามนโยบาย
+- ผู้ใช้หนึ่งคนมีหลาย role และหลาย assignment ข้ามหลาย project/site ได้ การเข้าถึงใช้หลัก deny-by-default
+- Online Check-in เป็น Mobile Web/PWA ต้องถ่ายภาพจากกล้องแบบ real-time พร้อม GPS, วันที่ และเวลา ห้ามเลือกภาพจาก file picker การใช้งาน offline ต้องมี grant ที่หัวหน้าอนุมัติและผูกกับบุคคล, project หรือ site และช่วงเวลา
+- Field Disbursement รองรับ Field Expense Advance, General Advance และ Expense Reimbursement ใช้การอนุมัติอิเล็กทรอนิกส์แบบลำดับขั้น แต่การจ่ายเงินใน MVP เป็นการบันทึก manual payment ไม่ใช่ Bank API
+- Asset History มีข้อมูลสินทรัพย์หลัก, หมวดหมู่, ความสัมพันธ์, เหตุการณ์ตลอดวงจรชีวิต, การอนุมัติเหตุการณ์ที่ถูกจำกัด และภาพประกอบแบบ optional
+- ไฟล์จริงเก็บใน NAS ภายในองค์กรผ่าน SMB ด้วย service account ส่วนฐานข้อมูลเก็บ metadata, ความสัมพันธ์, version และ checksum
+- ผู้ให้บริการอีเมลภายนอกเริ่มต้นคือ Gmail ผ่าน adapter โดย deployment เลือก Gmail SMTP หรือ Gmail API ได้โดยไม่กระทบ domain code
+- สภาพแวดล้อมแรกเป็น on-premises รองรับ LAN, VPN, internet และ mobile access ผ่าน HTTPS, reverse proxy และ firewall
+- Public Landing Page เดิมต้องใช้งานได้ต่อไป โดย development ใช้ port 4000 และ production start ใช้ port 4001
 
-## 3. Architecture Decisions
+## 3. การตัดสินใจด้านสถาปัตยกรรม
 
-| ID | Decision | Rationale |
+| ID | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
-| AD-01 | Use a modular monolith for MVP: one operational API, one PostgreSQL deployment, and well-bounded domain modules. | It keeps delivery and operations manageable while preserving module boundaries for future extraction. |
-| AD-02 | Keep the existing Next.js application as the web surface. Public and internal routes are separate route areas; protected operations never live in public page components. | This preserves the landing page and avoids an unnecessary frontend rewrite. |
-| AD-03 | Use an ASP.NET Core API with PostgreSQL for protected business logic and data. | It separates client concerns from business authorization, workflow, audit, and NAS access. |
-| AD-04 | Use the MVP deployment profile: Shared Back Office plus Shared Database. Every scoped business record carries an explicit workspace and project boundary. | This is the approved MVP profile; it is simpler to operate while maintaining strict logical isolation. |
-| AD-05 | Prepare for a future Dedicated Back Office plus Dedicated Database profile, but do not implement a separate deployment in MVP. | Domain modules must not assume a permanent single-database topology. |
-| AD-06 | Make access control a combination of role permissions and assignment scope. The API derives scope from the authenticated session and verifies every requested workspace, project, and site. | Hiding UI is not security; server-side authorization must control every sensitive read and mutation. |
-| AD-07 | Treat workflow policies as versioned configuration. A submitted workflow instance is permanently bound to the policy version used at submission. | Approval changes must not rewrite the meaning or path of work already in progress. |
-| AD-08 | Use an adapter boundary for NAS storage, email, identity providers, and future bank integration. | Business modules depend on stable application interfaces, not vendor-specific APIs. |
-| AD-09 | Write audit events for security-sensitive and business-state changes in the same transaction or durable outbox as the primary mutation. | An approved record without attributable history is not acceptable for this platform. |
-| AD-10 | Define REST/JSON APIs from OpenAPI contracts under `/api/v1`. Mutations that can be retried by a PWA or payment operator use idempotency keys. | This supports a Next.js web client, a PWA, integration adapters, and reliable retries. |
+| AD-01 | MVP ใช้ Modular Monolith: มี operational API เดียว, PostgreSQL deployment เดียว และ domain module ที่มีขอบเขตชัดเจน | ลดความซับซ้อนในการพัฒนาและดูแลระบบ ขณะยังคงขอบเขต module เพื่อแยกออกได้ในอนาคต |
+| AD-02 | คง Next.js application เดิมเป็น web surface โดยแยก route area ของ public และ internal ออกจากกัน งานปฏิบัติการที่ต้องป้องกันห้ามอยู่ใน public page component | รักษา Landing Page เดิมและไม่ต้อง rewrite frontend โดยไม่จำเป็น |
+| AD-03 | ใช้ ASP.NET Core API กับ PostgreSQL สำหรับ business logic และข้อมูลที่ต้องป้องกัน | แยกความรับผิดชอบของ client ออกจาก authorization, workflow, audit และการเข้าถึง NAS |
+| AD-04 | ใช้ MVP deployment profile: Shared Back Office + Shared Database ทุก business record ที่อยู่ใน scope ต้องมี workspace และ project boundary ที่ชัดเจน | เป็น profile ที่อนุมัติสำหรับ MVP ดูแลง่ายแต่ยังคง logical isolation อย่างเข้มงวด |
+| AD-05 | เตรียมเส้นทางไปสู่ Dedicated Back Office + Dedicated Database ในอนาคต แต่ไม่สร้าง deployment แยกใน MVP | Domain module ต้องไม่ผูกกับ topology แบบฐานข้อมูลเดียวเป็นการถาวร |
+| AD-06 | การควบคุมสิทธิ์ประกอบด้วย role permission และ assignment scope API สร้าง scope จาก authenticated session และตรวจทุก workspace, project และ site ที่ร้องขอ | การซ่อน UI ไม่ใช่ security ต้องบังคับ authorization ฝั่ง server ทุก sensitive read และ mutation |
+| AD-07 | Approval Policy เป็น configuration แบบ versioned และ workflow instance ที่ส่งแล้วจะผูกกับ policy version นั้นถาวร | การเปลี่ยนนโยบายใหม่ต้องไม่เขียนทับความหมายหรือเส้นทางอนุมัติของงานเดิม |
+| AD-08 | ใช้ adapter boundary สำหรับ NAS storage, email, identity provider และ Bank Integration ในอนาคต | Business module พึ่งพา application interface ที่เสถียร ไม่ผูกกับ vendor API |
+| AD-09 | เขียน Audit Event ของ security-sensitive action และ business-state change ใน transaction เดียวกันหรือ durable outbox เดียวกับ mutation หลัก | รายการที่อนุมัติแล้วแต่ตรวจสอบที่มาไม่ได้ เป็นผลลัพธ์ที่ยอมรับไม่ได้สำหรับแพลตฟอร์มนี้ |
+| AD-10 | API เป็น REST/JSON แบบ versioned ภายใต้ `/api/v1` และเผยแพร่ OpenAPI contract การ mutation ที่ PWA หรือ payment operator retry ได้ ต้องใช้ idempotency key | รองรับ Next.js web client, PWA, integration adapter และการ retry ที่เชื่อถือได้ |
 
-## 4. Logical Architecture
+## 4. สถาปัตยกรรมเชิงตรรกะ
 
 ```mermaid
 flowchart LR
-  Browser[Browser / Mobile PWA]
-  Web[Next.js web application\nPublic routes + protected internal routes]
-  Proxy[Reverse proxy / HTTPS boundary]
-  API[ASP.NET Core modular API]
-  DB[(PostgreSQL\nShared MVP database)]
-  NAS[NAS / SMB file storage]
-  Gmail[Gmail adapter]
+  Browser[เบราว์เซอร์ / Mobile PWA]
+  Web[เว็บแอป Next.js\nPublic routes + protected internal routes]
+  Proxy[Reverse proxy / ขอบเขต HTTPS]
+  API[ASP.NET Core Modular API]
+  DB[(PostgreSQL\nShared MVP Database)]
+  NAS[NAS / SMB File Storage]
+  Gmail[Gmail Adapter]
 
   Browser --> Proxy
   Proxy --> Web
@@ -106,88 +82,58 @@ flowchart LR
   API --> Gmail
 ```
 
-The browser reaches both the web application and API through the same HTTPS
-boundary. The reverse proxy is the only public entry point. The API is the
-only component allowed to access PostgreSQL, NAS credentials, Gmail
-credentials, and business authorization rules.
+เบราว์เซอร์เข้าถึงทั้ง web application และ API ผ่าน HTTPS boundary เดียวกัน Reverse proxy เป็น public entry point เพียงจุดเดียว API เป็น component เดียวที่ได้รับสิทธิ์เข้าถึง PostgreSQL, NAS credential, Gmail credential และ business authorization rule
 
-The web application may render public marketing pages without an operational
-session. Internal routes require a valid session and display only navigation
-that the active user can access. The API repeats every authorization decision
-for its own endpoint and data operation.
+Web application สามารถ render หน้า marketing สาธารณะโดยไม่ต้องมี operational session ส่วน internal route ต้องมี session ที่ถูกต้องและแสดงเฉพาะ navigation ที่ผู้ใช้เข้าได้ API ต้องตรวจ authorization ซ้ำในทุก endpoint และทุก data operation ของตนเอง
 
-## 5. Module Boundaries
+## 5. ขอบเขตของโมดูล
 
-| Module | Owns | Depends on |
+| โมดูล | สิ่งที่เป็นเจ้าของ | สิ่งที่พึ่งพา |
 | --- | --- | --- |
-| Identity and Access | accounts, local credentials, MFA enrollment, sessions, roles, permissions, offboarding | Audit, Notification |
-| Organization and Scope | workspace, department, project, site, membership, role and site assignment | Identity and Access |
-| File and Attachment | file object metadata, versions, checksums, attachment links, NAS adapter | Identity and Access, Organization and Scope, Audit |
-| Workflow and Approval | policy definitions, immutable policy versions, approval steps, workflow instances, actions | Identity and Access, Organization and Scope, Notification, Audit |
-| Notification | durable outbox, templates, email adapter, delivery attempts | Identity and Access, Audit |
-| Online Check-in | attendance events, capture metadata, offline grants, correction requests | Identity and Access, Organization and Scope, File and Attachment, Workflow and Approval, Audit |
-| Field Disbursement | requests, line items, advances, settlements, manual payment records | Identity and Access, Organization and Scope, File and Attachment, Workflow and Approval, Audit |
-| Asset History | assets, categories, relationships, lifecycle events, restricted-event rules | Identity and Access, Organization and Scope, File and Attachment, Workflow and Approval, Audit |
-| Reporting and Export | read models, export jobs, report permissions | All completed business modules, Audit |
-| Administration and Compliance | retention policies, consent records, operational configuration, backup/restore records | Identity and Access, Audit, Notification |
+| Identity and Access | account, local credential, MFA enrollment, session, role, permission, offboarding | Audit, Notification |
+| Organization and Scope | workspace, department, project, site, membership, role assignment และ site assignment | Identity and Access |
+| File and Attachment | file object metadata, version, checksum, attachment link และ NAS adapter | Identity and Access, Organization and Scope, Audit |
+| Workflow and Approval | policy definition, immutable policy version, approval step, workflow instance และ action | Identity and Access, Organization and Scope, Notification, Audit |
+| Notification | durable outbox, template, email adapter และ delivery attempt | Identity and Access, Audit |
+| Online Check-in | attendance event, capture metadata, offline grant และ correction request | Identity and Access, Organization and Scope, File and Attachment, Workflow and Approval, Audit |
+| Field Disbursement | request, line item, advance, settlement และ manual payment record | Identity and Access, Organization and Scope, File and Attachment, Workflow and Approval, Audit |
+| Asset History | asset, category, relationship, lifecycle event และ restricted-event rule | Identity and Access, Organization and Scope, File and Attachment, Workflow and Approval, Audit |
+| Reporting and Export | read model, export job และ report permission | Business module ที่เสร็จแล้วทั้งหมด, Audit |
+| Administration and Compliance | retention policy, consent record, operational configuration และ backup/restore record | Identity and Access, Audit, Notification |
 
-No business module may directly read or write another module's tables. Cross-
-module work occurs through application services and explicit interfaces. For
-example, Field Disbursement creates a workflow instance through the Workflow
-module rather than writing approval-step records itself.
+Business module ห้ามอ่านหรือเขียน table ของ business module อื่นโดยตรง งานข้าม module ต้องผ่าน application service และ interface ที่ระบุชัดเจน ตัวอย่างเช่น Field Disbursement ต้องสร้าง workflow instance ผ่าน Workflow module แทนการเขียน approval-step record ด้วยตนเอง
 
-## 6. Scope and Data-Isolation Model
+## 6. โมเดล Scope และการแยกข้อมูล
 
-### 6.1 MVP topology
+### 6.1 Topology ของ MVP
 
-MVP uses one controlled Back Office/API deployment and one PostgreSQL
-database. It is not a cross-project data lake. The database contains a
-workspace boundary and each business record belongs to a project when the
-business process requires one.
+MVP ใช้ Back Office/API ที่ควบคุมได้หนึ่ง deployment และ PostgreSQL database หนึ่งชุด ระบบนี้ไม่ใช่ cross-project data lake ฐานข้อมูลมี workspace boundary และ business record ทุกตัวจะอยู่ใต้ project เมื่อ business process นั้นต้องอ้างอิง project
 
-`workspace` identifies the deployment/organizational isolation boundary.
-`project` identifies an operational project within that workspace. `site` is
-an optional child of a project. A user may be assigned to more than one
-workspace/project/site only through explicit assignments.
+`workspace` คือขอบเขตการแยกระดับ deployment/องค์กร ส่วน `project` คือโครงการปฏิบัติการภายใน workspace นั้น `site` เป็น child ที่ optional ของ project ผู้ใช้จะเข้าถึงมากกว่าหนึ่ง workspace/project/site ได้ก็ต่อเมื่อมี assignment โดยชัดแจ้ง
 
-### 6.2 Mandatory enforcement rules
+### 6.2 กฎบังคับใช้
 
-1. Every business table has `workspace_id`; project-bound records also have
-   `project_id`. Site-bound records additionally have `site_id`.
-2. The API creates a `ScopeContext` from the authenticated session. Client
-   input never grants a scope merely by naming an identifier.
-3. Every list, detail, export, mutation, attachment, and workflow action
-   verifies the caller's permission and assignment against `ScopeContext`.
-4. Repositories accept a `ScopeContext` for scoped reads and writes. There is
-   no default repository method that returns records across workspaces.
-5. Composite foreign keys and indexes preserve workspace/project consistency;
-   a record cannot reference a project from another workspace.
-6. Audit events retain workspace, project, site, actor, action, correlation
-   identifier, result, and timestamp.
-7. Exports inherit the caller's current authorized scope and must record an
-   audit event with filters, row count, and destination type.
+1. Business table ทุกตัวมี `workspace_id` และ record ที่ผูกกับ project มี `project_id` เพิ่มเติม ส่วน record ที่ผูกกับ site มี `site_id` เพิ่มเติม
+2. API สร้าง `ScopeContext` จาก authenticated session ข้อมูลที่ client ส่งมาไม่สามารถมอบสิทธิ์ scope ได้เพียงแค่ระบุ identifier
+3. ทุก list, detail, export, mutation, attachment และ workflow action ต้องตรวจ permission และ assignment ของผู้เรียกกับ `ScopeContext`
+4. Repository รับ `ScopeContext` สำหรับ scoped read/write ไม่มี default repository method ที่คืน record ข้าม workspace
+5. Composite foreign key และ index ต้องรักษาความสอดคล้องของ workspace/project เพื่อไม่ให้ record อ้าง project ของ workspace อื่น
+6. Audit event เก็บ workspace, project, site, actor, action, correlation identifier, result และ timestamp
+7. Export ใช้ authorized scope ปัจจุบันของผู้เรียกและต้องสร้าง audit event ที่มี filter, row count และ destination type
 
-### 6.3 Future topology path
+### 6.3 เส้นทาง Topology ในอนาคต
 
-The schema and APIs use stable UUID identifiers and no domain module assumes
-that its data always shares a physical database with another workspace. A
-future deployment registry can route a workspace to a dedicated API,
-database, NAS namespace, credential set, backup policy, and network segment.
+Schema และ API ใช้ UUID ที่คงที่ และไม่มี domain module ใดสมมติว่าข้อมูลของตนต้องอยู่ใน physical database เดียวกับ workspace อื่นเสมอ ในอนาคต deployment registry สามารถ route workspace ไปยัง API, database, NAS namespace, credential set, backup policy และ network segment ที่แยกเฉพาะได้
 
-The MVP does not include cross-workspace reporting. Any future aggregate
-report requires an explicit sanctioned export/read model rather than direct
-cross-database operational queries.
+MVP ไม่รวม cross-workspace reporting รายงานรวมในอนาคตต้องใช้ sanctioned export/read model ที่ระบุชัดเจน ไม่ใช่ direct cross-database operational query
 
-## 7. Data Model Baseline
+## 7. โมเดลข้อมูลพื้นฐาน
 
-All primary identifiers are UUIDs. All mutable records use UTC timestamps;
-the UI renders Asia/Bangkok time and the agreed Thai date format. A record
-that has business lifecycle meaning includes `created_at`, `created_by`,
-`updated_at`, `updated_by`, and a status or version field where applicable.
+Primary identifier ทุกตัวเป็น UUID Record ที่แก้ไขได้ใช้ UTC timestamp ส่วน UI แสดงเวลา Asia/Bangkok และรูปแบบวันที่ภาษาไทยตามที่ตกลงกัน Record ที่มีความหมายตาม business lifecycle มี `created_at`, `created_by`, `updated_at`, `updated_by` และ status หรือ version field ตามความเหมาะสม
 
-### 7.1 Shared foundation entities
+### 7.1 เอนทิตีพื้นฐานร่วม
 
-| Area | Core entities |
+| พื้นที่ | Core Entity |
 | --- | --- |
 | Scope | `workspaces`, `departments`, `projects`, `sites`, `user_scope_assignments` |
 | Identity | `users`, `local_credentials`, `external_identities`, `roles`, `permissions`, `role_permissions`, `user_roles`, `mfa_factors`, `sessions`, `password_reset_requests` |
@@ -197,7 +143,7 @@ that has business lifecycle meaning includes `created_at`, `created_by`,
 | Notification | `notification_outbox`, `notification_deliveries`, `notification_templates` |
 | Operations | `retention_policies`, `consent_acceptances`, `backup_restore_records` |
 
-### 7.2 High-level ERD
+### 7.2 ERD ระดับสูง
 
 ```mermaid
 erDiagram
@@ -223,332 +169,206 @@ erDiagram
   FILE_OBJECTS ||--o{ FILE_ATTACHMENT_LINKS : attaches
 ```
 
-The diagram intentionally shows ownership and scope rather than every column.
-The implementation plan will translate this baseline into migrations with
-concrete primary keys, foreign keys, unique constraints, indexes, and enum
-values.
+Diagram นี้แสดง ownership และ scope โดยตั้งใจ ไม่ได้แสดงทุก column Implementation plan จะเปลี่ยน baseline นี้เป็น migration ที่มี primary key, foreign key, unique constraint, index และ enum value ที่ชัดเจน
 
-### 7.3 Online Check-in entities
+### 7.3 เอนทิตีของ Online Check-in
 
-- `checkin_events`: check-in/check-out event, workspace/project/site,
-  effective time, server-received time, status, and actor.
-- `checkin_captures`: file reference, GPS coordinates, accuracy, device
-  capture time, capture mode (`online` or `offline`), checksum, and overlay
-  version.
-- `offline_checkin_grants`: approved person, project/site scope, start/end
-  time, approving supervisor, reason, status, and audit relationship.
-- `checkin_correction_requests`: original event, proposed correction, reason,
-  workflow reference, and final resolution.
+- `checkin_events`: เหตุการณ์ check-in/check-out, workspace/project/site, effective time, server-received time, status และ actor
+- `checkin_captures`: file reference, GPS coordinate, accuracy, device capture time, capture mode (`online` หรือ `offline`), checksum และ overlay version
+- `offline_checkin_grants`: ผู้ได้รับอนุมัติ, project/site scope, เวลาเริ่ม/สิ้นสุด, supervisor ผู้อนุมัติ, เหตุผล, status และ audit relationship
+- `checkin_correction_requests`: เหตุการณ์เดิม, correction ที่เสนอ, เหตุผล, workflow reference และผลการพิจารณาสุดท้าย
 
-### 7.4 Field Disbursement entities
+### 7.4 เอนทิตีของ Field Disbursement
 
-- `disbursement_requests`: request type, requester, project/site when
-  relevant, requested amount, currency, workflow reference, and status.
-- `disbursement_items`: expense or planned-use lines, amounts, dates,
-  categories, and evidence requirements.
-- `disbursement_settlements`: approved advance, actual expenditure, amount
-  returned to company, amount owed to claimant, and settlement status.
-- `manual_payment_records`: finance operator, transfer date, bank/reference
-  identifier, amount, proof attachment, and reconciliation status.
+- `disbursement_requests`: request type, requester, project/site เมื่อเกี่ยวข้อง, requested amount, currency, workflow reference และ status
+- `disbursement_items`: รายการค่าใช้จ่ายหรือแผนใช้เงิน, amount, date, category และ evidence requirement
+- `disbursement_settlements`: approved advance, actual expenditure, amount ที่คืนบริษัท, amount ที่บริษัทต้องจ่าย และ settlement status
+- `manual_payment_records`: finance operator, transfer date, bank/reference identifier, amount, proof attachment และ reconciliation status
 
-### 7.5 Asset History entities
+### 7.5 เอนทิตีของ Asset History
 
-- `asset_categories`: controlled category hierarchy and active status.
-- `assets`: asset identity, owner/scope, serial or tag identifiers, current
-  state, and master attributes.
-- `asset_relationships`: typed asset-to-asset relationships with effective
-  dates.
-- `asset_events`: lifecycle event, actor, time, state transition, details,
-  optional attachment links, and workflow reference for restricted events.
+- `asset_categories`: ลำดับชั้น category ที่ควบคุมและ active status
+- `assets`: asset identity, owner/scope, serial หรือ tag identifier, current state และ master attribute
+- `asset_relationships`: ความสัมพันธ์แบบมี type ระหว่าง asset พร้อม effective date
+- `asset_events`: lifecycle event, actor, time, state transition, detail, optional attachment link และ workflow reference สำหรับ restricted event
 
-### 7.6 Referential rules
+### 7.6 กฎอ้างอิงข้อมูล
 
-- Attachments use generic links with a constrained owner type and owner UUID;
-  the API validates that the owner belongs to the same scope.
-- Workflow instances reference a business subject by module name and subject
-  UUID. The subject's module remains the source of truth for its business
-  status.
-- Audit data is append-only to normal application roles. Corrections add a
-  compensating event; they do not rewrite past audit history.
-- A suspended user is not deleted. Historical records continue to reference
-  the original user identity.
+- Attachment ใช้ generic link ที่จำกัด owner type และ owner UUID โดย API ตรวจว่า owner อยู่ใน scope เดียวกัน
+- Workflow instance อ้าง business subject ด้วย module name และ subject UUID โดย module เจ้าของ subject เป็น source of truth ของ business status
+- Audit data เป็น append-only สำหรับ application role ทั่วไป การแก้ไขต้องเพิ่ม compensating event ไม่ใช่เขียนทับ audit history เดิม
+- ผู้ใช้ที่ถูก suspend ไม่ถูกลบ Historical record ยังคงอ้างอิง user identity เดิมได้
 
-## 8. Identity, Authorization, and Audit
+## 8. ตัวตน การอนุญาต และ Audit
 
 ### 8.1 Authentication
 
-The first provider is a local account with normalized username/password.
-Accounts are created by authorized administrators; users cannot register
-themselves. Password reset supports an email-based reset flow and an
-administrator-issued reset that forces a password change on the next login.
+Provider แรกเป็น local account ที่ใช้ normalized username/password Account ถูกสร้างโดย administrator ที่ได้รับสิทธิ์ ผู้ใช้สมัครเองไม่ได้ Password reset รองรับทั้ง email-based reset flow และ admin-issued reset ที่บังคับเปลี่ยน password ในการ login ครั้งถัดไป
 
-The identity module exposes provider interfaces so a future provider can map
-an external identity to the same internal `users` record. Domain modules only
-use the internal user identifier and never depend on a provider-specific
-claim.
+Identity module เปิด provider interface เพื่อให้ provider ในอนาคต map external identity เข้ากับ `users` record ภายในตัวเดิมได้ Domain module ใช้เฉพาะ internal user identifier และไม่พึ่งพา provider-specific claim
 
-Passwords use Argon2id hashes. Session tokens are cryptographically random,
-stored in Secure, HttpOnly, SameSite cookies, and persisted only as hashes.
-The API revokes active sessions when an account is disabled, a password is
-reset, a role/assignment is removed, or an administrator performs a
-sign-out-everywhere action.
+Password ใช้ hash แบบ `Argon2id` Session token สุ่มด้วยวิธีเข้มแข็ง เก็บใน Secure, HttpOnly, SameSite cookie และบันทึกในฐานข้อมูลเป็น hash เท่านั้น API ต้อง revoke active session เมื่อ account ถูกปิด, password ถูก reset, role/assignment ถูกเอาออก หรือ administrator สั่ง sign-out-everywhere
 
-### 8.2 MFA policy
+### 8.2 นโยบาย MFA
 
-MFA is required before a user can perform privileged actions when the user
-holds any of these role classes: system administration, approval, accounting,
-or finance-data access. Other staff can enroll when enabled by policy.
-The API checks the MFA assurance state for privileged routes and workflow
-actions; a visible page alone cannot bypass that check.
+MFA เป็นข้อบังคับก่อนผู้ใช้ทำ privileged action เมื่อผู้ใช้นั้นมี role class ได้แก่ system administration, approval, accounting หรือ finance-data access ส่วนพนักงานอื่นลงทะเบียนได้เมื่อนโยบายเปิดใช้ API ตรวจ MFA assurance state สำหรับ privileged route และ workflow action เสมอ หน้าเว็บที่มองเห็นได้ไม่สามารถ bypass การตรวจนี้ได้
 
 ### 8.3 Authorization
 
-Authorization evaluates all of the following before access is granted:
+ก่อนอนุญาตให้เข้าถึง ระบบประเมินทุกข้อดังนี้:
 
-1. authenticated, active account;
-2. required named permission;
-3. MFA assurance when the route/action requires it;
-4. workspace/project/site assignment and data-type scope;
-5. field/detail visibility policy when applicable;
-6. state-specific rule, such as whether the same person created a policy or
-   request they are attempting to approve.
+1. account ผ่านการยืนยันตัวตนและยัง active
+2. มี named permission ที่ต้องใช้
+3. มี MFA assurance เมื่อ route/action กำหนด
+4. มี workspace/project/site assignment และ data-type scope ที่ถูกต้อง
+5. ผ่าน field/detail visibility policy เมื่อเกี่ยวข้อง
+6. ผ่าน state-specific rule เช่น บุคคลเดียวกันสร้าง policy หรือ request แล้วกำลังพยายามอนุมัติรายการนั้นเองหรือไม่
 
-Permission checks use named capabilities such as `checkin:create`,
-`disbursement:approve`, `asset:restricted-event`, `report:export`, and
-`audit:read`. Role mappings are configuration data. Business code asks for a
-capability, not for a hard-coded role name.
+Permission check ใช้ named capability เช่น `checkin:create`, `disbursement:approve`, `asset:restricted-event`, `report:export` และ `audit:read` Role mapping เป็น configuration data Business code ต้องขอ capability ไม่ใช่ตรวจ role name แบบ hard-coded
 
-### 8.4 Audit contract
+### 8.4 Audit Contract
 
-Each audit event records actor, acting role, scope, action type, target type,
-target identifier, outcome, correlation ID, timestamp, and sanitized change
-metadata. Audit events never contain plaintext passwords, session tokens,
-full MFA secrets, or raw NAS/Gmail credentials.
+Audit event แต่ละรายการเก็บ actor, acting role, scope, action type, target type, target identifier, outcome, correlation ID, timestamp และ sanitized change metadata Audit event ห้ามมี plaintext password, session token, MFA secret ฉบับเต็ม หรือ NAS/Gmail credential ดิบ
 
-## 9. File Storage and Attachment Contract
+## 9. ข้อตกลงของ File Storage และ Attachment
 
-Browsers never receive SMB credentials and do not access NAS paths directly.
-The File module verifies authorization, streams the upload through the API,
-writes it to a controlled project namespace, calculates a checksum, records
-file metadata, and then creates the business attachment link.
+เบราว์เซอร์จะไม่ได้รับ SMB credential และเข้าถึง NAS path โดยตรงไม่ได้ File module ตรวจ authorization, stream upload ผ่าน API, เขียนไฟล์ไปยัง project namespace ที่ควบคุม, คำนวณ checksum, บันทึก file metadata แล้วจึงสร้าง business attachment link
 
-Each stored file has a stable `file_object` identity. New content creates a
-`file_version` rather than overwriting historical evidence. The metadata
-includes original filename, MIME type, byte size, checksum, uploader,
-captured/uploaded time, storage provider, and logical namespace. Downloading
-or viewing a file repeats the current authorization check and writes an audit
-event.
+ไฟล์ที่จัดเก็บทุกไฟล์มี `file_object` identity ที่คงที่ เนื้อหาใหม่สร้าง `file_version` ใหม่แทนการเขียนทับหลักฐานเก่า Metadata ประกอบด้วย original filename, MIME type, byte size, checksum, uploader, captured/uploaded time, storage provider และ logical namespace การ download หรือ view file ต้องตรวจ authorization ปัจจุบันซ้ำและเขียน audit event
 
-The SMB adapter owns physical path construction and service-account access.
-The rest of the application uses a `FileStorage` interface; future object
-storage or a dedicated NAS can implement that interface without changing
-business tables.
+SMB adapter เป็นเจ้าของการสร้าง physical path และการเข้าถึงผ่าน service account ส่วนอื่นของระบบใช้ `FileStorage` interface ทำให้ object storage หรือ NAS เฉพาะทางในอนาคต implement interface เดียวกันได้ โดยไม่ต้องแก้ business table
 
-## 10. Workflow, Approval, and Notification Contract
+## 10. ข้อตกลงของ Workflow, Approval และ Notification
 
-An approval policy has a controlled lifecycle: draft, submitted for policy
-approval, active, superseded, or retired. The policy creator cannot approve
-their own policy change. Active policies are immutable versions.
+Approval policy มี lifecycle ที่ควบคุมได้: `draft`, `submitted for policy approval`, `active`, `superseded` หรือ `retired` ผู้สร้าง policy อนุมัติการเปลี่ยน policy ของตนเองไม่ได้ Active policy เป็น immutable version
 
-When a business subject is submitted, the Workflow module selects one active
-policy version using subject type, scope, amount/category conditions, and
-other configured criteria. It materializes sequential approval steps in a
-workflow instance. The instance retains the selected policy version even if a
-new policy becomes active tomorrow.
+เมื่อมีการส่ง business subject, Workflow module เลือก active policy version หนึ่งรายการโดยพิจารณา subject type, scope, amount/category condition และ criteria ที่ตั้งค่าไว้ จากนั้นสร้าง sequential approval step ลงใน workflow instance Instance นั้นเก็บ selected policy version เดิม แม้วันถัดไปจะมี policy ใหม่ active แล้วก็ตาม
 
-An action is one of approve, reject, return-for-correction, cancel, or
-escalate where the policy permits it. The API rejects self-approval, skipping
-an incomplete prior step, duplicate action submission, and actions by users
-outside the permitted scope.
+Action มีได้แก่ approve, reject, return-for-correction, cancel หรือ escalate ตามที่ policy อนุญาต API ปฏิเสธ self-approval, การข้าม prior step ที่ยังไม่เสร็จ, duplicate action submission และ action จากผู้ใช้นอก scope ที่อนุญาต
 
-Notifications are written to a durable outbox in the same transaction as the
-business/workflow event. A background worker delivers email through the
-configured Gmail adapter and records delivery attempts. A temporary Gmail
-failure never changes the approved/rejected business outcome; it remains a
-retryable notification operation visible to administrators.
+Notification ถูกเขียนลง durable outbox ใน transaction เดียวกับ business/workflow event Background worker ส่งอีเมลผ่าน Gmail adapter ที่ตั้งค่าไว้และบันทึก delivery attempt ความล้มเหลวชั่วคราวของ Gmail ไม่เปลี่ยนผลลัพธ์ approve/reject ของธุรกิจ แต่เป็น notification operation ที่ retry ได้และ administrator มองเห็นได้
 
-## 11. API Baseline
+## 11. มาตรฐาน API
 
-The API uses versioned JSON endpoints under `/api/v1` and publishes an
-OpenAPI document. Endpoints use problem-details responses for errors and a
-correlation ID for operational diagnosis.
+API ใช้ JSON endpoint แบบ versioned ภายใต้ `/api/v1` และเผยแพร่ OpenAPI document Endpoint ใช้ `problem-details` response สำหรับ error และ correlation ID สำหรับการวินิจฉัยเชิงปฏิบัติการ
 
-### 11.1 Endpoint groups
+### 11.1 กลุ่ม Endpoint
 
-| Prefix | Responsibility |
+| Prefix | ความรับผิดชอบ |
 | --- | --- |
-| `/auth` | login, logout, password reset, MFA enrollment/challenge, session state |
-| `/users`, `/roles`, `/permissions` | account and authorization administration |
-| `/workspaces`, `/projects`, `/sites`, `/assignments` | scope administration |
-| `/files` | upload, download, metadata, version and attachment operations |
-| `/approval-policies`, `/workflows` | policy lifecycle and subject workflow actions |
-| `/checkins` | online/offline check-in events, grants, corrections, sync |
-| `/disbursements` | requests, items, settlements, manual payments |
-| `/assets` | categories, assets, relationships, lifecycle events |
-| `/reports`, `/exports` | authorized reports and asynchronous exports |
-| `/admin` | retention, consent, health, backup/restore operational records |
+| `/auth` | login, logout, password reset, MFA enrollment/challenge และ session state |
+| `/users`, `/roles`, `/permissions` | การจัดการ account และ authorization |
+| `/workspaces`, `/projects`, `/sites`, `/assignments` | การจัดการ scope |
+| `/files` | upload, download, metadata, version และ attachment operation |
+| `/approval-policies`, `/workflows` | policy lifecycle และ workflow action ของ subject |
+| `/checkins` | online/offline check-in event, grant, correction และ sync |
+| `/disbursements` | request, item, settlement และ manual payment |
+| `/assets` | category, asset, relationship และ lifecycle event |
+| `/reports`, `/exports` | report ที่มีสิทธิ์และ asynchronous export |
+| `/admin` | retention, consent, health และ backup/restore operational record |
 
-### 11.2 API rules
+### 11.2 กฎของ API
 
-- Every mutating request carries a correlation ID. Retryable mutations also
-  carry an idempotency key scoped to the authenticated user and endpoint.
-- Pagination is explicit and bounded. Unbounded list and export endpoints do
-  not exist.
-- The server calculates authorization scope before database access. A client
-  may request a workspace/project/site but cannot select a scope it lacks.
-- Request validation happens before business mutation. Validation failures do
-  not write a partial business record.
-- State transitions use optimistic concurrency/version fields or transaction
-  locks so two approvers/operators cannot commit incompatible changes.
-- OpenAPI descriptions identify the required permission, MFA requirement,
-  relevant scope, request schema, response schema, and expected problem type.
+- Mutation request ทุกตัวมี correlation ID Mutation ที่ retry ได้มี idempotency key ซึ่งผูกกับ authenticated user และ endpoint
+- Pagination ต้องระบุชัดและมีขีดจำกัด ไม่มี unbounded list หรือ export endpoint
+- Server คำนวณ authorization scope ก่อนเข้าถึงฐานข้อมูล Client ขอ workspace/project/site ได้ แต่เลือก scope ที่ไม่มีสิทธิ์ไม่ได้
+- Request validation เกิดก่อน business mutation Validation failure ห้ามเขียน business record ที่ไม่สมบูรณ์
+- State transition ใช้ optimistic concurrency/version field หรือ transaction lock เพื่อป้องกัน approver/operator สองคน commit การเปลี่ยนแปลงที่ขัดกัน
+- OpenAPI description ระบุ required permission, MFA requirement, scope ที่เกี่ยวข้อง, request schema, response schema และ expected problem type
 
-## 12. Online Check-in Architecture
+## 12. สถาปัตยกรรม Online Check-in
 
-Online Check-in is implemented as a protected Mobile Web/PWA route. Its
-camera flow uses browser camera APIs and does not expose a file-picker option.
-The client draws GPS/date/time overlay content into the captured image and
-sends the image plus raw capture metadata to the API. The API records both
-device-reported and server-received times, validates the active assignment or
-approved exception, stores the evidence through the File module, and creates
-an immutable check-in/check-out event.
+Online Check-in เป็น protected Mobile Web/PWA route Camera flow ใช้ browser camera API และไม่แสดง file-picker option Client วาด GPS/date/time overlay ลงภาพที่ถ่าย แล้วส่งภาพพร้อม raw capture metadata ไปยัง API API บันทึกทั้ง device-reported time และ server-received time, ตรวจ active assignment หรือ approved exception, เก็บหลักฐานผ่าน File module และสร้าง check-in/check-out event แบบ immutable
 
-Offline use is disabled by default. A valid `offline_checkin_grant` is needed
-before the client may queue an offline capture. The grant is checked against
-the user, workspace/project/site, and start/end time before queueing and
-again when syncing. The PWA queue preserves an idempotency key, capture
-metadata, evidence checksum, and grant reference; it removes the queued item
-after a successful final sync or an explicit user discard. The API records
-the event as `offline` and audits both capture and sync.
+Offline ถูกปิดเป็นค่าเริ่มต้น Client ต้องมี `offline_checkin_grant` ที่ถูกต้องก่อน queue offline capture ระบบตรวจ grant กับ user, workspace/project/site และ start/end time ทั้งก่อน queue และเมื่อต้อง sync PWA queue เก็บ idempotency key, capture metadata, evidence checksum และ grant reference แล้วลบ queued item หลัง final sync สำเร็จหรือผู้ใช้สั่ง discard โดยชัดแจ้ง API บันทึก event เป็น `offline` และ audit ทั้งการ capture และ sync
 
-Correction is a new request linked to the original event. It never edits the
-original evidence or audit event in place.
+Correction เป็น request ใหม่ที่เชื่อมกับ event เดิม ห้ามแก้ evidence หรือ audit event เดิมโดยตรง
 
-## 13. Field Disbursement Architecture
+## 13. สถาปัตยกรรม Field Disbursement
 
-Field Disbursement is one module with three typed request flows:
+Field Disbursement เป็นโมดูลเดียวที่มี request flow แยกตามประเภท 3 แบบ:
 
-1. Field Expense Advance;
-2. General Advance; and
-3. Expense Reimbursement.
+1. เงินทดรองออกสนาม (`Field Expense Advance`)
+2. เงินทดรองทั่วไป (`General Advance`)
+3. เบิกคืนค่าใช้จ่าย (`Expense Reimbursement`)
 
-Each request has a typed state machine, supporting evidence, a workflow
-instance, and a financial settlement view. The module computes approved
-advance, actual expense, excess returned to company, and amount owed to the
-claimant from immutable submitted/approved items and settlement actions.
+Request ทุกประเภทมี typed state machine, หลักฐานประกอบ, workflow instance และ financial settlement view โมดูลคำนวณ approved advance, actual expense, amount ที่คืนบริษัท และ amount ที่บริษัทต้องจ่ายให้ผู้เบิกจาก item และ settlement action ที่ส่ง/อนุมัติแล้วแบบ immutable
 
-MVP payment execution is manual: authorized finance staff record payment
-date, amount, bank/reference identifier, and proof attachment after transfer
-outside the application. The Bank Payment interface is present as a boundary
-only; no bank credentials or automatic transfer workflow is introduced in
-MVP.
+การจ่ายเงินของ MVP เป็นแบบ manual: finance staff ที่มีสิทธิ์บันทึก payment date, amount, bank/reference identifier และ proof attachment หลังโอนเงินนอกระบบแล้ว `Bank Payment` interface มีไว้เป็น boundary เท่านั้น MVP ไม่มี bank credential หรือ automatic transfer workflow
 
-## 14. Asset History Architecture
+## 14. สถาปัตยกรรม Asset History
 
-Asset History owns the asset master and lifecycle record. Asset categories
-are managed reference data. Relationships are typed and effective-dated so an
-asset can be associated with another asset, project, site, or parent
-assembly without destroying previous history.
+Asset History เป็นเจ้าของ asset master และ lifecycle record Asset category เป็น managed reference data Relationship มี type และ effective date ทำให้ asset เชื่อมกับ asset อื่น, project, site หรือ parent assembly ได้โดยไม่ทำลาย history เดิม
 
-Lifecycle events include acquisition/registration, assignment, transfer,
-installation, inspection, maintenance, repair, retirement, and return. A
-restricted event is submitted through the Workflow module before it changes
-the asset's effective state. Images are optional attachments linked to the
-event; their metadata and access control follow the File module.
+Lifecycle event ประกอบด้วย acquisition/registration, assignment, transfer, installation, inspection, maintenance, repair, retirement และ return Restricted event ต้องส่งผ่าน Workflow module ก่อนจึงเปลี่ยน effective state ของ asset ได้ ภาพเป็น optional attachment ที่เชื่อมกับ event โดย metadata และ access control ใช้กติกาของ File module
 
-## 15. Deployment and Operational Baseline
+## 15. มาตรฐาน Deployment และการปฏิบัติการระบบ
 
-### 15.1 Environments
+### 15.1 Environment
 
-- Local development runs the existing Next.js web application at port 4000.
-- The production Next.js start command runs the web application at port 4001.
-- The API, PostgreSQL, background worker, and NAS connector are private
-  services. They are not exposed directly to the internet.
-- A reverse proxy terminates HTTPS, sends public/internal web traffic to the
-  Next.js application, and routes `/api` to the API service.
+- Local development รัน Next.js web application เดิมที่ port 4000
+- คำสั่ง Next.js production start รัน web application ที่ port 4001
+- API, PostgreSQL, background worker และ NAS connector เป็น private service ไม่เปิดสู่ internet โดยตรง
+- Reverse proxy ทำ TLS termination, ส่ง public/internal web traffic ไปยัง Next.js application และ route `/api` ไปยัง API service
 
-### 15.2 Production controls
+### 15.2 การควบคุมใน Production
 
-- TLS certificates, database credentials, NAS service-account credentials,
-  Gmail credentials, signing keys, and MFA secrets are held outside Git in a
-  deployment secret store or protected environment configuration.
-- Firewall rules allow only the reverse proxy to reach public clients; only
-  the API/worker service account reaches PostgreSQL, NAS, and Gmail.
-- Database backup, NAS backup, configuration backup, and secret metadata
-  backup use multiple approved destinations with restore tests.
-- A technical restore can be performed by a system administrator, but making
-  recovered business data active requires the configured approval process.
-- Monitoring covers API health, web health, storage availability, database
-  capacity, failed notification deliveries, backup completion, and audit
-  write failures.
+- TLS certificate, database credential, NAS service-account credential, Gmail credential, signing key และ MFA secret เก็บนอก Git ใน deployment secret store หรือ protected environment configuration
+- Firewall อนุญาตให้เฉพาะ reverse proxy รับ public client ได้ และเฉพาะ API/worker service account เข้าถึง PostgreSQL, NAS และ Gmail
+- Database backup, NAS backup, configuration backup และ secret metadata backup ใช้หลาย approved destination พร้อม restore test
+- System Administrator ทำ technical restore ได้ แต่การทำให้ recovered business data active ต้องผ่าน approval process ที่กำหนด
+- Monitoring ครอบคลุม API health, web health, storage availability, database capacity, notification delivery ที่ล้มเหลว, backup completion และ audit write failure
 
-## 16. Non-Goals for This MVP Baseline
+## 16. สิ่งที่ไม่อยู่ในเป้าหมายของ MVP นี้
 
-- Native mobile application.
-- Customer/partner self-service portal.
-- Automatic bank transfer or bank API credentials.
-- Deployment Profile 3 (dedicated Back Office and dedicated database).
-- Cross-workspace operational queries or aggregate dashboards.
-- Direct browser access to NAS/SMB.
-- Public landing-page contact form integration with the internal workflow
-  system. That integration is a separate, explicitly scoped change.
+- Native Mobile Application
+- Customer/Partner Self-service Portal
+- Automatic Bank Transfer หรือ Bank API Credential
+- Deployment Profile 3 (Dedicated Back Office และ Dedicated Database)
+- Cross-workspace operational query หรือ aggregate dashboard
+- การเข้าถึง NAS/SMB จากเบราว์เซอร์โดยตรง
+- การเชื่อม contact form ของ Public Landing Page เข้ากับ internal workflow system ซึ่งเป็นการเปลี่ยนแปลงแยกที่ต้องกำหนดขอบเขตโดยชัดแจ้ง
 
-## 17. Delivery Order and Exit Gates
+## 17. ลำดับการส่งมอบและเกณฑ์ผ่านงาน
 
-| Stage | Deliverable | Exit gate |
+| ระยะ | สิ่งที่ส่งมอบ | Exit Gate |
 | --- | --- | --- |
-| Module 0 | approved architecture, ERD baseline, API contract conventions, deployment/security baseline | user approves this design and the accompanying implementation plan |
-| Module 1 | API/web/database foundation and health checks | authenticated service can read/write a scoped test record with migrations and audit |
-| Module 2 | identity, sessions, MFA policy, RBAC | privileged and unprivileged route tests prove deny-by-default behavior |
-| Module 3 | workspace/project/site assignment scope | cross-scope read/write/export attempts are rejected and audited |
-| Module 4 | files/NAS adapter | upload, download, version, checksum, and scope checks pass |
-| Module 5 | versioned workflow and notification outbox | maker-checker, sequential approval, policy version binding, and retry behavior pass |
-| Module 6 | Online Check-in pilot slice | camera-only online flow, offline grant/sync, correction, and audit pass on mobile browser |
-| Module 7 | Field Disbursement pilot slice | all three flows, evidence, sequential approval, settlement, and manual payment proof pass |
-| Module 8 | Asset History pilot slice | lifecycle, restricted event approval, relationship, and optional image tests pass |
-| Module 9 | reporting/admin/compliance | scoped export, retention, consent, backup/restore record, and system health checks pass |
-| Module 10 | pilot and rollout | UAT sign-off, security review, operational runbook, training, and pilot acceptance complete |
+| Module 0 | Architecture ที่อนุมัติ, ERD baseline, API contract convention และ deployment/security baseline | ผู้ใช้อนุมัติ design นี้และ implementation plan ที่เกี่ยวข้อง |
+| Module 1 | API/web/database foundation และ health check | Authenticated service อ่าน/เขียน scoped test record ได้ พร้อม migration และ audit |
+| Module 2 | Identity, session, MFA policy และ RBAC | Route test ของผู้ใช้มี/ไม่มีสิทธิ์พิสูจน์ deny-by-default behavior |
+| Module 3 | Workspace/project/site assignment scope | ความพยายาม read/write/export ข้าม scope ถูกปฏิเสธและ audit |
+| Module 4 | File/NAS adapter | Upload, download, version, checksum และ scope check ผ่าน |
+| Module 5 | Versioned workflow และ notification outbox | Maker-checker, sequential approval, policy version binding และ retry behavior ผ่าน |
+| Module 6 | Online Check-in pilot slice | Camera-only online flow, offline grant/sync, correction และ audit ผ่านบน mobile browser |
+| Module 7 | Field Disbursement pilot slice | ทั้ง 3 flow, evidence, sequential approval, settlement และ manual payment proof ผ่าน |
+| Module 8 | Asset History pilot slice | Lifecycle, restricted-event approval, relationship และ optional image test ผ่าน |
+| Module 9 | Reporting/Admin/Compliance | Scoped export, retention, consent, backup/restore record และ system health check ผ่าน |
+| Module 10 | Pilot และ rollout | UAT sign-off, security review, operational runbook, training และ pilot acceptance ครบ |
 
-Every implementation task must follow a red/green test cycle, verify lint and
-production builds, and preserve the public landing-page behavior. Each module
-receives a separate detailed implementation plan and review gate before code
-is written.
+Implementation task ทุกงานต้องทำตาม red/green test cycle, ตรวจ lint และ production build และรักษาพฤติกรรมของ Public Landing Page เดิม ทุก module ต้องมี implementation plan และ review gate แยกต่างหากก่อนเขียน code
 
-## 18. Production Inputs Required Before Go-Live
+## 18. ข้อมูลที่ต้องมีใน Production ก่อน Go-Live
 
-The architecture is complete without embedding operational secrets. Before a
-production release, the authorized operational owners provide these values in
-deployment configuration and controlled policy data:
+Architecture สมบูรณ์ได้โดยไม่ฝัง operational secret ลงในเอกสาร ก่อน production release เจ้าของงานที่ได้รับมอบหมายต้องส่งข้อมูลต่อไปนี้ผ่าน deployment configuration และ controlled policy data:
 
-- canonical HTTPS hostnames and certificate management owner;
-- PostgreSQL, NAS, and Gmail service credentials through the secret store;
-- the selected Gmail adapter mode allowed by the organization's Google policy;
-- initial administrators, role assignments, project/site assignments, and
-  mandatory-MFA role classes;
-- approved Field Disbursement policy thresholds and approver chains;
-- pilot project/site and named pilot representatives;
-- backup destinations, retention windows, restore approvers, and restore-test
-  schedule.
+- Canonical HTTPS hostname และเจ้าของการจัดการ certificate
+- PostgreSQL, NAS และ Gmail service credential ผ่าน secret store
+- Gmail adapter mode ที่องค์กรอนุญาตตาม Google policy
+- Initial administrator, role assignment, project/site assignment และ mandatory-MFA role class
+- Field Disbursement policy threshold และ approver chain ที่อนุมัติแล้ว
+- Pilot project/site และตัวแทนผู้เข้าร่วม pilot ที่ระบุชื่อ
+- Backup destination, retention window, restore approver และ restore-test schedule
 
-These are operating parameters, not changes to the module architecture. They
-must be auditable configuration or protected deployment data, never hard-coded
-values in the repository.
+ข้อมูลเหล่านี้เป็น operating parameter ไม่ใช่การเปลี่ยนสถาปัตยกรรมของ module ต้องเป็น configuration ที่ตรวจสอบย้อนหลังได้หรือ protected deployment data และห้าม hard-code ลง repository
 
-## 19. Review Checklist
+## 19. รายการตรวจทานเพื่ออนุมัติ
 
-Approve this baseline when all of these statements are true:
+อนุมัติ baseline นี้เมื่อทุกข้อเป็นจริง:
 
-1. The MVP uses a Shared Back Office plus Shared Database with enforced
-   workspace/project scope and no default cross-project access.
-2. The future dedicated deployment path is preserved without being included
-   in MVP implementation.
-3. The Next.js public landing page remains independent from internal business
-   authorization and data.
-4. ASP.NET Core, PostgreSQL, NAS/SMB, Gmail adapter, on-premises reverse
-   proxy, and the modular-monolith boundary are acceptable technical choices.
-5. Identity, scope, files, workflow, audit, and notification are completed
-   before the three business modules.
-6. The API and database rules are sufficient to prevent authorization by UI
-   hiding or client-provided scope alone.
-7. Online Check-in, Field Disbursement, and Asset History constraints match
-   the intended MVP behavior.
+1. MVP ใช้ Shared Back Office + Shared Database ที่บังคับ workspace/project scope และไม่มี default cross-project access
+2. มีเส้นทางสู่ future dedicated deployment แต่ไม่รวมอยู่ในการพัฒนา MVP
+3. Next.js Public Landing Page ยังคงแยกจาก internal business authorization และข้อมูลภายใน
+4. ASP.NET Core, PostgreSQL, NAS/SMB, Gmail adapter, on-premises reverse proxy และ modular-monolith boundary เป็นเทคนิคที่ยอมรับได้
+5. Identity, scope, file, workflow, audit และ notification เสร็จก่อนโมดูลธุรกิจทั้งสาม
+6. กฎของ API และฐานข้อมูลเพียงพอที่จะป้องกัน authorization ที่อาศัยเพียงการซ่อน UI หรือ client-provided scope
+7. ข้อจำกัดของ Online Check-in, Field Disbursement และ Asset History ตรงกับพฤติกรรม MVP ที่ต้องการ
