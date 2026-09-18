@@ -26,6 +26,9 @@ npm run build
 npm run start
 ```
 
+The development server runs on `http://localhost:4000`. The production
+server runs on `http://localhost:4001` after `npm run build`.
+
 ## Known product boundaries
 
 - Telemetry values shown in the hero are simulated client-side demo data.
