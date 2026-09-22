@@ -1,6 +1,7 @@
 # เอกสารสถาปัตยกรรมพื้นฐาน Module 0 ของ TPR10
 
-วันที่: 2026-09-18
+วันที่จัดทำ: 2026-09-18
+แก้ไขล่าสุด: 2026-09-22
 สถานะ: รอผู้ใช้ตรวจทาน
 ภาษาเอกสาร: ภาษาไทย โดยคงชื่อเทคนิค, code, path, command และ identifier ที่จำเป็นเป็นภาษาอังกฤษ
 
@@ -30,6 +31,7 @@ repository ปัจจุบันเป็น Corporate Landing Page ที่
 | L. Deployment และการปฏิบัติการระบบ | ส่วน 15 |
 | M. เกณฑ์ผ่านงานและข้อมูลก่อนใช้งานจริง | ส่วน 17–18 |
 | N. เกณฑ์การอนุมัติ | ส่วน 19 |
+| เอกสารสนับสนุน | ส่วน 20: Decision Register และ Security/Pilot Acceptance Matrix |
 
 ## 2. ข้อจำกัดของผลิตภัณฑ์ที่ยืนยันแล้ว
 
@@ -60,6 +62,9 @@ repository ปัจจุบันเป็น Corporate Landing Page ที่
 | AD-08 | ใช้ adapter boundary สำหรับ NAS storage, email, identity provider และ Bank Integration ในอนาคต | Business module พึ่งพา application interface ที่เสถียร ไม่ผูกกับ vendor API |
 | AD-09 | เขียน Audit Event ของ security-sensitive action และ business-state change ใน transaction เดียวกันหรือ durable outbox เดียวกับ mutation หลัก | รายการที่อนุมัติแล้วแต่ตรวจสอบที่มาไม่ได้ เป็นผลลัพธ์ที่ยอมรับไม่ได้สำหรับแพลตฟอร์มนี้ |
 | AD-10 | API เป็น REST/JSON แบบ versioned ภายใต้ `/api/v1` และเผยแพร่ OpenAPI contract การ mutation ที่ PWA หรือ payment operator retry ได้ ต้องใช้ idempotency key | รองรับ Next.js web client, PWA, integration adapter และการ retry ที่เชื่อถือได้ |
+| AD-11 | Browser ใช้ public origin เดียว และเรียก API ผ่าน `/api` ที่ reverse proxy ส่งต่อไป ASP.NET Core API เท่านั้น API เป็นผู้ออกและ revoke session cookie ส่วน Next.js ใช้ผล session check จาก API เพื่อควบคุมการนำทางของ internal route แต่ไม่เป็น authority ของ business authorization | ลดความเสี่ยงจาก CORS, split session authority และการเชื่อว่าการซ่อน route ฝั่งเว็บเป็นการป้องกันข้อมูล |
+| AD-12 | ลำดับ Module 1–3 แยก foundation, identity และ scope ออกจากกันอย่างชัดเจน: Module 1 ยังไม่อ้างว่า authentication หรือ business scope เสร็จ, Module 2 พิสูจน์ identity/session/RBAC/MFA, และ Module 3 จึงพิสูจน์ scope operation กับการปฏิเสธข้าม scope | ทำให้ Exit Gate ไม่เรียกร้องความสามารถที่ยังไม่ได้สร้าง และป้องกันการประกาศว่า scoped access ปลอดภัยก่อนมี identity กับ assignment |
+| AD-13 | ใช้ Decision Register และ Security/Pilot Acceptance Matrix เป็นแหล่งควบคุมการตัดสินใจด้าน policy และ operation ที่ต้องมี owner กับหลักฐานก่อนผ่าน module gate หรือ Go-Live โดยไม่บันทึก secret | ทำให้ค่าที่ต้องตัดสินใจภายหลังตรวจสอบย้อนหลังได้ และแยก configuration/หลักฐานออกจาก source code และ architecture principle |
 
 ## 4. สถาปัตยกรรมเชิงตรรกะ
 
@@ -209,6 +214,14 @@ Identity module เปิด provider interface เพื่อให้ provide
 
 Password ใช้ hash แบบ `Argon2id` Session token สุ่มด้วยวิธีเข้มแข็ง เก็บใน Secure, HttpOnly, SameSite cookie และบันทึกในฐานข้อมูลเป็น hash เท่านั้น API ต้อง revoke active session เมื่อ account ถูกปิด, password ถูก reset, role/assignment ถูกเอาออก หรือ administrator สั่ง sign-out-everywhere
 
+### 8.1.1 ข้อตกลงของ Session Transport และ CSRF
+
+- Browser ใช้ HTTPS public origin เดียว โดยเรียก API เป็น `https://<hostname>/api/...` Reverse proxy ส่งต่อเฉพาะเส้นทาง `/api` ไปยัง ASP.NET Core API; API และ PostgreSQL ไม่รับ direct public traffic
+- API เป็น session authority เพียงจุดเดียว: เป็นผู้ออก, ตรวจสอบ และ revoke cookie ชื่อ `__Host-tpr10_session` ที่มี `Secure`, `HttpOnly`, `Path=/` และ `SameSite=Lax` Next.js ไม่ออก session หรือเก็บ session token ใน JavaScript, local storage หรือ client state
+- Internal route ของ Next.js อาจส่ง cookie ที่ได้รับไปขอ session state จาก API ฝั่ง server เพื่อ redirect/navigation เท่านั้น ทุก API endpoint ยังต้องตรวจ session, permission, MFA และ scope ของตนเองเสมอ
+- ทุก request ที่เปลี่ยน state (`POST`, `PUT`, `PATCH`, `DELETE`) ต้องส่ง `X-CSRF-Token` API ออก token อายุสั้นแบบ signed จาก `GET /api/v1/auth/csrf`; token ของ session ที่ยืนยันตัวตนแล้วต้องผูกกับ session นั้น ส่วน login, password reset และ MFA bootstrap ใช้ pre-auth flow อายุสั้นที่ผูกกับ server record
+- API ต้องตรวจ header, อายุ, binding ของ CSRF token และ `Origin`/`Host` allowlist ก่อน mutation หากตรวจไม่ผ่านต้องไม่เกิด business mutation และต้องสร้าง security audit event ตามความเหมาะสม
+
 ### 8.2 นโยบาย MFA
 
 MFA เป็นข้อบังคับก่อนผู้ใช้ทำ privileged action เมื่อผู้ใช้นั้นมี role class ได้แก่ system administration, approval, accounting หรือ finance-data access ส่วนพนักงานอื่นลงทะเบียนได้เมื่อนโยบายเปิดใช้ API ตรวจ MFA assurance state สำหรับ privileged route และ workflow action เสมอ หน้าเว็บที่มองเห็นได้ไม่สามารถ bypass การตรวจนี้ได้
@@ -250,7 +263,7 @@ Notification ถูกเขียนลง durable outbox ใน transaction �
 
 ## 11. มาตรฐาน API
 
-API ใช้ JSON endpoint แบบ versioned ภายใต้ `/api/v1` และเผยแพร่ OpenAPI document Endpoint ใช้ `problem-details` response สำหรับ error และ correlation ID สำหรับการวินิจฉัยเชิงปฏิบัติการ
+API ใช้ JSON endpoint แบบ versioned ภายใต้ `/api/v1` และเผยแพร่ OpenAPI document Endpoint ใช้ `problem-details` response สำหรับ error และ correlation ID สำหรับการวินิจฉัยเชิงปฏิบัติการ Prefix ในตารางต่อไปนี้เป็น relative path ภายใต้ `/api/v1`
 
 ### 11.1 กลุ่ม Endpoint
 
@@ -275,6 +288,12 @@ API ใช้ JSON endpoint แบบ versioned ภายใต้ `/api/v1` แ
 - Request validation เกิดก่อน business mutation Validation failure ห้ามเขียน business record ที่ไม่สมบูรณ์
 - State transition ใช้ optimistic concurrency/version field หรือ transaction lock เพื่อป้องกัน approver/operator สองคน commit การเปลี่ยนแปลงที่ขัดกัน
 - OpenAPI description ระบุ required permission, MFA requirement, scope ที่เกี่ยวข้อง, request schema, response schema และ expected problem type
+
+### 11.3 Same-origin transport และการป้องกัน mutation
+
+- Reverse proxy ส่ง `/api/*` จาก public origin เดียวไปยัง ASP.NET Core API โดยคง versioned suffix เช่น `/api/v1/auth/csrf`; browser ไม่เรียก private API host โดยตรง
+- OpenAPI ต้องระบุ `X-CSRF-Token` เป็น required header ของทุก unsafe method และระบุ `401`, `403` หรือ `problem-details` ที่เกี่ยวข้องกับ session, permission, MFA และ CSRF ให้ทดสอบได้
+- API ตรวจ CSRF token, Origin/Host allowlist, session binding และ permission ก่อน mutation เสมอ ส่วน Next.js server-side session check ใช้เพียงเพื่อประสบการณ์การนำทาง ไม่ลดหรือแทน authorization ของ API
 
 ## 12. สถาปัตยกรรม Online Check-in
 
@@ -319,6 +338,10 @@ Lifecycle event ประกอบด้วย acquisition/registration, assignm
 - System Administrator ทำ technical restore ได้ แต่การทำให้ recovered business data active ต้องผ่าน approval process ที่กำหนด
 - Monitoring ครอบคลุม API health, web health, storage availability, database capacity, notification delivery ที่ล้มเหลว, backup completion และ audit write failure
 
+### 15.3 เกณฑ์ความพร้อมเชิงปฏิบัติการ
+
+ก่อนเข้าสู่ pilot หรือ production ต้องกำหนดและเก็บหลักฐานสำหรับ recovery objective, ความถี่ restore test, capacity/concurrency assumption, NAS namespace/MIME/ขนาดไฟล์ที่อนุญาต, Gmail retry/alert limit และ owner ของ incident response รายการตัดสินใจและหลักฐานอ้างอิงอยู่ในส่วน 20; ค่าเหล่านี้เป็น controlled configuration หรือ operational record ไม่ใช่ค่า hard-code ใน repository
+
 ## 16. สิ่งที่ไม่อยู่ในเป้าหมายของ MVP นี้
 
 - Native Mobile Application
@@ -334,9 +357,9 @@ Lifecycle event ประกอบด้วย acquisition/registration, assignm
 | ระยะ | สิ่งที่ส่งมอบ | Exit Gate |
 | --- | --- | --- |
 | Module 0 | Architecture ที่อนุมัติ, ERD baseline, API contract convention และ deployment/security baseline | ผู้ใช้อนุมัติ design นี้และ implementation plan ที่เกี่ยวข้อง |
-| Module 1 | API/web/database foundation และ health check | Authenticated service อ่าน/เขียน scoped test record ได้ พร้อม migration และ audit |
-| Module 2 | Identity, session, MFA policy และ RBAC | Route test ของผู้ใช้มี/ไม่มีสิทธิ์พิสูจน์ deny-by-default behavior |
-| Module 3 | Workspace/project/site assignment scope | ความพยายาม read/write/export ข้าม scope ถูกปฏิเสธและ audit |
+| Module 1 | API/web/database foundation, migration, correlation/audit foundation และ health check | Web/API proxy และ health check ทำงาน, migration มีหลักฐาน apply/rollback strategy และ controlled technical test mutation มี correlation/audit evidence; ยังไม่อ้างว่า authentication หรือ business scope เสร็จ |
+| Module 2 | Local identity, session, MFA policy และ RBAC | Login/session และ protected test endpoint ทำงาน; ไม่มี session หรือไม่มี named permission ถูกปฏิเสธแบบ deny-by-default และ privileged test endpoint ต้องมี MFA; ยังไม่ใช้ business record ที่ต้องมี scope |
+| Module 3 | Workspace/project/site assignment, `ScopeContext` และ scoped repository/test endpoint | ผู้ใช้ที่ยืนยันตัวตนแล้วอ่าน/เขียน scoped test record ได้เฉพาะ assignment ของตน; list/detail/write/export-simulation ข้าม scope ถูกปฏิเสธโดยไม่รั่วข้อมูลและมี audit evidence |
 | Module 4 | File/NAS adapter | Upload, download, version, checksum และ scope check ผ่าน |
 | Module 5 | Versioned workflow และ notification outbox | Maker-checker, sequential approval, policy version binding และ retry behavior ผ่าน |
 | Module 6 | Online Check-in pilot slice | Camera-only online flow, offline grant/sync, correction และ audit ผ่านบน mobile browser |
@@ -349,7 +372,7 @@ Implementation task ทุกงานต้องทำตาม red/green test
 
 ## 18. ข้อมูลที่ต้องมีใน Production ก่อน Go-Live
 
-Architecture สมบูรณ์ได้โดยไม่ฝัง operational secret ลงในเอกสาร ก่อน production release เจ้าของงานที่ได้รับมอบหมายต้องส่งข้อมูลต่อไปนี้ผ่าน deployment configuration และ controlled policy data:
+Architecture สมบูรณ์ได้โดยไม่ฝัง operational secret ลงในเอกสาร ก่อน production release เจ้าของงานที่ได้รับมอบหมายต้องส่งข้อมูลต่อไปนี้ผ่าน deployment configuration และ controlled policy data พร้อมปิดรายการตัดสินใจและหลักฐานที่เกี่ยวข้องในส่วน 20:
 
 - Canonical HTTPS hostname และเจ้าของการจัดการ certificate
 - PostgreSQL, NAS และ Gmail service credential ผ่าน secret store
@@ -372,3 +395,38 @@ Architecture สมบูรณ์ได้โดยไม่ฝัง operation
 5. Identity, scope, file, workflow, audit และ notification เสร็จก่อนโมดูลธุรกิจทั้งสาม
 6. กฎของ API และฐานข้อมูลเพียงพอที่จะป้องกัน authorization ที่อาศัยเพียงการซ่อน UI หรือ client-provided scope
 7. ข้อจำกัดของ Online Check-in, Field Disbursement และ Asset History ตรงกับพฤติกรรม MVP ที่ต้องการ
+8. Exit Gate ของ Module 1–3 ไม่อ้าง authentication, MFA หรือ scope ก่อนความสามารถนั้นถูกสร้างและทดสอบใน module ที่เหมาะสม
+9. Session transport ใช้ public origin เดียว โดย API เป็น session authority และ mutation มี CSRF token พร้อม Origin/Host validation
+10. Decision Register และ Security/Pilot Acceptance Matrix มี owner, gate และหลักฐานที่ต้องใช้ก่อน pilot หรือ Go-Live
+
+## 20. Decision Register และ Security/Pilot Acceptance Matrix
+
+ส่วนนี้กำหนดรายการที่ต้องตัดสินใจโดยเจ้าของงานและหลักฐานที่ต้องมีเพื่อผ่าน gate ไม่ใช่รายการที่ผ่านแล้ว และห้ามบันทึก credential, token, secret หรือข้อมูลส่วนบุคคลที่ไม่จำเป็นลงในเอกสารนี้
+
+### 20.1 Decision Register
+
+| หัวข้อที่ต้องตัดสินใจ | Owner role | ต้องพร้อมก่อน | หลักฐานที่ยอมรับ |
+| --- | --- | --- | --- |
+| Canonical HTTPS hostname, TLS ownership และ mapping ของ reverse proxy | Operations owner | deploy Module 1 | Configuration review และผล proxy/health check |
+| Session cookie policy, CSRF Origin/Host allowlist, account lockout/reset และ MFA recovery | Security owner | Exit Gate Module 2 | API/OpenAPI review และผล security acceptance test |
+| Role, permission, workspace/project/site assignment และ data-type scope สำหรับ test environment | System/Business owner ร่วมกับ Security owner | Exit Gate Module 3 | Scope matrix ที่อนุมัติและผล cross-scope test |
+| NAS namespace, MIME type, byte-size limit, retention และผู้รับผิดชอบ storage incident | Operations owner ร่วมกับ Security owner | Exit Gate Module 4 | Storage policy และผล integration test |
+| Approval threshold, approver chain, escalation และ policy owner | Business process owner | Exit Gate Module 5 และ Module 7 | Policy configuration ที่อนุมัติและ workflow test evidence |
+| GPS tolerance, clock policy, offline-grant duration และ correction review | Field operations owner | Exit Gate Module 6 | Field test record และ approved exception policy |
+| Disbursement limit, settlement rule, manual-payment proof และ financial approver | Finance owner | Exit Gate Module 7 | Approved financial policy และ pilot test evidence |
+| RPO/RTO, backup destination/retention, restore-test schedule, Gmail retry/alert limit และ incident owner | Operations owner | Exit Gate Module 9 และก่อน Module 10 | Restore report, alert test และ runbook review |
+| Pilot project/site, participant role list, training และ UAT sign-off owner | Pilot owner | Exit Gate Module 10 | Training record และ UAT/pilot acceptance sign-off |
+
+### 20.2 Security/Pilot Acceptance Matrix
+
+| สถานการณ์ที่ต้องทดสอบ | เริ่มบังคับใช้ใน | เกณฑ์หลักฐานผ่าน |
+| --- | --- | --- |
+| Request ที่ไม่มี session, session ที่ถูก revoke หรือผู้ใช้ที่ไม่มี named permission เรียก protected test endpoint | Module 2 | API ส่ง expected `problem-details` โดยไม่เปิดข้อมูล และมี audit evidence สำหรับเหตุการณ์ security ที่กำหนด |
+| ผู้ใช้ privileged เรียก endpoint ที่ต้องใช้ MFA โดยไม่มี MFA assurance | Module 2 | API ปฏิเสธก่อน mutation พร้อม expected problem type และ audit evidence |
+| Unsafe request ไม่มี/มี `X-CSRF-Token` ผิด, token หมดอายุ หรือ Origin/Host ไม่อยู่ใน allowlist | Module 2 | API ปฏิเสธก่อน mutation, ไม่มี business record เปลี่ยน และมี security audit evidence |
+| ผู้ใช้ที่มี session ถูกต้องพยายาม list/detail/write/export-simulation record นอก workspace/project/site assignment | Module 3 | ไม่รั่วข้อมูล, API ปฏิเสธทุกทางเข้าที่ทดสอบ และมี audit evidence ที่อ้าง correlation ID ได้ |
+| ผู้ใช้ที่ไม่มีสิทธิ์เข้าถึงไฟล์พยายาม upload/download หรือข้าม project namespace | Module 4 | File module ปฏิเสธก่อนเข้าถึง NAS และมี audit evidence |
+| Maker พยายามอนุมัติเอง, ข้ามขั้น หรือ retry action เดิม | Module 5 | Workflow state ไม่เปลี่ยนผิดลำดับ, มี idempotency/audit evidence และ notification retry แยกจาก business outcome |
+| Check-in ใช้ file picker, ไม่มี assignment/exception, หรือส่ง offline event นอก grant | Module 6 | API/PWA ปฏิเสธหรือบันทึก correction ตาม policy พร้อมหลักฐาน audit และ field test |
+| Disbursement ข้าม threshold/approver, ไม่มีหลักฐาน หรือ settlement/manual payment ไม่ครบ | Module 7 | ไม่มี financial state transition ที่ไม่ผ่าน policy และมี approval/payment audit trail |
+| Backup restore, storage outage และ notification delivery failure | Module 9–10 | มี restore report, monitoring/alert result, runbook evidence และ pilot owner ยอมรับผล |
