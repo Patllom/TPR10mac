@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** Task 1 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 โดยมี Minor ค้าง 2 ข้อใน [รายงาน Task 1](../../architecture/module-2-task-1-verification.md) Tasks 2–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Tasks 1–2 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md) (Minor ค้าง 2 ข้อ) และ [รายงาน Task 2](../../architecture/module-2-task-2-verification.md) (Important แก้แล้ว, Minor ค้าง 1 ข้อ) Tasks 3–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -146,7 +146,7 @@ var digest = await argon.GetBytesAsync(32);
 
 **รับ/ส่ง:** ใช้ schema Task 1; `CsrfService.IssueAsync(HttpContext, CancellationToken): Task<string>` และ `ValidateAsync(HttpContext, CancellationToken): Task<bool>`; `GET /api/v1/auth/csrf` คืน `{token}` พร้อม no-store และ pre-auth cookie `__Host-tpr10_preauth` ซึ่งมี security flags แบบ session
 
-- [ ] เขียน test ปฏิเสธก่อน mutation โดยตั้ง HTTPS base address และ Origin ที่อนุญาตใน ApiFactory:
+- [x] เขียน test ปฏิเสธก่อน mutation โดยตั้ง HTTPS base address และ Origin ที่อนุญาตใน ApiFactory:
 
 ```csharp
 [Fact]
@@ -159,8 +159,8 @@ public async Task Login_without_csrf_is_forbidden() {
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CsrfTests` ต้องแดงก่อนติดตั้ง middleware
-- [ ] ใช้ ASP.NET Data Protection สร้าง token ตาม purpose แยกจาก secret encryption และ server record binding; validate expiry ด้วย TimeProvider, ใช้ exact origin tuple scheme/host/port และ configured host; ไม่เชื่อ arbitrary forwarded headers โดยรักษา trusted proxy config Module 1:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CsrfTests` ต้องแดงก่อนติดตั้ง middleware
+- [x] ใช้ ASP.NET Data Protection สร้าง token ตาม purpose แยกจาก secret encryption และ server record binding; validate expiry ด้วย TimeProvider, ใช้ exact origin tuple scheme/host/port และ configured host; ไม่เชื่อ arbitrary forwarded headers โดยรักษา trusted proxy config Module 1:
 
 ```csharp
 if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Request.Method)
@@ -174,10 +174,10 @@ if (HttpMethods.IsPost(context.Request.Method) || HttpMethods.IsPut(context.Requ
 await next(context);
 ```
 
-- [ ] เพิ่ม tests token หาย/แก้ไข/หมดอายุ, flow ผิด, Origin/Host ไม่อนุญาต, forwarded host จาก remote ไม่เชื่อถือ, GET ไม่มี side-effect ทางธุรกิจ; issuer GET สร้างได้เฉพาะ bounded pre-auth record พร้อม rate limit/expiry cleanup ไม่เพิ่ม cookie domain
-- [ ] จัด pipeline forwarded headers → correlation → exception handling → routing → rate limit → authentication → CSRF → authorization → endpoint; บันทึก denial ด้วย sanitized audit แยก transaction ไม่ให้ mutation เกิดก่อนตรวจ
-- [ ] ทำ HTTPS proxy local 4443 ไป Next 4000 หรือ4001 และ API private origin; certificate/key อยู่นอก Git บันทึกวิธี trust local CA ไม่ใช้ `ignoreHTTPSErrors` เป็นผล acceptance; HTTP port ใช้ landing preview เท่านั้น
-- [ ] รัน CsrfTests และ ForwardedHeadersTests ให้ผ่าน พร้อมตรวจ cookie flags/ไม่มี Domain แล้ว commit `feat: enforce same-origin pre-auth CSRF`
+- [x] เพิ่ม tests token หาย/แก้ไข/หมดอายุ, flow ผิด, Origin/Host ไม่อนุญาต, forwarded host จาก remote ไม่เชื่อถือ, GET ไม่มี side-effect ทางธุรกิจ; issuer GET สร้างได้เฉพาะ bounded pre-auth record พร้อม rate limit/expiry cleanup ไม่เพิ่ม cookie domain
+- [x] จัด pipeline forwarded headers → correlation → exception handling → routing → rate limit → authentication → CSRF → authorization → endpoint; บันทึก denial ด้วย sanitized audit แยก transaction ไม่ให้ mutation เกิดก่อนตรวจ — ใน Task 2 ติดตั้งส่วนที่มีจริงและเว้น authentication/authorization ให้ Task 3/6 ตาม ruling ไม่สร้าง handler ปลอม
+- [x] ทำ HTTPS proxy local 4443 ไป Next 4000 หรือ4001 และ API private origin; certificate/key อยู่นอก Git บันทึกวิธี trust local CA ไม่ใช้ `ignoreHTTPSErrors` เป็นผล acceptance; HTTP port ใช้ landing preview เท่านั้น
+- [x] รัน CsrfTests และ ForwardedHeadersTests ให้ผ่าน พร้อมตรวจ cookie flags/ไม่มี Domain แล้ว commit `feat: enforce same-origin pre-auth CSRF`
 
 ## Task 3: Login, session และ logout
 
