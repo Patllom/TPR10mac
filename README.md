@@ -1,4 +1,20 @@
-# TPR-10 Landing Page
+# TPR-10 เว็บและระบบภายใน
+
+Module 1 เพิ่ม ASP.NET Core API และ PostgreSQL foundation พร้อม /portal และ API ผ่าน origin เดียวกับเว็บ
+
+อ่าน [คู่มือ Module 1](docs/runbooks/module-1-foundation.md) และ [หลักฐานตรวจรับ](docs/architecture/module-1-exit-gate.md)
+
+Development ใช้ port 4000; production process ใช้ port 4001; API ภายในใช้ port 5080
+
+```bash
+npm test
+npm run lint
+npm run build
+dotnet tool restore
+dotnet test backend/TPR10.sln -c Release
+dotnet build backend/TPR10.sln -c Release
+dotnet format backend/TPR10.sln --verify-no-changes
+```
 
 Corporate landing page for TPR-10 Co., Ltd., built with Next.js 14, React,
 TypeScript, and Tailwind CSS.

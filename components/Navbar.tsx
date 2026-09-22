@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useTheme } from './ThemeContext';
 import { Sun, Moon, ArrowUpRight, Menu, X } from 'lucide-react';
 
@@ -65,6 +66,9 @@ export default function Navbar({ onOpenContact }: NavbarProps) {
 
         {/* Action Controls & Day/Night Toggle */}
         <div className="flex items-center gap-3">
+          <Link href="/portal" className="hidden xl:inline-flex text-xs text-slate-600 dark:text-slate-300 hover:text-orange-600">
+            เข้าสู่ระบบพนักงาน
+          </Link>
           {/* Day / Night Theme Switch */}
           <button
             onClick={toggleTheme}
@@ -122,6 +126,9 @@ export default function Navbar({ onOpenContact }: NavbarProps) {
             ))}
           </div>
           <div className="pt-2 border-t border-black/5 dark:border-white/10">
+            <Link href="/portal" onClick={() => setMobileMenuOpen(false)} className="mb-4 block px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
+              เข้าสู่ระบบพนักงาน
+            </Link>
             <button
               onClick={() => {
                 setMobileMenuOpen(false);

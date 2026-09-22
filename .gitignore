@@ -1,4 +1,10 @@
 .DS_Store
+backend/**/bin/
+backend/**/obj/
+backend/**/TestResults/
+!backend/.env.foundation.example
+*.pfx
+*.p12
 .superpowers/
 .worktrees/
 tmp/
