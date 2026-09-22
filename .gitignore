@@ -2,7 +2,6 @@
 backend/**/bin/
 backend/**/obj/
 backend/**/TestResults/
-!backend/.env.foundation.example
 *.pfx
 *.p12
 .superpowers/
@@ -14,6 +13,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+!backend/.env.foundation.example
 coverage/
 dist/
 uploads/
