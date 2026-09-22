@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** แผนเสนอให้ตรวจทาน ยังไม่ได้เริ่มพัฒนา Module 2 และยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Task 1 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 โดยมี Minor ค้าง 2 ข้อใน [รายงาน Task 1](../../architecture/module-2-task-1-verification.md) Tasks 2–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -107,7 +107,7 @@ public interface IResetDelivery {
 
 **รับ/ส่ง:** ใช้ `TimeProvider`/`Tpr10DbContext` เดิม; ส่ง `IPasswordHasher`, `IIdentityProvider` ตามสัญญาข้างต้น และ schema ให้ Task 2–7
 
-- [ ] เขียน test hash ก่อน implementation:
+- [x] เขียน test hash ก่อน implementation:
 
 ```csharp
 [Fact]
@@ -122,8 +122,8 @@ public async Task Hash_is_salted_and_rejects_wrong_password() {
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~PasswordTests` ต้องแดงเพราะยังไม่มี hasher
-- [ ] ตรวจ package license/advisories/compatibility จากแหล่งผู้ผลิต แล้ว pin exact resolved version พร้อม lock file; ใช้ `Konscious.Security.Cryptography.Argon2` เป็น candidate ไม่รับรองความปลอดภัยจากชื่อ package เพียงอย่างเดียว ใช้ salt ใหม่แต่ละครั้ง และ compare แบบ fixed-time:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~PasswordTests` ต้องแดงเพราะยังไม่มี hasher
+- [x] ตรวจ package license/advisories/compatibility จากแหล่งผู้ผลิต แล้ว pin exact resolved version พร้อม lock file; ใช้ `Konscious.Security.Cryptography.Argon2` เป็น candidate ไม่รับรองความปลอดภัยจากชื่อ package เพียงอย่างเดียว ใช้ salt ใหม่แต่ละครั้ง และ compare แบบ fixed-time:
 
 ```csharp
 using var argon = new Konscious.Security.Cryptography.Argon2id(
@@ -135,10 +135,10 @@ argon.DegreeOfParallelism = 1;
 var digest = await argon.GetBytesAsync(32);
 ```
 
-- [ ] ทำ encoded format `$argon2id$v=19$m=65536,t=3,p=1$<salt-base64>$<digest-base64>`; parse ต้องจำกัด algorithm/version/parameter และขนาดก่อนจัดสรร memory, malformed hash คืน false ไม่ 500; เพิ่ม test password Unicode, salt ต่างกัน, malformed format, oversized cost, username normalized ชนกัน
-- [ ] สร้างตาราง `users`, `local_credentials`, `external_identities`, `roles`, `permissions`, `role_permissions`, `user_roles`, `mfa_factors`, `sessions`, `password_reset_requests`, `pre_auth_flows`, `mfa_recovery_codes`, `identity_delivery_outbox`; GUID keys, UTC timestamps, unique normalized username และ provider/subject, composite unique role mappings, FK restrictive, indexes token hash/expiry; user มี `security_version` และ active; session มี stage/expiry/idle/MFA time/version; factor มี encrypted secret/last-used-step; token table มี consumed/revoked timestamp
-- [ ] สร้าง migration ด้วย `dotnet ef migrations add AddIdentityFoundation --project backend/src/TPR10.Api --startup-project backend/src/TPR10.Api --output-dir Data/Migrations`; เก็บไฟล์ timestamp ที่ EF สร้างและ snapshot โดยไม่แตะ migration เดิม ทดสอบ migrate ฐานว่างและ upgrade จาก Module 1, unique/FK และ audit trigger ยังคงทำงาน
-- [ ] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~PasswordTests|FullyQualifiedName~IdentitySchemaTests'` ให้ผ่าน แล้ว commit `feat: add identity schema and Argon2id credentials`
+- [x] ทำ encoded format `$argon2id$v=19$m=65536,t=3,p=1$<salt-base64>$<digest-base64>`; parse ต้องจำกัด algorithm/version/parameter และขนาดก่อนจัดสรร memory, malformed hash คืน false ไม่ 500; เพิ่ม test password Unicode, salt ต่างกัน, malformed format, oversized cost, username normalized ชนกัน
+- [x] สร้างตาราง `users`, `local_credentials`, `external_identities`, `roles`, `permissions`, `role_permissions`, `user_roles`, `mfa_factors`, `sessions`, `password_reset_requests`, `pre_auth_flows`, `mfa_recovery_codes`, `identity_delivery_outbox`; GUID keys, UTC timestamps, unique normalized username และ provider/subject, composite unique role mappings, FK restrictive, indexes token hash/expiry; user มี `security_version` และ active; session มี stage/expiry/idle/MFA time/version; factor มี encrypted secret/last-used-step; token table มี consumed/revoked timestamp
+- [x] สร้าง migration ด้วย `dotnet ef migrations add AddIdentityFoundation --project backend/src/TPR10.Api --startup-project backend/src/TPR10.Api --output-dir Data/Migrations`; เก็บไฟล์ timestamp ที่ EF สร้างและ snapshot โดยไม่แตะ migration เดิม ทดสอบ migrate ฐานว่างและ upgrade จาก Module 1, unique/FK และ audit trigger ยังคงทำงาน
+- [x] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~PasswordTests|FullyQualifiedName~IdentitySchemaTests'` ให้ผ่าน แล้ว commit `feat: add identity schema and Argon2id credentials`
 
 ## Task 2: Pre-auth CSRF และ HTTPS transport
 

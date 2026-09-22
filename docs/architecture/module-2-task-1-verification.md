@@ -66,4 +66,28 @@ Node ปัจจุบัน 20.18.0 ทำให้เกิด engine warning
 
 ## Code Review
 
-รอ reviewer อิสระตรวจ commit ทั้งช่วงของ Task 1; จะเพิ่มผลและ verification หลังแก้ข้อค้นพบก่อนส่งมอบ
+Reviewer อิสระ Plato ตรวจช่วง `6c7f1ae..296c880` แบบ read-only และสรุปว่ารับ Task 1 ได้ ไม่พบ Critical/Important ไม่ใช่การรับทั้ง Module 2
+
+ข้อ Minor ที่ยังไม่แก้ตามวิธี Native ของ Superpowers:
+
+1. เพิ่ม malformed-hash tests ที่มี prefix/ความยาวถูกต้อง แต่ Base64 หรือ canonical padding ผิด เพื่อให้ตรวจถึง validation ชั้นใน ไม่หยุดที่ length guard
+2. เพิ่ม negative tests สำหรับ hash length, session stage/expiry และ unique MFA factor ที่ยังไม่ revoked; implementation มี constraints แล้ว แต่ regression coverage ยังไม่ครบกลุ่มนี้
+
+ไม่ยกระดับสองข้อนี้เป็น blocker ของ Task 1 เพราะ reviewer ตรวจพบว่า implementation มีการป้องกันอยู่และยังไม่มี auth endpoint เปิดใช้งาน แต่ต้องติดตามก่อนการรับ security gate
+
+### คำวินิจฉัยของผู้พัฒนาต่อเรื่องที่ reviewer เว้นไว้
+
+| เรื่อง | คำวินิจฉัยและผลหากผิด |
+| --- | --- |
+| Cookie เก่า/role ถูกถอด | ต้องพิสูจน์ Task 3/6 ก่อนเปิด protected API; schema รอบนี้ไม่รับรอง revocation ถ้าข้ามจะเสี่ยงใช้สิทธิ์เก่า |
+| CSRF/Origin/forwarded host | ต้องพิสูจน์ Task 2/3; ถ้าข้ามก่อนเปิด mutation จะเสี่ยง request ปลอม |
+| Reset/recovery/TOTP แข่งกัน | ต้องพิสูจน์ atomic consumption ใน Task 5/7; ถ้าข้ามเสี่ยงใช้หลักฐานซ้ำ |
+| MFA/forced password change | ต้อง enforce stage ใน Task 4/5/7; ถ้าข้ามเสี่ยงข้ามขั้นยืนยันตัวตน |
+| Next cache/return URL | ต้องพิสูจน์ Task 8; ถ้าข้ามเสี่ยงรั่ว session/redirect ภายนอก |
+| Failed attempts/rate limit/account เปลี่ยนระหว่าง login | ต้องออกแบบ transaction และตรวจซ้ำตอนออก session ใน Task 3; provider อ่าน credential รอบนี้อย่างเดียวไม่รับรองการแข่งขัน ถ้าข้ามเสี่ยง brute force/stale credential |
+| Account lifecycle/actor/audit transaction | ต้องพิสูจน์เมื่อมี account/role mutation ใน Task 4/6/7; ถ้าข้ามเสี่ยง mutation ไม่มี audit แม้ trigger เดิมยังอยู่ |
+| Production/benchmark/keys/delivery/dependency | ไม่ผ่าน production gate ในรอบนี้; ต้องแก้ dependency และรับ policy/operation แยกก่อน deploy มิฉะนั้นเสี่ยงตามรายการที่ยังไม่ตรวจ |
+
+บันทึกผล verification รอบสุดท้ายหลัง review เมื่อ 2026-09-22 17:58 UTC: backend 59/59, Node 17/17, backend build และ dotnet format, Next production build และ ESLint ผ่านทั้งหมด ไม่มีการแก้ production code ตาม review และไม่มีการ merge/push
+
+ขั้นถัดไป: Task 2 — Pre-auth CSRF และ HTTPS transport โดยใช้ worktree/ledger เดิมสำหรับแผนนี้ต่อได้ ไม่ต้องทำ Task 1 ซ้ำ
