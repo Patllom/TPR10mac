@@ -4,6 +4,8 @@ backend/**/obj/
 backend/**/TestResults/
 *.pfx
 *.p12
+*.key
+*.pem
 .superpowers/
 .worktrees/
 tmp/

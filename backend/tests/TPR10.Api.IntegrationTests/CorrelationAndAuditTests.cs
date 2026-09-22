@@ -21,7 +21,7 @@ public sealed class CorrelationAndAuditTests(PostgresFixture postgres)
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<Tpr10DbContext>();
         await db.Database.MigrateAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateCsrfClientAsync();
         if (incoming is not null) client.DefaultRequestHeaders.Add("X-Correlation-ID", incoming);
         var response = await client.PostAsJsonAsync("/api/v1/system/technical-probes", new { note = " module-1-proof " });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -48,7 +48,7 @@ public sealed class CorrelationAndAuditTests(PostgresFixture postgres)
     public async Task Empty_note_is_rejected(string? note)
     {
         await using var factory = new ApiFactory(postgres.ConnectionString);
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateCsrfClientAsync();
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.PostAsJsonAsync("/api/v1/system/technical-probes", new { note })).StatusCode);
     }
@@ -57,7 +57,7 @@ public sealed class CorrelationAndAuditTests(PostgresFixture postgres)
     public async Task Oversized_note_is_rejected()
     {
         await using var factory = new ApiFactory(postgres.ConnectionString);
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateCsrfClientAsync();
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.PostAsJsonAsync("/api/v1/system/technical-probes", new { note = new string('a', 501) })).StatusCode);
     }
@@ -65,8 +65,9 @@ public sealed class CorrelationAndAuditTests(PostgresFixture postgres)
     [Fact]
     public async Task Production_does_not_expose_mutation()
     {
-        await using var factory = new ApiFactory(postgres.ConnectionString, "Production");
-        using var client = factory.CreateClient();
+        using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory(postgres.ConnectionString, "Production", settings: keys.Settings);
+        using var client = await factory.CreateCsrfClientAsync();
         Assert.Equal(HttpStatusCode.NotFound,
             (await client.PostAsJsonAsync("/api/v1/system/technical-probes", new { note = "proof" })).StatusCode);
     }
@@ -92,7 +93,7 @@ public sealed class CorrelationAndAuditTests(PostgresFixture postgres)
             await fault.ExecuteNonQueryAsync();
         try
         {
-            using var client = factory.CreateClient();
+            using var client = await factory.CreateCsrfClientAsync();
             var response = await client.PostAsJsonAsync("/api/v1/system/technical-probes", new { note = "must-rollback" });
             Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
             Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);

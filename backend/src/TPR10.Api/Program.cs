@@ -9,6 +9,7 @@ using TPR10.Api.TechnicalProbes;
 using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
 using TPR10.Api.Identity;
+using TPR10.Api.Identity.Csrf;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
@@ -24,6 +25,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddIdentityFoundation();
+builder.Services.AddPreAuthCsrf(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<CorrelationContext>();
 builder.Services.AddScoped<ICorrelationContext>(services => services.GetRequiredService<CorrelationContext>());
 builder.Services.AddScoped<IAuditEventWriter, AuditEventWriter>();
@@ -36,6 +38,10 @@ var app = builder.Build();
 app.UseForwardedHeaders();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
+app.UseRouting();
+app.UseRateLimiter();
+app.UseMiddleware<CsrfMiddleware>();
+app.MapAuthEndpoints();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");
