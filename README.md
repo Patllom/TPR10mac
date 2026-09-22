@@ -16,39 +16,35 @@ dotnet build backend/TPR10.sln -c Release
 dotnet format backend/TPR10.sln --verify-no-changes
 ```
 
-Corporate landing page for TPR-10 Co., Ltd., built with Next.js 14, React,
-TypeScript, and Tailwind CSS.
+Landing Page ของ TPR-10 ใช้ Next.js 14, React, TypeScript และ Tailwind CSS
 
-## Current runtime
+## หน้าปัจจุบัน
 
-The active page is assembled in `app/page.tsx` from these sections:
+หน้าหลักประกอบใน `app/page.tsx` จากส่วนต่อไปนี้:
 
-- Hero and telemetry overview
-- Water resources and telemetering services
-- Digital solutions and AI platforms
-- Infrastructure, network, and security
-- Contact CTA and footer
+- ภาพรวมและ telemetry
+- บริการทรัพยากรน้ำและระบบโทรมาตร
+- โซลูชันดิจิทัลและ AI
+- โครงสร้างพื้นฐาน เครือข่าย และความปลอดภัย
+- ปุ่มติดต่อและส่วนท้าย
 
-The older AETHERIS prototype is preserved in `archive/aetheris/` and is
-excluded from TypeScript compilation and the active runtime.
+ต้นแบบ AETHERIS เดิมอยู่ใน `archive/aetheris/` และไม่รวมใน TypeScript compilation หรือ runtime ปัจจุบัน
 
-## Commands
+## คำสั่งเว็บ
 
 ```bash
-npm install
+npm ci
 npm run dev
 npm run lint
 npm run build
 npm run start
 ```
 
-The development server runs on `http://localhost:4000`. The production
-server runs on `http://localhost:4001` after `npm run build`.
+Development เปิดที่ `http://localhost:4000` ส่วน production process เปิดที่ `http://localhost:4001` หลังรัน `npm run build`
 
-## Known product boundaries
+## ขอบเขตปัจจุบัน
 
-- Telemetry values shown in the hero are simulated client-side demo data.
-- The contact form currently displays a local success state; it is not wired
-  to an email service or backend endpoint.
-- Marketing figures and certification language should be confirmed by the
-  business owner before production publication.
+- ค่า telemetry ในส่วน hero เป็นข้อมูลจำลองใน browser
+- แบบฟอร์มติดต่อแสดงสถานะสำเร็จในเครื่อง ยังไม่เชื่อมอีเมลหรือ backend
+- ตัวเลขการตลาดและข้อความรับรองต้องได้รับการยืนยันจากเจ้าของธุรกิจก่อนเผยแพร่
+- /portal เป็นหน้าเตรียมเปิดใช้งาน; การเข้าสู่ระบบและสิทธิ์เป็นงาน Module 2

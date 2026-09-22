@@ -66,7 +66,7 @@ export default function Navbar({ onOpenContact }: NavbarProps) {
 
         {/* Action Controls & Day/Night Toggle */}
         <div className="flex items-center gap-3">
-          <Link href="/portal" className="hidden xl:inline-flex text-xs text-slate-600 dark:text-slate-300 hover:text-orange-600">
+          <Link href="/portal" className="hidden lg:inline-flex text-xs text-slate-600 dark:text-slate-300 hover:text-orange-600">
             เข้าสู่ระบบพนักงาน
           </Link>
           {/* Day / Night Theme Switch */}
