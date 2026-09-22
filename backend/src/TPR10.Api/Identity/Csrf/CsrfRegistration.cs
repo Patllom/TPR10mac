@@ -1,4 +1,3 @@
-using System.Threading.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.DataProtection;
 using System.Security.Cryptography.X509Certificates;
@@ -57,19 +56,9 @@ public static class CsrfRegistration
     {
         services.AddRateLimiter(_ => { });
         services.AddOptions<Microsoft.AspNetCore.RateLimiting.RateLimiterOptions>()
-            .Configure<IOptions<CsrfOptions>>((limiter, configured) =>
+            .Configure<IOptions<CsrfOptions>, TimeProvider>((limiter, configured, clock) =>
             {
-                var policy = configured.Value;
-                static bool Applies(HttpContext context) => CsrfMiddleware.IsIssuer(context) || CsrfMiddleware.IsUnsafe(context.Request.Method);
-                static FixedWindowRateLimiterOptions Window(int permits) => new()
-                { PermitLimit = permits, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true };
-                limiter.GlobalLimiter = PartitionedRateLimiter.CreateChained(
-                    PartitionedRateLimiter.Create<HttpContext, string>(context => Applies(context)
-                        ? RateLimitPartition.GetFixedWindowLimiter("all", _ => Window(policy.GlobalPermitLimit))
-                        : RateLimitPartition.GetNoLimiter("safe")),
-                    PartitionedRateLimiter.Create<HttpContext, string>(context => Applies(context)
-                        ? RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => Window(policy.PerIpPermitLimit))
-                        : RateLimitPartition.GetNoLimiter("safe")));
+                limiter.GlobalLimiter = new CsrfRateLimiter(configured.Value, clock);
                 limiter.OnRejected = async (context, cancellationToken) =>
                 {
                     context.HttpContext.Response.Headers.CacheControl = "no-store";

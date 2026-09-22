@@ -13,6 +13,36 @@ namespace TPR10.Api.IntegrationTests;
 [Collection("database")]
 public sealed class CsrfTests(PostgresFixture postgres)
 {
+    [Fact]
+    public async Task Flood_from_one_ip_does_not_consume_another_ips_global_admission_budget()
+    {
+        await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString,
+            new() { ["Identity:Csrf:PerIpPermitLimit"] = "1", ["Identity:Csrf:GlobalPermitLimit"] = "3" });
+        await using var factory = driver.Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddSingleton<IStartupFilter>(new TestRemoteHeaderFilter())));
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost:4443") });
+        client.DefaultRequestHeaders.Add("X-Test-Remote", "192.0.2.1");
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/auth/csrf")).StatusCode);
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(HttpStatusCode.TooManyRequests, (await client.GetAsync("/api/v1/auth/csrf")).StatusCode);
+        client.DefaultRequestHeaders.Remove("X-Test-Remote");
+        client.DefaultRequestHeaders.Add("X-Test-Remote", "192.0.2.2");
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/auth/csrf")).StatusCode);
+    }
+
+    private sealed class TestRemoteHeaderFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (context, downstream) =>
+            {
+                context.Connection.RemoteIpAddress = IPAddress.Parse(context.Request.Headers["X-Test-Remote"].ToString());
+                await downstream(context);
+            });
+            next(app);
+        };
+    }
+
     [Theory]
     [InlineData("/api/v1/auth/csrf/")]
     [InlineData("/API/V1/AUTH/CSRF/")]

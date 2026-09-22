@@ -38,6 +38,8 @@ Next ยังคง dev **4000** และ production build **4001** ส่ว�
 
 Rate limit ครอบคลุม issuer และ unsafe methods ใช้ fixed window ไม่เข้าคิว ส่ง 429 พร้อม Retry-After=60 และ no-store โดยไม่เขียน denial audit ทุกครั้งเพื่อไม่ให้โจมตีขยายฐานข้อมูลผ่าน audit ได้ Health GET ไม่ถูกจำกัดด้วย budget นี้
 
+การรับคำขอหัก per-IP และ global budget พร้อมกันภายใต้ lock เดียว คำขอที่เกินโควตา IP ไม่กินโควตารวม เก็บ IP เฉพาะคำขอที่รับเข้ามา จึงมี entries ไม่เกิน GlobalPermitLimit และล้างทุก window ใช้เวลาชนิด monotonic จาก TimeProvider เพื่อไม่อิงการปรับเวลานาฬิกาของระบบ
+
 GET issuer ล้าง pre-auth ที่หมดอายุ/ถูกใช้/ถูกเพิกถอน และใช้ PostgreSQL transaction advisory lock ตรวจเพดานร่วมกันหลาย API instances; ไม่ลบ audit หรือ business data เมื่อเต็มตอบ 503 ผู้ถือ flow เดิมที่ยังใช้ได้ยังขอ token ซ้ำได้ ทั้ง rate limit และจำนวน active flows มีหน้าที่ต่างกัน: rate budget อยู่ใน process จึงต้องทบทวน distributed limiting ก่อนเพิ่มจำนวน replicas
 
 ## กุญแจ Data Protection
