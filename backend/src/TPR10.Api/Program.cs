@@ -8,6 +8,7 @@ using TPR10.Api.Auditing;
 using TPR10.Api.TechnicalProbes;
 using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
+using TPR10.Api.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
@@ -22,6 +23,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardLimit = 1;
 });
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddIdentityFoundation();
 builder.Services.AddScoped<CorrelationContext>();
 builder.Services.AddScoped<ICorrelationContext>(services => services.GetRequiredService<CorrelationContext>());
 builder.Services.AddScoped<IAuditEventWriter, AuditEventWriter>();

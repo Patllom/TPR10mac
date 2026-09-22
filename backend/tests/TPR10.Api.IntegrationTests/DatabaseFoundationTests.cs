@@ -58,6 +58,6 @@ public sealed class DatabaseFoundationTests(PostgresFixture postgres)
         var migrator = db.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
         await migrator.MigrateAsync("0");
         await db.Database.MigrateAsync();
-        Assert.Single(await db.Database.GetAppliedMigrationsAsync());
+        Assert.Equal(db.Database.GetMigrations(), await db.Database.GetAppliedMigrationsAsync());
     }
 }
