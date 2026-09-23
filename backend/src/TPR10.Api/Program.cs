@@ -49,7 +49,7 @@ app.UseExceptionHandler();
 app.UseRouting();
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
+    if (context.Request.Path.StartsWithSegments("/api/v1"))
         context.Response.OnStarting(() => { context.Response.Headers.CacheControl = "no-store"; return Task.CompletedTask; });
     try { await next(context); }
     catch (Exception error) when ((error is Npgsql.NpgsqlException or DbUpdateException
@@ -68,6 +68,8 @@ app.UseAuthorization();
 app.UseMiddleware<RestrictedSessionMiddleware>();
 app.UseMiddleware<SessionActivityMiddleware>();
 app.MapAuthEndpoints();
+app.MapAccountEndpoints();
+app.MapRoleEndpoints();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");

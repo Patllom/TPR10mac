@@ -26,6 +26,8 @@ public static class IdentityCatalog
         (Guid.Parse("20000000-0000-0000-0000-000000000006"), "users:recover-mfa")
     ];
 
+    public static string[] Capabilities => Permissions.Select(x => x.Capability).ToArray();
+
     public static async Task SeedAsync(Tpr10DbContext db, DateTimeOffset now, CancellationToken ct)
     {
         foreach (var role in Roles)

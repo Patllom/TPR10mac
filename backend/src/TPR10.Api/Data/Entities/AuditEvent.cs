@@ -7,6 +7,9 @@ public sealed class AuditEvent
     public DateTimeOffset OccurredAtUtc { get; set; }
     public required string CorrelationId { get; set; }
     public Guid? ActorId { get; set; }
+    public Guid? ActingRoleId { get; set; }
+    public string? TargetType { get; set; }
+    public string? Outcome { get; set; }
     public Guid? WorkspaceId { get; set; }
     public Guid? ProjectId { get; set; }
     public Guid? SiteId { get; set; }

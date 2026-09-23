@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createServer } from 'node:net';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 const root = mkdtempSync(join(tmpdir(), 'tpr10-tls-smoke-'));
 const suffix = root.split('-').at(-1).toLowerCase();
@@ -81,12 +82,31 @@ try {
   assert.equal(missingStatus, '403', readFileSync(join(root, 'denied-body'), 'utf8'));
   const requestConfig = join(root, 'request.conf');
   writeFileSync(requestConfig, `header = "Origin: https://localhost:4443"\nheader = "X-CSRF-Token: ${issued.token}"\nheader = "Content-Type: application/json"\ndata = "{\\"note\\":\\"tls-smoke\\"}"\n`, { mode: 0o600 });
+  assert.equal(tls('/api/v1/system/technical-probes', ['-b', join(root, 'cookies'), '--config', requestConfig, '-o', '/dev/null', '-w', '%{http_code}']), '401');
+  // Test-only DB fixture: validates transport/authorization, not a real login/TOTP flow.
+  // The real password + enrollment + TOTP flow is exercised by the API integration tests.
+  const actorId = randomUUID(); const roleId = randomUUID(); const permissionId = randomUUID();
+  const sessionRaw = randomBytes(32);
+  const hash = createHash('sha256').update(sessionRaw).digest('hex');
+  run('docker', ['exec', '-i', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], { input: `
+    INSERT INTO users(id,username,normalized_username) VALUES ('${actorId}','tls-fixture','TLS-FIXTURE');
+    INSERT INTO roles(id,name,role_class) VALUES ('${roleId}','tls-fixture','staff');
+    INSERT INTO permissions(id,capability) VALUES ('${permissionId}','system:probe');
+    INSERT INTO user_roles(user_id,role_id) VALUES ('${actorId}','${roleId}');
+    INSERT INTO role_permissions(role_id,permission_id) VALUES ('${roleId}','${permissionId}');
+    INSERT INTO mfa_factors(id,user_id,protected_secret,confirmed_at_utc) VALUES ('${randomUUID()}','${actorId}','transport-test-only',now());
+    INSERT INTO sessions(id,user_id,token_hash,stage,created_at_utc,last_seen_at_utc,expires_at_utc,mfa_verified_at_utc)
+      VALUES ('${randomUUID()}','${actorId}',decode('${hash}','hex'),'Active',now(),now(),now()+interval '8 hours',now());
+  ` });
+  writeFileSync(join(root, 'cookies'), `# Netscape HTTP Cookie File\nlocalhost\tFALSE\t/\tTRUE\t0\t__Host-tpr10_session\t${sessionRaw.toString('base64url')}\n`, { mode: 0o600 });
+  const sessionCsrf = JSON.parse(tls('/api/v1/auth/csrf', ['--fail', '-b', join(root, 'cookies')]));
+  writeFileSync(requestConfig, `header = "Origin: https://localhost:4443"\nheader = "X-CSRF-Token: ${sessionCsrf.token}"\nheader = "Content-Type: application/json"\ndata = "{\\"note\\":\\"tls-smoke\\"}"\n`, { mode: 0o600 });
   assert.equal(tls('/api/v1/system/technical-probes', ['-b', join(root, 'cookies'), '--config', requestConfig, '-o', '/dev/null', '-w', '%{http_code}']), '201');
   const forged = spawnSync('curl', ['--silent', '--max-time', '10', '--cacert', join(root, 'ca.pem'), '-H', 'Host: evil.example', 'https://localhost:4443/api/v1/auth/csrf']);
   assert.equal(forged.status, 52, 'Host ที่ไม่อนุญาตต้องถูกปิด connection');
   assert.equal(docker('exec', proxy, 'nginx', '-t').includes('failed'), false);
   assert.ok(api);
-  console.log(`ผ่าน HTTPS acceptance: web${port}, trust CA, cookie flags, 403/201, hostile Host; API ไม่เปิดพอร์ตสาธารณะ`);
+  console.log(`ผ่าน HTTPS acceptance: web${port}, trust CA, cookie flags, 403/401/201, hostile Host; API ไม่เปิดพอร์ตสาธารณะ`);
 } finally {
   if (web) {
     web.kill('SIGTERM');

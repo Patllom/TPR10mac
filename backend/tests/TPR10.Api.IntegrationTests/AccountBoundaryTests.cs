@@ -38,7 +38,7 @@ public sealed class AccountBoundaryTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Adapter_routes_carry_named_policy_but_are_not_mapped_in_real_hosts()
+    public async Task Adapter_routes_carry_named_policy_and_real_hosts_deny_anonymous()
     {
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddScoped<AccountProvisioning>();
@@ -53,8 +53,8 @@ public sealed class AccountBoundaryTests(PostgresFixture postgres)
         {
             await using var factory = new ApiFactory(driver.Database.ConnectionString, environment, settings: keys.Settings);
             using var client = await factory.CreateCsrfClientAsync();
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/users")).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/v1/users", new { username = "intruder", password = Password })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/users")).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/users", new { username = "intruder", password = Password })).StatusCode);
         }
     }
 

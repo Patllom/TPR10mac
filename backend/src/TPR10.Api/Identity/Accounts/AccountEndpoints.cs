@@ -4,7 +4,6 @@ namespace TPR10.Api.Identity.Accounts;
 
 public static class AccountEndpoints
 {
-    // Deliberately not called by Program until Task 6 supplies the permission + MFA policy.
     public static void MapAccountEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/users").RequireAuthorization("users:manage");

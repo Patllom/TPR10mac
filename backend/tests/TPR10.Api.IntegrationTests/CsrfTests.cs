@@ -230,7 +230,9 @@ public sealed class CsrfTests(PostgresFixture postgres)
     [Fact]
     public async Task Valid_csrf_allows_existing_probe_and_missing_csrf_does_not_mutate()
     {
-        await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString);
+        using var keys = new TestKeyMaterial();
+        await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString, keys.Settings);
+        await CorrelationAndAuditTests.ReadyAsync(driver);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await driver.Client.PostAsync("/api/v1/system/technical-probes", null)).StatusCode);
         await using var db = driver.Database.CreateContext();

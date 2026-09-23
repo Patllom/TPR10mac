@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Net.Mail;
 using TPR10.Api.Identity.Data;
 using TPR10.Api.Identity.Passwords;
+using TPR10.Api.Identity.Authorization;
 
 namespace TPR10.Api.Identity.Accounts;
 
@@ -13,12 +14,14 @@ public sealed record AccountView(Guid Id, string Username, string? Email, bool I
 public sealed record AccountPage(AccountView[] Items, int Total, int Page, int PageSize);
 
 // Use-case boundary: owns transaction/audit/Save. HTTP callers must also require the Task 6 MFA policy.
-public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passwords, ISessionService sessions, IAuditEventWriter audit, TimeProvider clock)
+public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passwords, ISessionService sessions, IAuditEventWriter audit, TimeProvider clock,
+    PermissionMutationGuard? guard = null)
 {
     public async Task<IResult> CreateAsync(Guid actorId, CreateAccountRequest request, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct);
+        if (guard is not null && !await guard.AllowsAsync(actorId, "users:manage", ct)) return Denied();
         if (!await CanManageAsync(actorId, ct)) return Denied();
         if (request.RoleIds is not null && !await CanManageAsync(actorId, ct, "roles:manage")) return Denied();
         var normalized = UsernameNormalizer.Normalize(request.Username);
@@ -51,6 +54,7 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct);
+        if (guard is not null && !await guard.AllowsAsync(actorId, "users:manage", ct)) return Denied();
         if (!await CanManageAsync(actorId, ct)) return Denied();
         if (request.RoleIds is not null && !await CanManageAsync(actorId, ct, "roles:manage")) return Denied();
         if ((request.IsActive is null && request.RoleIds is null) || (request.RoleIds is not null && !await ValidRolesAsync(request.RoleIds, ct))) return Invalid();
@@ -70,6 +74,7 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
             return Results.Problem(statusCode: 409, title: "ไม่สามารถปิดหรือถอดผู้ดูแลที่ใช้งานอยู่คนสุดท้ายได้");
         var rolesChanged = !previous.ToHashSet().SetEquals(roles);
         if (active == user.IsActive && !rolesChanged) return Results.Ok(View(user, roles));
+        var hadManagingAdmin = await PermissionMutationGuard.HasManagingAdminAsync(db, ct);
         user.IsActive = active;
         user.UpdatedAtUtc = clock.GetUtcNow();
         if (rolesChanged)
@@ -77,6 +82,9 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
             db.RemoveRange(mappings.Where(x => !roles.Contains(x.RoleId)));
             foreach (var role in roles.Except(previous)) db.Add(new UserRole { UserId = userId, RoleId = role, CreatedAtUtc = clock.GetUtcNow() });
         }
+        await db.SaveChangesAsync(ct);
+        if (hadManagingAdmin && !await PermissionMutationGuard.HasManagingAdminAsync(db, ct))
+            return Results.Problem(statusCode: 409, title: "ไม่สามารถถอดสิทธิ์จัดการของผู้ดูแลคนสุดท้ายได้");
         await sessions.RevokeUserAsync(userId, "account-or-role-change", ct);
         await WriteAuditAsync("identity.user.updated", actorId, userId, rolesChanged ? "active,roles" : "active", ct);
         await db.SaveChangesAsync(ct);
@@ -86,6 +94,7 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
 
     public async Task<IResult> ListAsync(Guid actorId, int page, int pageSize, CancellationToken ct)
     {
+        if (guard is not null && !await guard.AllowsAsync(actorId, "users:manage", ct)) return Denied();
         if (!await CanManageAsync(actorId, ct)) return Denied();
         if (page < 1 || pageSize < 1) return Invalid();
         pageSize = Math.Min(pageSize, 100);

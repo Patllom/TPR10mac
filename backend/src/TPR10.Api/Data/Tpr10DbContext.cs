@@ -26,6 +26,9 @@ public sealed class Tpr10DbContext(DbContextOptions<Tpr10DbContext> options) : D
         audit.Property(x => x.OccurredAtUtc).HasColumnName("occurred_at_utc");
         audit.Property(x => x.CorrelationId).HasColumnName("correlation_id").HasMaxLength(36);
         audit.Property(x => x.ActorId).HasColumnName("actor_id");
+        audit.Property(x => x.ActingRoleId).HasColumnName("acting_role_id");
+        audit.Property(x => x.TargetType).HasColumnName("target_type").HasMaxLength(120);
+        audit.Property(x => x.Outcome).HasColumnName("outcome").HasMaxLength(40);
         audit.Property(x => x.WorkspaceId).HasColumnName("workspace_id");
         audit.Property(x => x.ProjectId).HasColumnName("project_id");
         audit.Property(x => x.SiteId).HasColumnName("site_id");

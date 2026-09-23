@@ -1,8 +1,33 @@
-# คู่มือ Module 2 — Tasks 2–5: HTTPS, Session บัญชีผู้ใช้ และ MFA
+# คู่มือ Module 2 — Tasks 2–6: HTTPS, Session บัญชีผู้ใช้ MFA และสิทธิ์
 
 ## ขอบเขต
 
-มี API สำหรับ CSRF, Login, ตรวจ Session, Logout และ MFA พร้อม CLI สร้างผู้ดูแลแรกและ use case จัดการบัญชีแล้ว API จัดการบัญชียังไม่เปิดจน Task 6 มี permission+MFA policy ครบ ยังไม่มีหน้า Login และยังไม่ใช่การอนุมัติขึ้น Production
+มี API สำหรับ CSRF, Login, ตรวจ Session, Logout และ MFA พร้อม CLI สร้างผู้ดูแลแรกและ API จัดการบัญชี/role ภายใต้ permission+MFA แล้ว ยังไม่มีหน้า Login และยังไม่ใช่การอนุมัติขึ้น Production
+
+## สิทธิ์และ Audit (Task 6)
+
+ทุก route ด้านล่างต้อง Active session, capability ปัจจุบันและ MFAไม่เกิน15นาที; unsafe methods ต้อง Origin/CSRF ด้วย ทุกresponse no-store:
+
+| Endpoint | Capability | ข้อมูลเข้า |
+| --- | --- | --- |
+| GET/POST `/api/v1/users`, PATCH `/api/v1/users/{id}` | `users:manage`; ระบุRoleIdsต้อง`roles:manage`เพิ่ม | สัญญาบัญชีด้านล่าง |
+| GET/POST `/api/v1/roles` | `roles:manage` | POST `{name,roleClass}` |
+| PATCH `/api/v1/roles/{id}` | `roles:manage` | `{name}` classเปลี่ยนไม่ได้ |
+| PUT `/api/v1/roles/{id}/permissions` | `roles:manage` | `{permissionIds:[UUID]}` แทนรายการเดิมทั้งชุด |
+| PUT `/api/v1/users/{id}/roles` | `roles:manage` | `{roleIds:[UUID]}` แทนรายการเดิมทั้งชุด |
+| GET `/api/v1/permissions` | `roles:read` | catalogระบบ สร้างcapabilityเองไม่ได้ |
+| POST `/api/v1/users/{id}/sign-out-everywhere` | `users:manage` | ยกเลิกทุกsessionและเพิ่มversion |
+| POST `/api/v1/users/{id}/mfa/recover` | `users:recover-mfa` | `{reason,evidenceReference}` ห้ามself-recovery |
+
+GET `/api/v1/system/identity-probe` และ POST `/api/v1/system/technical-probes` เฉพาะTesting/Development ต้อง`system:probe`+MFA ปัญหาที่policyปฏิเสธใช้ `urn:tpr10:session-required`, `permission-denied`, `mfa-required`, `stage-restricted` พร้อมcorrelation
+
+เปลี่ยนgrants/rolesจะrevokeaffectedusersรวมผู้ทำรายการถ้าตนได้รับผล ต้องlogin/MFAใหม่ไม่ใช้cookie/CSRFเก่า ถ้าทำให้ไม่มีadminclassหรือadminที่มีusers:manage/roles:manageเหลือจะ409; ไม่พบtarget404; รายการซ้ำ/UUIDที่ไม่มี/ข้อมูลผิด400
+
+ก่อนใช้ฐานเก่าให้backupและรันmigrationตามคู่มือdeploymentโดยตรวจdestination ห้ามใช้ฐานproductionทดสอบ `ExpandIdentityAudit` ไม่เขียนทับauditเก่า ไม่คืนgrantที่เคยถอด เติมcatalogเฉพาะฐานbootstrapเดิม ผู้มีroles:manage+MFAใช้GETpermissions/PUTrolepermissionsเพื่ออนุมัติcapabilityใหม่อย่างตั้งใจ หากไม่มีผู้มีอำนาจเหลือให้หยุดและใช้ขั้นตอนกู้คืนที่องค์กรอนุมัติ ไม่แก้SQLสิทธิ์โดยพลการ
+
+Auditใหม่เก็บactor/roleที่APIเลือกจริง/action/target/outcome/correlationและscopenullจนModule3 คอลัมน์ใหม่ในauditเก่าnullไม่ใช่ข้อมูลสูญหาย Audit+mutationrollbackพร้อมกัน ห้ามใส่password/token/secret/หลักฐานบุคคลดิบในreason/evidenceReference; metadataallowlistไม่ตรวจsecretที่แฝงในข้อความอิสระได้ทั้งหมด
+
+HTTPSsmokeใช้sessionfixtureเฉพาะฐานทดสอบ ไม่ใช่login/TOTPในbrowser; APIintegrationtestsใช้login/enroll/confirmจริง
 
 ## MFA (Task 5)
 
@@ -27,9 +52,9 @@ Enrollment และ restricted challenge หมดอายุ10นาที �
 
 รหัสผิด5ครั้งใน15นาทีล็อก MFA account15นาที คำขอถัดไป429พร้อม Retry-After เปลี่ยน session หรือรอ IP rate limitครบ1นาทีไม่ล้าง account lock; keyหาย/ถอดรหัสไม่ได้503แบบไม่ให้ assurance อย่าสร้าง key ใหม่ทับแล้วคาดว่า factorเก่าจะใช้ได้
 
-Operator-assisted recovery ยังไม่เปิด HTTP ใน Task5 ต้องมี `users:recover-mfa` แยกจาก users:manage, recent MFAไม่เกิน15นาที และห้ามทำให้ตนเอง ต้องยืนยันตัวบุคคลนอกระบบตามนโยบายองค์กรก่อนบันทึกเหตุผล/เลขอ้างอิงเคส ห้ามใส่รหัสลับหรือเอกสารส่วนบุคคลดิบใน audit ไม่มี backdoor ข้าม MFA ให้ผู้ดูแลคนเดียวที่สูญเสียทั้ง factor และ recovery codes
+Operator-assisted recovery เปิด HTTP ตามหัวข้อ Task6 ต้องมี `users:recover-mfa` แยกจาก users:manage, recent MFAไม่เกิน15นาที และห้ามทำให้ตนเอง ต้องยืนยันตัวบุคคลนอกระบบตามนโยบายองค์กรก่อนบันทึกเหตุผล/เลขอ้างอิงเคส ห้ามใส่รหัสลับหรือเอกสารส่วนบุคคลดิบใน audit ไม่มี backdoor ข้าม MFA ให้ผู้ดูแลคนเดียวที่สูญเสียทั้ง factor และ recovery codes
 
-Bootstrapใหม่ seed capability `users:recover-mfa` เพิ่มด้วย ฐานข้อมูลที่มีบัญชีอยู่ก่อนแล้วจะไม่ถูกเปลี่ยน grants อัตโนมัติ; Task6ต้องตรวจ catalog/grants และ operator ที่ได้รับอนุมัติก่อนเปิด route
+Bootstrapใหม่ seed capability `users:recover-mfa` เพิ่มด้วย ฐานข้อมูลเดิมไม่เปลี่ยน grants อัตโนมัติ ให้ตรวจ catalog/grants และ operator ที่ได้รับอนุมัติตามขั้นตอน Task6 ด้านบน
 
 ## สร้างผู้ดูแลเริ่มต้น (Task 4)
 
@@ -45,7 +70,7 @@ dotnet run --project backend/src/TPR10.Api -- --bootstrap-admin
 
 สอง process แข่งกันจะสร้างได้เพียงหนึ่งราย ใช้ transaction และ advisory lock `7241002` ร่วมกับ account mutations; seed 5 role classes และ permissions `users:manage`, `roles:manage`, `roles:read`, `audit:read`, `system:probe`, `users:recover-mfa` ด้วย ID คงที่ ไม่มีบัญชีทดลอง หากเชื่อมต่อขาดระหว่าง commit ให้ตรวจสถานะฐานข้อมูลก่อน retry; ไม่รับรอง exactly-once acknowledgement
 
-### ข้อตกลงบัญชีที่จะเปิดใน Task 6
+### ข้อตกลงบัญชีที่เปิดใน Task 6
 
 - `POST /api/v1/users`: สร้างบัญชี บังคับเปลี่ยนรหัสผ่านในการเข้าใช้ครั้งแรก; ไม่มี self-registration
 - `PATCH /api/v1/users/{id}`: เปลี่ยน active หรือ roles; ต้องมี `users:manage` และเมื่อระบุ roles ต้องมี `roles:manage` เพิ่มด้วย
