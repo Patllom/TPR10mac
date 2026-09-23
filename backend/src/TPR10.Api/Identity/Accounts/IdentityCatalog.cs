@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Data;
+using TPR10.Api.Scopes;
 
 namespace TPR10.Api.Identity.Accounts;
 
@@ -26,18 +27,21 @@ public static class IdentityCatalog
         (Guid.Parse("20000000-0000-0000-0000-000000000006"), "users:recover-mfa")
     ];
 
-    public static string[] Capabilities => Permissions.Select(x => x.Capability).ToArray();
+    public static string[] Capabilities => Permissions.Select(x => x.Capability)
+        .Concat(ScopeCatalog.Permissions.Select(x => x.Capability)).ToArray();
 
     public static async Task SeedAsync(Tpr10DbContext db, DateTimeOffset now, CancellationToken ct)
     {
         foreach (var role in Roles)
             if (!await db.Set<IdentityRole>().AnyAsync(x => x.Id == role.Id, ct))
                 db.Add(new IdentityRole { Id = role.Id, Name = role.Name, RoleClass = role.Class, CreatedAtUtc = now });
-        foreach (var permission in Permissions)
+        foreach (var permission in Permissions.Select(x => (x.Id, x.Capability, Domain: ScopeCatalog.SystemDomain))
+                     .Concat(ScopeCatalog.Permissions))
         {
             if (!await db.Set<IdentityPermission>().AnyAsync(x => x.Id == permission.Id, ct))
-                db.Add(new IdentityPermission { Id = permission.Id, Capability = permission.Capability });
-            if (!await db.Set<RolePermission>().AnyAsync(x => x.RoleId == AdministratorRoleId && x.PermissionId == permission.Id, ct))
+                db.Add(new IdentityPermission { Id = permission.Id, Capability = permission.Capability, Domain = permission.Domain });
+            if (permission.Domain == ScopeCatalog.SystemDomain
+                && !await db.Set<RolePermission>().AnyAsync(x => x.RoleId == AdministratorRoleId && x.PermissionId == permission.Id, ct))
                 db.Add(new RolePermission { RoleId = AdministratorRoleId, PermissionId = permission.Id });
         }
     }
