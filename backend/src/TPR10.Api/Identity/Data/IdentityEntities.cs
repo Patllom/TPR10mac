@@ -21,6 +21,8 @@ public sealed class LocalCredential
     public DateTimeOffset? FailureWindowStartedAtUtc { get; set; }
     public DateTimeOffset? LockedUntilUtc { get; set; }
     public DateTimeOffset PasswordChangedAtUtc { get; set; }
+    public DateTimeOffset? TemporaryExpiresAtUtc { get; set; }
+    public DateTimeOffset? TemporaryConsumedAtUtc { get; set; }
 }
 
 public sealed class ExternalIdentity

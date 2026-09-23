@@ -15,6 +15,8 @@ public static class IdentityRegistration
         services.AddScoped<IIdentityProvider, LocalIdentityProvider>();
         services.AddScoped<RequestSession>();
         services.AddScoped<LoginService>();
+        services.AddScoped<Reset.PasswordResetService>();
+        services.AddScoped<IResetDelivery, Reset.ResetDelivery>();
         services.AddScoped<AccountProvisioning>();
         services.AddScoped<RoleAdministration>();
         services.AddScoped<Authorization.PermissionMutationGuard>();

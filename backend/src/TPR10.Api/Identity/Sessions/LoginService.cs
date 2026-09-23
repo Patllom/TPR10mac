@@ -81,6 +81,7 @@ public sealed class LoginService(Tpr10DbContext db, IIdentityProvider provider, 
             stage = confirmed ? SessionStage.MfaChallengeRequired : mandatory ? SessionStage.MfaEnrollmentRequired : SessionStage.Active;
         }
         var issued = await sessions.IssueAsync(user.Id, stage, ct);
+        if (credential.TemporaryExpiresAtUtc is not null) credential.TemporaryConsumedAtUtc = clock.GetUtcNow();
         credential.FailedAttempts = attempts.FailedAttempts = 0;
         credential.LockedUntilUtc = attempts.LockedUntilUtc = null;
         credential.FailureWindowStartedAtUtc = null;

@@ -222,6 +222,27 @@ node infra/nginx/smoke-identity-https.mjs 4000
 
 สคริปต์สร้าง CA อายุ 1 วันใน temp directory และให้ curl เชื่อถือเฉพาะ CA นี้ ตรวจ TLS จริง, เว็บ, cookie flags, no-store, CSRF 403/201 และ hostile Host รวมถึงพิสูจน์ว่า client ที่ไม่ trust CA ถูกปฏิเสธ ใช้ฐานข้อมูลทดสอบใน Docker แยก ไม่เชื่อมฐานข้อมูลผู้ใช้ ล้างเฉพาะ containers/network/ไฟล์ชั่วคราวที่สร้างเอง และหยุด Next ที่เริ่มเองเมื่อจบ ไม่เปิด preview ค้างไว้
 
+## Password reset และ forced password change (Task 7)
+
+| Endpoint (POST ทั้งหมด) | สิ่งที่ต้องส่ง | ผลสำเร็จ |
+| --- | --- | --- |
+| `/api/v1/auth/password-reset/request` | `{username}` และ pre-auth CSRF/Origin | 202 ข้อความทั่วไปเหมือนกัน ไม่รับรองว่ามีบัญชีหรือส่งอีเมลแล้ว |
+| `/api/v1/auth/password-reset/complete` | `{token,password}` และ CSRF/Origin | 204; token ใช้ครั้งเดียว เพิกถอนทุก session และ token เก่า ไม่มี auto-login |
+| `/api/v1/auth/password/change` | `{currentPassword,newPassword}` พร้อม session และ CSRF/Origin | 204; รองรับ Active/PasswordChangeRequired ล้าง cookie และต้อง login ใหม่ |
+| `/api/v1/users/{id}/password-reset` | session ของผู้ดูแลที่มี `users:manage`, MFA ปัจจุบัน และ CSRF/Origin | 200 `{temporaryPassword,expiresAtUtc}` แสดงครั้งเดียวผ่าน no-store response |
+
+รหัสชั่วคราวหมดอายุใน 15 นาที ใช้ login สำเร็จได้ครั้งเดียวและได้เฉพาะ `PasswordChangeRequired` ห้ามเข้าหน้าธุรกิจก่อนเปลี่ยนรหัส หลังเปลี่ยนต้อง login ใหม่และทำ MFA ตาม role/factor เดิม หาก response หายหรือ session หลัง login หาย ให้ผู้ดูแลออกใหม่ ห้ามบันทึกหรือส่งรหัสใน email/log/screenshot/ticket ผู้ดูแลต้องส่งต่อผ่านช่องทางยืนยันตัวบุคคลที่องค์กรอนุมัติ
+
+Email reset ใน production **ยังไม่พร้อม**: `Identity:Reset:EmailEnabled` ต้องเป็น false (ค่าเริ่มต้น production) การตั้ง true ทำให้ startup validation ปฏิเสธ จนกว่าจะเชื่อม delivery adapter Module 5 Endpoint ยังคงตอบข้อความทั่วไป 202 แต่ไม่สร้าง outbox และไม่กล่าวว่าส่งแล้ว
+
+Testing/Development เปิดได้เมื่อมี persistent key ring พร้อม certificate ตามข้อกำหนด CSRF ตั้ง `Identity:Reset:EmailEnabled=false` เพื่อปิดได้ เมื่อเปิด คำขอที่เข้าเกณฑ์มี token hash ใน DB และ payload เข้ารหัสใน outbox แต่ยังไม่มี background email worker ผู้พัฒนาเรียก `ResetOutboxDispatcher.DispatchAsync(requestId, ct)` ผ่าน DI scope และอ่านครั้งเดียวด้วย `DevelopmentResetSink.Take(requestId)` ผ่าน DI เท่านั้น ไม่มี HTTP route สำหรับดู token และ sink ไม่ถูกลงทะเบียนใน production ห้าม log ค่าที่อ่านได้
+
+คำขอซ้ำขณะที่ token เดิมยังใช้ได้ไม่สร้าง token ใหม่ Outbox retry ใช้ request ID/payload เดิม สูงสุด 5 ครั้ง เว้น 1 นาที และไม่ส่งเมื่อหมดอายุ/ใช้แล้ว/เพิกถอน/บัญชีปิด/recipient เปลี่ยน Adapter จริงต้อง deduplicate ด้วย request ID เพราะการส่งกับ DB commit ไม่ใช่ exactly-once และต้องมี retention/monitoring ใน Module 5
+
+Migration `AddTemporaryCredentialLifecycle` เพิ่ม nullable expiry/consumed ใน local credential ไม่เปลี่ยน credential เดิม ห้าม downgrade หลังเปิดใช้ temporary password โดยไม่มีแผนรักษาการ consume/expiry ไม่ล้าง MFA หรือ lockout เดิมเมื่อ reset; หากยังติด lockout ต้องรอเวลานโยบายเดิม
+
+รายละเอียดหลักฐานและข้อจำกัดอยู่ใน [รายงาน Task 7](../architecture/module-2-task-7-verification.md)
+
 ## จุดตรวจรับก่อนขั้นถัดไป
 
 รัน backend tests/build/format, Node tests, Next lint/build และ independent code review ก่อนถือว่าจบ Task 3 ลำดับปัจจุบันคือ authentication → CSRF → authorization → idle activity → endpoint; ห้ามถือว่า pre-auth validation หรือ stage เป็นหลักฐาน business permission

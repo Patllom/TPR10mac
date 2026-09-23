@@ -13,6 +13,13 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapMfaEndpoints();
+        endpoints.MapPost("/api/v1/auth/password/change", (Reset.PasswordChangeRequest request, Reset.PasswordResetService reset,
+            HttpContext context, RequestSession current, CancellationToken ct) => reset.ChangeAsync(request, context, current, ct))
+            .RequireAuthorization().WithMetadata(new AllowedSessionStages(SessionStage.PasswordChangeRequired, SessionStage.Active));
+        endpoints.MapPost("/api/v1/auth/password-reset/request", (Reset.ResetRequest request, Reset.PasswordResetService reset, CancellationToken ct)
+            => reset.RequestAsync(request, ct));
+        endpoints.MapPost("/api/v1/auth/password-reset/complete", (Reset.ResetCompleteRequest request, Reset.PasswordResetService reset, RequestSession current, CancellationToken ct)
+            => reset.CompleteAsync(request, current, ct));
         endpoints.MapGet("/api/v1/auth/csrf", async (HttpContext context, CsrfService csrf, CancellationToken cancellationToken) =>
         {
             try { return Results.Ok(new { token = await csrf.IssueAsync(context, cancellationToken) }); }

@@ -12,6 +12,7 @@ using TPR10.Api.Identity;
 using TPR10.Api.Identity.Csrf;
 using TPR10.Api.Identity.Sessions;
 using TPR10.Api.Identity.Accounts;
+using TPR10.Api.Identity.Reset;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -34,6 +35,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddIdentityFoundation();
 builder.Services.AddPreAuthCsrf(builder.Configuration, builder.Environment);
+builder.Services.AddPasswordResetDelivery(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<CorrelationContext>();
 builder.Services.AddScoped<ICorrelationContext>(services => services.GetRequiredService<CorrelationContext>());
 builder.Services.AddScoped<IAuditEventWriter, AuditEventWriter>();

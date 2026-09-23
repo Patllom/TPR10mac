@@ -42,10 +42,11 @@ public sealed class AccountBoundaryTests(PostgresFixture postgres)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddScoped<AccountProvisioning>();
+        builder.Services.AddScoped<TPR10.Api.Identity.Reset.PasswordResetService>();
         await using var app = builder.Build();
         app.MapAccountEndpoints();
         var routes = ((IEndpointRouteBuilder)app).DataSources.SelectMany(x => x.Endpoints).ToArray();
-        Assert.Equal(3, routes.Length);
+        Assert.Equal(4, routes.Length);
         Assert.All(routes, route => Assert.Contains(route.Metadata.GetOrderedMetadata<IAuthorizeData>(), x => x.Policy == "users:manage"));
         await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString);
         using var keys = new TestKeyMaterial();
@@ -55,6 +56,7 @@ public sealed class AccountBoundaryTests(PostgresFixture postgres)
             using var client = await factory.CreateCsrfClientAsync();
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/users")).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/users", new { username = "intruder", password = Password })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync($"/api/v1/users/{Guid.NewGuid()}/password-reset", new { })).StatusCode);
         }
     }
 

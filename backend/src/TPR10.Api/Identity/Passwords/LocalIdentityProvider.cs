@@ -21,10 +21,13 @@ public sealed class LocalIdentityProvider(Tpr10DbContext db, IPasswordHasher has
                                  user.IsActive,
                                  credential.PasswordHash,
                                  credential.MustChangePassword,
-                                 credential.LockedUntilUtc
+                                 credential.LockedUntilUtc,
+                                 credential.TemporaryExpiresAtUtc,
+                                 credential.TemporaryConsumedAtUtc
                              }).SingleOrDefaultAsync(ct);
         var matches = await hasher.VerifyAsync(password, account?.PasswordHash ?? DummyHash, ct);
-        if (!matches || account is null || !account.IsActive || account.LockedUntilUtc > clock.GetUtcNow()) return null;
+        if (!matches || account is null || !account.IsActive || account.LockedUntilUtc > clock.GetUtcNow()
+            || account.TemporaryConsumedAtUtc is not null || account.TemporaryExpiresAtUtc <= clock.GetUtcNow()) return null;
         return new PasswordCheck(account.Id, account.MustChangePassword);
     }
 }

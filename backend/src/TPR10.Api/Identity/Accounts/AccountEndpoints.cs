@@ -7,6 +7,8 @@ public static class AccountEndpoints
     public static void MapAccountEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/users").RequireAuthorization("users:manage");
+        group.MapPost("/{id:guid}/password-reset", (HttpContext context, Reset.PasswordResetService reset, Guid id, CancellationToken ct)
+            => Actor(context, out var actor) ? reset.AdminResetAsync(actor, id, ct) : Task.FromResult(Results.Unauthorized()));
         group.MapGet("", ListAsync);
         group.MapPost("", async (HttpContext context, AccountProvisioning accounts, CreateAccountRequest request, CancellationToken ct) =>
         {
