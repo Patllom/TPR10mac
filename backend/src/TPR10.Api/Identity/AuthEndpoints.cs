@@ -13,6 +13,23 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapMfaEndpoints();
+        endpoints.MapPost("/api/v1/auth/logout-all", async (HttpContext context, ISessionService sessions,
+            Tpr10DbContext db, IAuditEventWriter audit, CancellationToken ct) =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct);
+            var token = context.Request.Cookies[CsrfService.SessionCookieName];
+            var current = token is null ? null : await sessions.ValidateAsync(token, ct);
+            if (current is null) return Results.Unauthorized();
+            await sessions.RevokeUserAsync(current.UserId, "self-sign-out", ct);
+            await audit.WriteAsync("identity.logout-all", current.UserId,
+                new Dictionary<string, string> { ["outcome"] = "success" }, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            context.Response.Cookies.Delete(CsrfService.SessionCookieName, SessionAuthenticationHandler.CookieOptions());
+            context.Response.Cookies.Delete(CsrfService.CookieName, SessionAuthenticationHandler.CookieOptions());
+            return Results.NoContent();
+        }).RequireAuthorization().WithMetadata(AllowedSessionStages.Common);
         endpoints.MapPost("/api/v1/auth/password/change", (Reset.PasswordChangeRequest request, Reset.PasswordResetService reset,
             HttpContext context, RequestSession current, CancellationToken ct) => reset.ChangeAsync(request, context, current, ct))
             .RequireAuthorization().WithMetadata(new AllowedSessionStages(SessionStage.PasswordChangeRequired, SessionStage.Active));

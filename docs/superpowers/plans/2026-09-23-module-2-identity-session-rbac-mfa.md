@@ -6,7 +6,7 @@
 
 **สถาปัตยกรรม:** เพิ่ม Identity module ภายใน ASP.NET Core modular monolith เดิม ใช้ PostgreSQL เดิม และคง Next.js เป็นหน้าเว็บ/API consumer เท่านั้น ผู้ใช้เข้า HTTPS origin เดียวผ่าน reverse proxy; ไม่เพิ่ม authentication server หรือ JWT ใน browser
 
-**เทคโนโลยี:** Next.js 14/React 18/TypeScript, .NET 10, EF Core/Npgsql, PostgreSQL, xUnit/Testcontainers เดิม; เพิ่ม Argon2id และ TOTP ผ่าน library ที่ตรวจ dependency ก่อนติดตั้ง เพิ่ม Playwright สำหรับ browser acceptance
+**เทคโนโลยี:** Next.js 15.5.26/React 19.3/TypeScript (ผู้ใช้อนุมัติอัปเกรดแก้ช่องโหว่ระหว่าง Task 8), .NET 10, EF Core/Npgsql, PostgreSQL, xUnit/Testcontainers; Argon2id และ TOTP; Playwright 1.63.0 สำหรับ browser acceptance
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 

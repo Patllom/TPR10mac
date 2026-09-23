@@ -16,7 +16,7 @@ dotnet build backend/TPR10.sln -c Release
 dotnet format backend/TPR10.sln --verify-no-changes
 ```
 
-Landing Page ของ TPR-10 ใช้ Next.js 14, React, TypeScript และ Tailwind CSS
+Landing Page และหน้า authentication ใช้ Next.js 15.5.26, React 19.3, TypeScript และ Tailwind CSS ใช้ Node.js 22.13 ขึ้นไปในสาย 22 หรือ Node 24 ขึ้นไป (`.nvmrc` ระบุรุ่นที่ทดสอบ)
 
 ## หน้าปัจจุบัน
 
@@ -47,4 +47,5 @@ Development เปิดที่ `http://localhost:4000` ส่วน productio
 - ค่า telemetry ในส่วน hero เป็นข้อมูลจำลองใน browser
 - แบบฟอร์มติดต่อแสดงสถานะสำเร็จในเครื่อง ยังไม่เชื่อมอีเมลหรือ backend
 - ตัวเลขการตลาดและข้อความรับรองต้องได้รับการยืนยันจากเจ้าของธุรกิจก่อนเผยแพร่
-- /portal เป็นหน้าเตรียมเปิดใช้งาน; การเข้าสู่ระบบและสิทธิ์เป็นงาน Module 2
+- `/login` เชื่อมบัญชีภายในกับ `/portal`; หน้า MFA/เปลี่ยนรหัสผ่าน/กู้คืน และ `/portal/account` ใช้ API เป็นผู้ตรวจสิทธิ์จริง อ่าน [คู่มือ Identity](docs/runbooks/module-2-identity.md)
+- โมดูลธุรกิจและอีเมล reset production ยังไม่เปิดใช้งาน; การผ่าน Task 8 ไม่ใช่การอนุมัติ Security Exit Gate

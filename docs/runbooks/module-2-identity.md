@@ -245,8 +245,38 @@ Migration `AddTemporaryCredentialLifecycle` เพิ่ม nullable expiry/cons
 
 รายละเอียดหลักฐานและข้อจำกัด รวม Minor เรื่อง eligible-account enumeration coverage อยู่ใน [รายงาน Task 7](../architecture/module-2-task-7-verification.md)
 
+## Task 8: หน้าเว็บและการทดสอบ HTTPS
+
+เส้นทางใช้งานคือ `/` → `/login` → ขั้นเปลี่ยนรหัสผ่านหรือ MFA ที่ API กำหนด → `/portal` และ `/portal/account` ไม่ถือหน้า Portal เป็นตัวแทนการตรวจ permission ของ API
+
+ใช้ Node 22.23.2 ตาม `.nvmrc` หรือรุ่นที่ผ่าน `engines` ใน package.json; Next dev ยังใช้ 4000 และ production ยังใช้ 4001:
+
+```bash
+npm ci
+npx playwright install firefox
+npm test
+npm run lint
+npm run build
+node infra/nginx/smoke-identity-https.mjs 4001 --e2e
+node infra/nginx/smoke-identity-https.mjs 4000 --e2e
+```
+
+คำสั่ง HTTPS ต้องมี Docker Desktop, .NET 10 SDK/EF tool และ OpenSSL ใน PATH พอร์ต 4443 และพอร์ต Next ที่เลือกต้องว่าง ชุดทดสอบสร้าง PostgreSQL/NGINX/API container ใหม่ ใช้ key ring/CA ชั่วคราว และปิดเฉพาะทรัพยากรที่สร้างเองเมื่อจบ ไม่แตะฐานข้อมูลเดิมหรือ trust store ของ macOS
+
+Browser ใช้ Firefox ของ Playwright พร้อม certificate policy เฉพาะ disposable profile; `ignoreHTTPSErrors` เป็น false การทดสอบไม่ครอบคลุม Chrome/WebKit ชุดทดสอบเพิ่ม rate budget เฉพาะ fixture; production/default policy ไม่เปลี่ยน
+
+`TPR10_API_ORIGIN` เป็น server-only origin ที่ operator กำหนด ไม่ใช้ `NEXT_PUBLIC_` และไม่คำนวณจาก incoming Host สำหรับ fixture ใช้ `https://localhost:4443` ซึ่ง NGINX ส่ง `/api` ไป API loopback พร้อม trusted forwarded headers; Next process เชื่อถือ CA ผ่าน `NODE_EXTRA_CA_CERTS` เฉพาะ process การตั้งค่า production ต้องมี private routing/TLS/trusted proxy ที่ส่ง canonical authority ตาม API allowlist ตรงกัน **การชี้ตรง HTTP 5080 โดยไม่มี trusted HTTPS metadata ใช้ authenticated session ไม่ได้**
+
+ฟอร์มจะปิด input/button จน JavaScript พร้อม หากผู้ใช้ปิด JavaScript จะมีคำแนะนำและไม่ส่ง password ด้วย native GET เมื่อเปลี่ยน session ใช้ full navigation; กลับจาก bfcache ให้ตรวจ server ใหม่ ไม่เก็บ session token ใน JavaScript/storage และไม่ใช้ QR service ภายนอกส่ง MFA secret
+
+Reset link ใช้ `/auth/reset#token=...` เท่านั้น หน้าเว็บย้ายค่าเข้า memory และล้าง fragment รวมการเปิดลิงก์ใหม่ในหน้าเดิม ไม่ส่ง token ใน query; refresh หลังล้าง fragment จะสูญเสีย token ใน memory ซึ่งต้องเปิดลิงก์ที่ได้รับใหม่ ห้ามนำ URL/token ไปใส่ ticket หรือ log การส่งอีเมล production ยังปิดรอ Module 5; การแสดงข้อความทั่วไปไม่ใช่หลักฐานว่าส่งอีเมลแล้ว
+
+`POST /api/v1/auth/logout-all` เป็น self-service แยกจาก admin sign-out เดิม: actor มาจาก cookie ที่ตรวจซ้ำใน transaction, body ไม่มีสิทธิ์เลือกผู้ใช้อื่น, revoke ทุก session/security version และ audit commit พร้อมกัน ใช้ CSRF/Origin validation เหมือน mutation อื่น
+
+Dependency อัปเกรดตามการอนุมัติผู้ใช้เป็น Next 15.5.26/React 19.3 และมี PostCSS override เฉพาะ Next เป็น 8.5.28 ต้องตรวจ audit และ compatibility ใหม่ทุกครั้งที่ปรับรุ่น ไม่ใช้ `npm audit fix --force` โดยไม่ตรวจผล ดู [รายงาน Task 8](../architecture/module-2-task-8-verification.md) สำหรับหลักฐานและข้อจำกัดล่าสุด
+
 ## จุดตรวจรับก่อนขั้นถัดไป
 
-รัน backend tests/build/format, Node tests, Next lint/build และ independent code review ก่อนถือว่าจบ Task 3 ลำดับปัจจุบันคือ authentication → CSRF → authorization → idle activity → endpoint; ห้ามถือว่า pre-auth validation หรือ stage เป็นหลักฐาน business permission
+รัน backend tests/build/format, Node tests, ESLint/Next build, browser E2E และ independent code review ก่อนปิด Task 8 ลำดับ API คือ authentication → CSRF → authorization → idle activity → endpoint; ห้ามถือว่า pre-auth validation หรือ stage เป็นหลักฐาน business permission
 
-ยังต้องตรวจ production capacity, key backup/rotation, browser flow ใน Task 8 และ dependency vulnerabilities เดิมก่อน deploy รอบนี้ไม่อัปเกรด dependency ข้าม major หรือรับรองความพร้อมทั้ง Module 2
+ยังต้องตรวจ production capacity, key backup/rotation, deployment topology และ Task 9 ก่อน deploy ไม่รับรองความพร้อมทั้ง Module 2 จากผล Task 8 เพียงอย่างเดียว

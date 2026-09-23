@@ -109,7 +109,7 @@ export default function Footer() {
       </div>
 
       {/* Bottom Bar */}
-      <Link href="/portal" className="inline-block mt-6 text-xs text-slate-500 hover:text-orange-600 dark:text-slate-400">
+      <Link href="/login" prefetch={false} className="inline-block mt-6 text-xs text-slate-500 hover:text-orange-600 dark:text-slate-400">
         เข้าสู่ระบบพนักงาน
       </Link>
       <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400 font-mono">
