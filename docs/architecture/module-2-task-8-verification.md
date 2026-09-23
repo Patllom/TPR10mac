@@ -1,6 +1,6 @@
 # หลักฐาน Task 8: Landing → Login → Portal
 
-สถานะ: กำลังตรวจรับ ยังไม่ปิด Task 8 และยังไม่ผ่าน Security Exit Gate ของ Module 2
+สถานะ: ส่งมอบ Task 8 เมื่อ 2026-09-23 ผ่าน TDD, review อิสระหนึ่งรอบ และ Test/Build/Lint ครบ มี Minor ที่เปิดเผย 1 ข้อ; ยังไม่ผ่าน Security Exit Gate ของ Module 2
 
 ## ขอบเขต
 
@@ -40,7 +40,9 @@
 - Node 28/28 และ lint ผ่านระหว่างพัฒนา; Next production build ผ่าน หน้า auth/portal เป็น dynamic
 - ก่อน review: E2E 13/13 ผ่านทั้ง 4000 (41.6 วินาที) และ 4001 (28.2 วินาที), TLS smoke ทั้งคู่ผ่าน; Node28/Lint/Build/Audit0 ผ่านหลังแก้ล่าสุด
 - เคยพบ dev hydration ไม่พร้อมหนึ่งครั้งหลัง 12 tests; เพิ่ม diagnostic แล้วรอบถัดไปผ่าน 13/13 พบ asset abort ระหว่าง navigation เท่านั้น ยังไม่ยืนยันสาเหตุของความไม่สม่ำเสมอ และไม่ถือการ rerun ผ่านเป็นการพิสูจน์ root cause
-- ยังรอ review อิสระก่อนปิดงาน
+- Review อิสระเสร็จหนึ่งรอบ: Critical 0 / Important 0 / Minor 1
+- หลัง review: backend 309/309, 0 skipped (4 นาที 2 วินาที); .NET build 0 warnings/errors และ format ผ่าน; Node 28/28, Lint, Next Build, Audit 0, production E2E 13/13 (28.4 วินาที) พร้อม TLS smoke ผ่านทั้งหมด ไม่มี production code เปลี่ยนหลัง review
+- ปิด ledger ผ่าน `task-done` ด้วย E2E production 13/13 (28.2 วินาที) และ HTTPS acceptance อีกครั้ง; implementation commit `af6293a` ยังไม่ push/merge เก็บ worktree สำหรับ Task 9
 
 ## ข้อวินิจฉัยและต้นทุนหากผิด
 
@@ -58,4 +60,23 @@
 
 ## Code Review
 
-ยังไม่เริ่ม review อิสระ ณ ฉบับนี้ ต้องตรวจ diff จาก `cc22bd1a6dabf51729f935bbf0c4b995ae75636e` รวมการอัปเกรด dependency และ interaction กับ API เดิม
+ผู้ตรวจ Einstein (`01a0cd74-7430-7b82-b9fd-ec8c3ce441a1`) ตรวจแบบ fresh context/read-only หนึ่งรอบ ช่วง `cc22bd1..af6293a` รวม dependency และ interaction กับ API เดิม ผล Critical 0 / Important 0 / Minor 1; ไม่ตรวจซ้ำรอบสอง
+
+ผู้ตรวจรัน helper 5/5 และ `git diff --check` เอง ส่วน full backend/Node/Build/Lint/Audit/E2E เป็นหลักฐานที่ผู้ทำหลักรัน ไม่อ้างว่าผู้ตรวจรันทั้งหมดซ้ำ
+
+### Minor ที่เลื่อนไปแก้แยก
+
+เมื่อ session หมดอายุ Next server fetch รับ 401 แต่ไม่ได้ส่ง Set-Cookie ลบ cookie กลับ browser เมื่อกด login ครั้งแรก CSRF issuer จะลบ cookie เก่าและตอบ 403 โดยยังไม่ส่ง login POST ผู้ใช้ต้องกดอีกครั้ง จึงเป็น UX ไม่ใช่การข้าม authentication ตรวจโค้ด `auth-client.ts`/`session-fetch.ts` สอดคล้องกับ finding; ผู้ตรวจจำลอง transport ได้ครั้งแรก 403/POST 0 และครั้งถัดไป 200/POST 1 ยังไม่ใช่ browser regression ของกรณีนี้
+
+ตามกติกา Minor จดไว้ไม่แก้ในรอบนี้ งานถัดไปควรเพิ่ม regression login หลัง expiry และจัดการ stale-cookie recovery โดยไม่ retry mutation อัตโนมัติ
+
+### ข้อที่ review ไม่รับรองและผลหากวินิจฉัยผิด
+
+- Tasks 1–7 ตรวจเฉพาะ interaction ไม่ทวน concurrency/replay matrix และ Minor เดิมทั้งหมด — ถ้าสมมติฐานผิดอาจตกหล่น regression ข้าม task จึงคง full backend suite
+- Task 9/OpenAPI/Security Exit Gate รวม deployment/trusted proxy/TLS, provisioning, capacity/Argon2, distributed limiting, key backup/rotation และ operational policy ยังไม่รับรอง — ถ้าข้ามอาจ deploy ก่อนพร้อม
+- Module 5 email/delivery/retry/dedup/exactly-once และ Module 3 organization scope ไม่อยู่ Task 8 — ถ้าสื่อสารผิดผู้ใช้อาจคาดหวังระบบส่งเมลหรือจำกัดองค์กรที่ยังไม่พร้อม
+- Chrome/WebKit และ browser-history ทุกสภาวะนอก Firefox ไม่ได้ตรวจ — ถ้าพฤติกรรมต่างต้องเพิ่ม acceptance บน browser เป้าหมาย
+- Dev hydration ที่ไม่สม่ำเสมอยังไม่มี root cause — rerun ผ่านไม่รับรองว่าไม่มีปัญหา อาจพบซ้ำระหว่างพัฒนา
+- Audit 0 และ build ไม่รับรองไม่มีช่องโหว่ทั้งหมดหรือ compatibility ทุกกรณีของ override — ต้องติดตาม advisory และทวนเมื่ออัปเกรด
+
+ไม่มี Critical/Important ที่ค้าง และไม่มีการแก้ production code หลัง review; เอกสารฉบับส่งมอบปรับโดยผู้ทำหลัก ไม่ได้อ้างการตรวจอิสระรอบที่สอง

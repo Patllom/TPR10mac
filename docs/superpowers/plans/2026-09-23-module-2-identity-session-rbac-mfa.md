@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** Tasks 1–7 ผ่าน implementation, review อิสระและการแก้ finding พร้อม Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md), [Task 5](../../architecture/module-2-task-5-verification.md), [Task 6](../../architecture/module-2-task-6-verification.md) และ [Task 7](../../architecture/module-2-task-7-verification.md) รวม backend305/Node23ผ่านหลังแก้ review มี Minor ที่เปิดเผยในแต่ละรายงาน Tasks 8–9 ยังไม่เริ่ม อีเมล production รอ Module 5 จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Tasks 1–8 ผ่าน implementation, review อิสระและ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md), [Task 5](../../architecture/module-2-task-5-verification.md), [Task 6](../../architecture/module-2-task-6-verification.md), [Task 7](../../architecture/module-2-task-7-verification.md) และ [Task 8](../../architecture/module-2-task-8-verification.md) ล่าสุด backend309/Node28 และ Firefox HTTPS E2E13/13 ผ่านทั้ง dev4000/prod4001; Task8 review Critical0 Important0 Minor1 เรื่อง login หลัง session หมดอายุต้องกดซ้ำ มี Minor เดิมตามรายงานแต่ละ task; Task 9 ยังไม่เริ่ม อีเมล production รอ Module 5 จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -352,7 +352,7 @@ await tx.CommitAsync(ct);
 
 **รับ/ส่ง:** `readServerSession(): Promise<SessionView | null>` ใช้ server-only module, private API origin และ forwarding cookie เฉพาะAPIที่ตั้งค่า; `safeReturnPath(value: string | null): string` คืนเฉพาะ `/portal` หรือ pathใต้ `/portal/`; `authMutation(path: string, body: unknown): Promise<Response>` ดึงCSRFใหม่ก่อน mutation
 
-- [ ] ติดตั้ง/pin Playwright dev dependency และ browser runtime หลังตรวจversion; เขียน E2E ก่อน UI:
+- [x] ติดตั้ง/pin Playwright dev dependency และ browser runtime หลังตรวจversion; เขียน E2E ก่อน UI:
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -363,8 +363,8 @@ test('ผู้ใช้ไม่เข้าสู่ระบบถูกส�
 });
 ```
 
-- [ ] รัน `npx playwright test tests/e2e/identity.spec.ts` กับlocalHTTPSproxy ต้องแดงเพราะ portalยังไม่ redirect
-- [ ] Navbar/Footer ชี้ login; loginสำเร็จ routeตามstage ก่อนreturnTo; server session fetch `cache: 'no-store'`, portal `dynamic = 'force-dynamic'`; 401เท่านั้นredirectlogin ส่วน APIล่มแสดงสถานะบริการไม่พร้อม ห้ามตีความว่าsessionใช้ได้:
+- [x] รัน `npx playwright test tests/e2e/identity.spec.ts` กับlocalHTTPSproxy ต้องแดงเพราะ portalยังไม่ redirect
+- [x] Navbar/Footer ชี้ login; loginสำเร็จ routeตามstage ก่อนreturnTo; server session fetch `cache: 'no-store'`, portal `dynamic = 'force-dynamic'`; 401เท่านั้นredirectlogin ส่วน APIล่มแสดงสถานะบริการไม่พร้อม ห้ามตีความว่าsessionใช้ได้:
 
 ```typescript
 export function safeReturnPath(value: string | null): string {
@@ -376,9 +376,9 @@ export function safeReturnPath(value: string | null): string {
 }
 ```
 
-- [ ] ฟอร์มมีlabel, keyboard focus, loadingป้องกันsubmitซ้ำและข้อความไทย; หน้า MFA แสดง URI/manual keyในenrollmentพร้อมคำเตือนไม่แชร์ มีchallenge/recovery; หน้าresetใช้ tokenจาก URL fragment ย้ายเข้าmemoryแล้วล้างfragmentทันที ห้ามใช้query/log; account pageมีlogout/signout-allและMFA enrollmentสำหรับผู้ใช้ทั่วไปตามpolicy
-- [ ] เพิ่ม E2E loginผิด, forced-change, MFArequired, logout/back, sessionหมดอายุ, APIล่ม, external/protocol-relative/backslash/malformed returnTo, สองbrowser contextไม่เห็นข้อมูลกัน, cookieflags และหน้าจอมือถือ; catch malformed URLในhelperแล้วfallback `/portal`
-- [ ] browser testเข้าผ่านHTTPSที่trustแล้ว API testยืนยันauthorizationโดยไม่ผ่านUI; รัน E2E, `npm test`, `npm run lint`, `npm run build` ผ่าน แล้ว commit `feat: connect landing login and protected portal`
+- [x] ฟอร์มมีlabel, keyboard focus, loadingป้องกันsubmitซ้ำและข้อความไทย; หน้า MFA แสดง URI/manual keyในenrollmentพร้อมคำเตือนไม่แชร์ มีchallenge/recovery; หน้าresetใช้ tokenจาก URL fragment ย้ายเข้าmemoryแล้วล้างfragmentทันที ห้ามใช้query/log; account pageมีlogout/signout-allและMFA enrollmentสำหรับผู้ใช้ทั่วไปตามpolicy
+- [x] เพิ่ม E2E loginผิด, forced-change, MFArequired, logout/back, sessionหมดอายุ, APIล่ม, external/protocol-relative/backslash/malformed returnTo, สองbrowser contextไม่เห็นข้อมูลกัน, cookieflags และหน้าจอมือถือ; catch malformed URLในhelperแล้วfallback `/portal`
+- [x] browser testเข้าผ่านHTTPSที่trustแล้ว API testยืนยันauthorizationโดยไม่ผ่านUI; รัน E2E, `npm test`, `npm run lint`, `npm run build` ผ่าน แล้ว commit `feat: connect landing login and protected portal`
 
 ## Task 9: OpenAPI, ตรวจทานอิสระ และ Exit Gate
 

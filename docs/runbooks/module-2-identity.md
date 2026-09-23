@@ -275,6 +275,8 @@ Reset link ใช้ `/auth/reset#token=...` เท่านั้น หน้�
 
 Dependency อัปเกรดตามการอนุมัติผู้ใช้เป็น Next 15.5.26/React 19.3 และมี PostCSS override เฉพาะ Next เป็น 8.5.28 ต้องตรวจ audit และ compatibility ใหม่ทุกครั้งที่ปรับรุ่น ไม่ใช้ `npm audit fix --force` โดยไม่ตรวจผล ดู [รายงาน Task 8](../architecture/module-2-task-8-verification.md) สำหรับหลักฐานและข้อจำกัดล่าสุด
 
+ข้อจำกัด UX ที่ทราบจาก review: เมื่อ session หมดอายุ cookie เก่าอาจยังอยู่ใน browser การกด login ครั้งแรกจะหยุดที่ CSRF 403 และล้าง cookie ให้กดเข้าสู่ระบบอีกครั้ง ระบบยังไม่ retry mutation อัตโนมัติ ประเด็นนี้บันทึกเป็น Minor เพื่อเพิ่ม regression และแก้แยก ไม่ใช่ authentication bypass
+
 ## จุดตรวจรับก่อนขั้นถัดไป
 
 รัน backend tests/build/format, Node tests, ESLint/Next build, browser E2E และ independent code review ก่อนปิด Task 8 ลำดับ API คือ authentication → CSRF → authorization → idle activity → endpoint; ห้ามถือว่า pre-auth validation หรือ stage เป็นหลักฐาน business permission
