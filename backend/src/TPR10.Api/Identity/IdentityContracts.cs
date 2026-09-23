@@ -18,6 +18,7 @@ public interface ISessionService
     Task<IssuedSession> IssueAsync(Guid userId, SessionStage stage, CancellationToken ct);
     Task<SessionView?> ValidateAsync(string token, CancellationToken ct);
     Task RevokeUserAsync(Guid userId, string reason, CancellationToken ct);
+    Task<IssuedSession> RotateAsync(string token, SessionStage stage, DateTimeOffset? mfaVerifiedAtUtc, CancellationToken ct);
 }
 public interface IResetDelivery
 {

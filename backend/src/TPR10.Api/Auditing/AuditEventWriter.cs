@@ -14,6 +14,7 @@ public sealed class AuditEventWriter(Tpr10DbContext db, ICorrelationContext corr
             Id = id,
             EventType = eventType,
             TargetId = targetId,
+            ActorId = eventType is "identity.login" or "identity.logout" ? targetId : null,
             OccurredAtUtc = clock.GetUtcNow(),
             CorrelationId = correlation.CorrelationId.ToString("D")
         });

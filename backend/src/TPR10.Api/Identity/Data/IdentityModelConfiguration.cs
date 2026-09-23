@@ -8,6 +8,14 @@ internal static class IdentityModelConfiguration
 {
     public static void Configure(ModelBuilder model)
     {
+        var attempts = model.Entity<LoginAttemptWindow>();
+        attempts.ToTable("login_attempt_windows", t =>
+        {
+            t.HasCheckConstraint("ck_login_identifier_hash", "octet_length(identifier_hash) = 32");
+            t.HasCheckConstraint("ck_login_attempt_count", "failed_attempts >= 0 AND failed_attempts <= 5");
+        });
+        attempts.HasKey(x => x.IdentifierHash);
+        attempts.HasIndex(x => x.ExpiresAtUtc);
         var user = Table<IdentityUser>(model, "users");
         user.Property(x => x.Username).HasMaxLength(128);
         user.Property(x => x.NormalizedUsername).HasMaxLength(256);

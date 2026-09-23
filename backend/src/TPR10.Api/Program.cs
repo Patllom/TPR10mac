@@ -10,6 +10,7 @@ using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
 using TPR10.Api.Identity;
 using TPR10.Api.Identity.Csrf;
+using TPR10.Api.Identity.Sessions;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
@@ -39,8 +40,25 @@ app.UseForwardedHeaders();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseRouting();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/v1/auth"))
+        context.Response.OnStarting(() => { context.Response.Headers.CacheControl = "no-store"; return Task.CompletedTask; });
+    try { await next(context); }
+    catch (Exception error) when ((error is Npgsql.NpgsqlException or DbUpdateException
+        || error is InvalidOperationException { InnerException: Npgsql.NpgsqlException })
+        && (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Cookies.ContainsKey(CsrfService.SessionCookieName)))
+    {
+        if (context.Response.HasStarted) throw;
+        context.Response.Clear();
+        await Results.Problem(statusCode: 503, title: "ระบบยืนยันตัวตนไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง").ExecuteAsync(context);
+    }
+});
 app.UseRateLimiter();
+app.UseAuthentication();
 app.UseMiddleware<CsrfMiddleware>();
+app.UseAuthorization();
+app.UseMiddleware<SessionActivityMiddleware>();
 app.MapAuthEndpoints();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();

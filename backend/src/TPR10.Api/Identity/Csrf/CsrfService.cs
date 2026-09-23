@@ -6,10 +6,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Data;
+using TPR10.Api.Identity.Sessions;
 
 namespace TPR10.Api.Identity.Csrf;
 
-public sealed class CsrfService(Tpr10DbContext db, IDataProtectionProvider protection, TimeProvider clock, IOptions<CsrfOptions> options)
+public sealed class CsrfService(Tpr10DbContext db, IDataProtectionProvider protection, TimeProvider clock, IOptions<CsrfOptions> options, RequestSession session)
 {
     public const string CookieName = "__Host-tpr10_preauth";
     public const string SessionCookieName = "__Host-tpr10_session";
@@ -18,9 +19,13 @@ public sealed class CsrfService(Tpr10DbContext db, IDataProtectionProvider prote
     private readonly IDataProtector protector = protection.CreateProtector("TPR10.Identity.Csrf.v1");
 
     public bool HasValidTransport(HttpContext context, bool requireOrigin)
+        => HasTrustedTransport(context, requireOrigin)
+            && (!context.Request.Cookies.ContainsKey(SessionCookieName) || session.Entity is not null);
+
+    public bool HasTrustedTransport(HttpContext context, bool requireOrigin)
     {
         var request = context.Request;
-        if (!request.IsHttps || context.User.Identity?.IsAuthenticated == true || request.Cookies.ContainsKey(SessionCookieName)) return false;
+        if (!request.IsHttps) return false;
         var authority = $"https://{request.Host.Value}";
         if (!options.Value.AllowedOrigins.Contains(authority, StringComparer.OrdinalIgnoreCase)) return false;
         var origin = request.Headers.Origin;
@@ -32,6 +37,9 @@ public sealed class CsrfService(Tpr10DbContext db, IDataProtectionProvider prote
     public async Task<string> IssueAsync(HttpContext context, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
+        if (session.Entity is { } active)
+            return protector.Protect(JsonSerializer.Serialize(new Payload(active.Id, "csrf-session",
+                (active.ExpiresAtUtc < now.AddMinutes(options.Value.LifetimeMinutes) ? active.ExpiresAtUtc : now.AddMinutes(options.Value.LifetimeMinutes)).ToUnixTimeSeconds())));
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         // Serialize capacity checks across API instances; no business or audit rows are removed.
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241003)", cancellationToken);
@@ -69,15 +77,25 @@ public sealed class CsrfService(Tpr10DbContext db, IDataProtectionProvider prote
         if (!HasValidTransport(context, requireOrigin: true)) return false;
         var header = context.Request.Headers[HeaderName];
         if (header.Count != 1 || header[0] is not { Length: > 0 and <= 2048 } token) return false;
-        var hash = CookieHash(context);
-        if (hash is null) return false;
         Payload? payload;
         try { payload = JsonSerializer.Deserialize<Payload>(protector.Unprotect(token)); }
         catch (Exception error) when (error is CryptographicException or JsonException) { return false; }
         var now = clock.GetUtcNow();
-        if (payload is null || payload.Purpose != Purpose || payload.Expires <= now.ToUnixTimeSeconds()) return false;
+        if (payload is null || payload.Expires <= now.ToUnixTimeSeconds()) return false;
+        if (session.Entity is { } active) return payload.Purpose == "csrf-session" && payload.Id == active.Id;
+        var hash = CookieHash(context);
+        if (hash is null || payload.Purpose != Purpose) return false;
         return await db.Set<PreAuthFlow>().AnyAsync(x => x.Id == payload.Id && x.TokenHash == hash && x.Purpose == Purpose
             && x.ExpiresAtUtc > now && x.ConsumedAtUtc == null && x.RevokedAtUtc == null, cancellationToken);
+    }
+
+    public async Task<bool> ConsumePreAuthAsync(HttpContext context, CancellationToken ct)
+    {
+        var hash = CookieHash(context);
+        var now = clock.GetUtcNow();
+        return hash is not null && await db.Set<PreAuthFlow>().Where(x => x.TokenHash == hash && x.Purpose == Purpose
+            && x.ExpiresAtUtc > now && x.ConsumedAtUtc == null && x.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ConsumedAtUtc, now), ct) == 1;
     }
 
     private static byte[]? CookieHash(HttpContext context)

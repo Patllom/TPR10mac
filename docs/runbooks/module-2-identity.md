@@ -1,8 +1,8 @@
-# คู่มือ Module 2 — Task 2: CSRF ก่อนเข้าสู่ระบบและ HTTPS
+# คู่มือ Module 2 — Tasks 2–3: HTTPS, CSRF และ Session
 
 ## ขอบเขต
 
-รอบนี้เปิดเฉพาะ `GET /api/v1/auth/csrf` ยังไม่มี Login, Logout, session authority, RBAC หรือ MFA ของ Tasks 3–9 และยังไม่ใช่การอนุมัติขึ้น Production
+มี API สำหรับ CSRF, Login, ตรวจ Session และ Logout แล้ว ยังไม่มีหน้า Login, การสร้างบัญชีผ่านระบบ, RBAC หรือการพิสูจน์ MFA ของ Tasks 4–9 และยังไม่ใช่การอนุมัติขึ้น Production
 
 Next ยังคง dev **4000** และ production build **4001** ส่วน **4443** เป็น HTTPS ทางเข้าเดียวของเว็บและ API สำหรับทดสอบความปลอดภัย HTTP ใช้ดู landing page เท่านั้น ไม่ใช้เป็นหลักฐานว่า cookie/auth ทำงาน
 
@@ -18,11 +18,37 @@ Next ยังคง dev **4000** และ production build **4001** ส่ว�
 2. Server ตั้ง `__Host-tpr10_preauth` พร้อม Secure, HttpOnly, Path=/, SameSite=Lax และไม่มี Domain เก็บเฉพาะ SHA-256 ของค่า cookie ในฐานข้อมูล
 3. คำขอเปลี่ยนข้อมูลต้องส่ง cookie, `Origin` ตรงกับ HTTPS scheme/host/port ที่อนุญาต และ `X-CSRF-Token` ที่ได้จากข้อแรก ห้ามเก็บ token ลง localStorage หรือ log
 4. Token ผูกกับ pre-auth record และ purpose เฉพาะ ผ่าน Data Protection; อายุเริ่มต้น 10 นาที ไม่ต่ออายุโดย GET ซ้ำใน flow เดิม
-5. คำขอไม่ผ่านจะเป็น 403 พร้อม audit `security.csrf.denied` ก่อนเรียก endpoint ไม่มี business mutation; หากบันทึก audit ไม่ได้จะ fail closed เป็น 500 และไม่แสดงรายละเอียดภายใน
+5. คำขอไม่ผ่านจะเป็น 403 พร้อม audit `security.csrf.denied` ก่อนเรียก endpoint ไม่มี business mutation; หากฐานข้อมูล/audit ใช้ไม่ได้ใน auth flow จะ fail closed เป็น 503 โดยไม่แสดงรายละเอียดภายใน (endpoint อื่นอาจใช้ generic 500 เดิม)
 
-หากส่ง session cookie อยู่แล้วหรือมี authenticated principal จะปฏิเสธ ไม่ลดกลับไปใช้ pre-auth โดยเงียบ ๆ การผูก CSRF กับ restricted/active session และ rotation อยู่ Task 3
+หลัง Login สำเร็จ server consume pre-auth flow ใน transaction เดียวกับ session/audit แล้วลบ pre-auth cookie ผู้ใช้ต้องเรียก CSRF ใหม่ซึ่งผูกกับ session ID; ใช้ได้ทั้ง restricted/active session แต่ไม่ใช่หลักฐานสิทธิ์ ถ้ามี session cookie ที่ไม่ผ่านการตรวจ จะไม่ลดกลับไปใช้ pre-auth ในคำขอเดียวกัน cookie ที่หมดอายุ/ผิดรูปจะถูกลบเพื่อให้คำขอถัดไปเริ่ม flow ใหม่ได้
 
-การเรียก `/api/v1/auth/login` ที่ไม่มี CSRF จึงได้ 403 แต่หาก CSRF ถูกต้องจะได้ 404 เพราะยังไม่มี Login API ส่วน technical-probe เดิมเปิดเฉพาะ Development/Testing เพื่อทดสอบ mutation เท่านั้น ไม่ใช่ endpoint ทางธุรกิจที่ผ่าน authentication แล้ว
+Login ที่ไม่มี CSRF ได้ 403; ถ้า CSRF ถูกต้องจึงตรวจรหัสผ่าน ส่วน technical-probe เดิมยังเปิดเฉพาะ Development/Testing ไม่ใช่ endpoint ทางธุรกิจที่ผ่าน RBAC แล้ว
+
+## สัญญา Login และ Session
+
+| Endpoint | ผลลัพธ์ |
+| --- | --- |
+| `POST /api/v1/auth/login` | JSON `{username,password}`; สำเร็จ 200 พร้อม SessionView และ cookie; ข้อมูลไม่ถูกต้อง 401 แบบไม่บอกว่ามีบัญชีหรือไม่; ถูกล็อก/เกินอัตรา 429 พร้อม Retry-After |
+| `GET /api/v1/auth/session` | 200 พร้อม `userId`, ชื่อ `stage`, `permissions`, `mfaVerifiedAtUtc`; ไม่มี session ที่ใช้ได้ 401 ไม่ redirect |
+| `POST /api/v1/auth/logout` | ต้องมี session และ CSRF ใหม่; revoke session พร้อม audit ใน transaction แล้วตอบ 204 และลบ cookie |
+
+ทุก response ในกลุ่ม auth มี `Cache-Control: no-store` ทั้งสำเร็จและล้มเหลว Login ขณะมี session ที่ใช้ได้ตอบ 409 ให้ Logout ก่อนเปลี่ยนบัญชี ไม่มี remember-me และไม่รับ stage/permission จากผู้ส่ง
+
+Cookie `__Host-tpr10_session` ใช้ Secure, HttpOnly, SameSite=Lax, Path=/ ไม่มี Domain ค่า random 32 bytes ส่งเป็น base64url และเก็บเฉพาะ SHA-256 ใน DB ไม่ส่ง token ใน body หรือบันทึกใน application/audit log
+
+Session หมดอายุเมื่อไม่ใช้งาน 30 นาที หรือครบ 8 ชั่วโมงนับจาก Login แม้มีการใช้งานต่อเนื่อง Middleware ตรวจ revocation, account active, security version, assurance ที่จำเป็น และอ่าน permission ปัจจุบันทุกคำขอ การต่อ idle เกิดหลังผ่าน transport/CSRF/authorization เท่านั้น จึงไม่ต่ออายุจากคำขอ CSRF ผิด
+
+Stage ที่ต้องเปลี่ยนรหัสผ่านมาก่อน MFA; ถ้ามี factor ยืนยันแล้วใช้ `MfaChallengeRequired`, ถ้า role class บังคับแต่ยังไม่มี factor ใช้ `MfaEnrollmentRequired`; ทั้งสาม restricted stage คืน permissions ว่าง ไม่ได้อนุญาต business action การทำ enrollment/challenge จริงยังอยู่ Task 5
+
+Lockout เก็บในตารางเพิ่ม `login_attempt_windows` โดย hash ของชื่อที่ normalize แล้ว ทั้งชื่อที่มีและไม่มีบัญชี: ผิด 5 ครั้งใน 15 นาที คำขอถัดไปพัก 15 นาที ตารางจำกัด 10,000 entries และล้างเมื่อพ้นอายุ 30 นาที; เมื่อเต็มไม่เปิด bucket ใหม่ ตอบ 429 counters อยู่ข้าม restart และ row lock ป้องกันการนับขาดเมื่อส่งพร้อมกัน ค่าชุดนี้เป็นนโยบายพัฒนา/ทดสอบตามแผน ต้องประเมิน capacity และผลกระทบการล็อกบัญชีเป้าหมายก่อน production
+
+Migration เพิ่มตารางใหม่เท่านั้น ไม่แก้ migration เดิมหรือ audit history ให้รัน `dotnet ef database update --project backend/src/TPR10.Api` กับฐานข้อมูลพัฒนาที่ระบุไว้ก่อนเรียก Login; deployment จริงต้องทบทวน migration ตามกระบวนการเดิม
+
+`ISessionService.IssueAsync`, `RevokeUserAsync`, `RotateAsync` เปลี่ยน tracked entities ไม่ commit เอง ผู้เรียกเป็นเจ้าของ transaction/audit/SaveChanges โดย Rotate ต้องอยู่ใน transaction และต้องพิสูจน์ stage/MFA จากฝั่ง server ก่อนเรียก ไม่เปิดเป็น public endpoint ใหม่; token เก่าถูก revoke และ CSRF เก่าใช้กับ token ใหม่ไม่ได้ โดยรักษาเวลาเริ่ม/หมดอายุสูงสุดเดิม
+
+Tasks 4–7 ที่เปลี่ยนบัญชี รหัสผ่าน role หรือ assurance ต้องใช้ security version/revocation/rotation ใน transaction เดียวกับ mutation; `RevokeUserAsync` เพิ่ม security version ของ user ด้วยเพื่อครอบคลุม session ที่ออกพร้อมกับการเพิกถอน caller ต้องจัดการ concurrency conflict แบบ fail closed ไม่แก้ role แล้วถือว่า cookie เก่าถูกเพิกถอนอัตโนมัติ การป้องกัน business permission และความสดของ MFA ยังต้องทำ Task 6
+
+Audit Login/Logout สำเร็จมี actor/target user และ correlation; Login ผิด/ถูกล็อกไม่บันทึกชื่อที่กรอกหรือรหัสผ่าน หาก audit ล้มเหลว session/การ consume pre-auth/การ revoke จะ rollback ด้วย ไม่มีการส่ง session cookie ก่อน commit ผล commit ที่ไม่แน่นอนจากเครือข่ายต้องตรวจ session ก่อน retry ไม่รับรอง exactly-once delivery
 
 ## ค่าตั้งต้นและขอบเขตทรัพยากร
 
@@ -115,6 +141,6 @@ node infra/nginx/smoke-identity-https.mjs 4000
 
 ## จุดตรวจรับก่อนขั้นถัดไป
 
-รัน backend tests/build/format, Node tests, Next lint/build และ independent code review ก่อนถือว่าจบ Task 2 Task 3 ต้องเพิ่ม authentication ก่อน CSRF และ authorization หลัง CSRF พร้อม tests session-bound token; ห้ามถือว่า pre-auth validation เป็นหลักฐานสิทธิ์ผู้ใช้
+รัน backend tests/build/format, Node tests, Next lint/build และ independent code review ก่อนถือว่าจบ Task 3 ลำดับปัจจุบันคือ authentication → CSRF → authorization → idle activity → endpoint; ห้ามถือว่า pre-auth validation หรือ stage เป็นหลักฐาน business permission
 
 ยังต้องตรวจ production capacity, key backup/rotation, browser flow ใน Task 8 และ dependency vulnerabilities เดิมก่อน deploy รอบนี้ไม่อัปเกรด dependency ข้าม major หรือรับรองความพร้อมทั้ง Module 2
