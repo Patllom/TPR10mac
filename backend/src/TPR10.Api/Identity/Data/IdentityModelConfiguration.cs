@@ -8,6 +8,10 @@ internal static class IdentityModelConfiguration
 {
     public static void Configure(ModelBuilder model)
     {
+        var mfaAttempts = model.Entity<MfaAttemptState>();
+        mfaAttempts.ToTable("mfa_attempt_states", t => t.HasCheckConstraint("ck_mfa_attempts", "failed_attempts >= 0 AND failed_attempts <= 5"));
+        mfaAttempts.HasKey(x => x.UserId);
+        UserLink(mfaAttempts);
         var attempts = model.Entity<LoginAttemptWindow>();
         attempts.ToTable("login_attempt_windows", t =>
         {

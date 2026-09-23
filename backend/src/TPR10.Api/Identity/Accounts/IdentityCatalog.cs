@@ -22,7 +22,8 @@ public static class IdentityCatalog
         (Guid.Parse("20000000-0000-0000-0000-000000000002"), "audit:read"),
         (Guid.Parse("20000000-0000-0000-0000-000000000003"), "system:probe"),
         (Guid.Parse("20000000-0000-0000-0000-000000000004"), "roles:manage"),
-        (Guid.Parse("20000000-0000-0000-0000-000000000005"), "roles:read")
+        (Guid.Parse("20000000-0000-0000-0000-000000000005"), "roles:read"),
+        (Guid.Parse("20000000-0000-0000-0000-000000000006"), "users:recover-mfa")
     ];
 
     public static async Task SeedAsync(Tpr10DbContext db, DateTimeOffset now, CancellationToken ct)

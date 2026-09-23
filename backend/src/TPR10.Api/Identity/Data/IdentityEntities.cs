@@ -64,6 +64,7 @@ public sealed class MfaFactor
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
     public required string ProtectedSecret { get; set; }
+    public Guid? EnrollmentSessionId { get; set; }
     public long? LastUsedStep { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset? ConfirmedAtUtc { get; set; }

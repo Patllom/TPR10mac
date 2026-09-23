@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TPR10.Api.Data;
@@ -11,9 +12,11 @@ using TPR10.Api.Data;
 namespace TPR10.Api.Data.Migrations
 {
     [DbContext(typeof(Tpr10DbContext))]
-    partial class Tpr10DbContextModelSnapshot : ModelSnapshot
+    [Migration("20260923013229_AddMfaEnrollmentBinding")]
+    partial class AddMfaEnrollmentBinding
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -494,32 +497,6 @@ namespace TPR10.Api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("TPR10.Api.Identity.Data.MfaAttemptState", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.Property<int>("FailedAttempts")
-                        .HasColumnType("integer")
-                        .HasColumnName("failed_attempts");
-
-                    b.Property<DateTimeOffset?>("LockedUntilUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("locked_until_utc");
-
-                    b.Property<DateTimeOffset>("WindowStartedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("window_started_at_utc");
-
-                    b.HasKey("UserId");
-
-                    b.ToTable("mfa_attempt_states", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_mfa_attempts", "failed_attempts >= 0 AND failed_attempts <= 5");
-                        });
-                });
-
             modelBuilder.Entity("TPR10.Api.Identity.Data.MfaFactor", b =>
                 {
                     b.Property<Guid>("Id")
@@ -803,15 +780,6 @@ namespace TPR10.Api.Data.Migrations
                     b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
                         .WithOne()
                         .HasForeignKey("TPR10.Api.Identity.Data.LocalCredential", "UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TPR10.Api.Identity.Data.MfaAttemptState", b =>
-                {
-                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

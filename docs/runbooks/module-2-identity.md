@@ -1,8 +1,33 @@
-# คู่มือ Module 2 — Tasks 2–4: HTTPS, Session และบัญชีผู้ใช้
+# คู่มือ Module 2 — Tasks 2–5: HTTPS, Session บัญชีผู้ใช้ และ MFA
 
 ## ขอบเขต
 
-มี API สำหรับ CSRF, Login, ตรวจ Session และ Logout พร้อม CLI สร้างผู้ดูแลแรกและ use case จัดการบัญชีแล้ว API จัดการบัญชียังไม่เปิดจน Task 6 มี permission+MFA policy ครบ ยังไม่มีหน้า Login หรือการพิสูจน์ MFA ของ Tasks 5–9 และยังไม่ใช่การอนุมัติขึ้น Production
+มี API สำหรับ CSRF, Login, ตรวจ Session, Logout และ MFA พร้อม CLI สร้างผู้ดูแลแรกและ use case จัดการบัญชีแล้ว API จัดการบัญชียังไม่เปิดจน Task 6 มี permission+MFA policy ครบ ยังไม่มีหน้า Login และยังไม่ใช่การอนุมัติขึ้น Production
+
+## MFA (Task 5)
+
+ต้องกำหนด `Identity:Csrf:KeyRingPath`, `CertificatePath` และ certificate password (ถ้ามี) ตามคู่มือ key ring ด้านล่างก่อน enroll แม้ development หากใช้ ephemeral keys API จะตอบ503 แทนเก็บ factor ที่สูญหายหลัง restart สำรอง key ring พร้อม encryption certificate/private key แยกจากฐานข้อมูลด้วยช่องทางที่ได้รับอนุมัติ ห้ามใส่ secret/certificate password ใน Git
+
+ทุก endpoint ต่อไปนี้เป็น POST ต้องมี cookie, Origin และ CSRF ที่ผูก session พร้อม response no-store:
+
+| Endpoint | เงื่อนไข/ผลสำเร็จ |
+| --- | --- |
+| `/api/v1/auth/mfa/enroll` | EnrollmentRequired หรือ Staff Active ที่ login ไม่เกิน10นาที; คืน provisioningUri ครั้งเริ่มต้น ให้ authenticator อ่าน URI โดยไม่ส่งไปบริการ QR ภายนอก |
+| `/api/v1/auth/mfa/confirm` | JSON `{code}` 6หลักจาก factor ที่เริ่มโดย session เดียวกัน; คืน `{session,recoveryCodes}` หลัง commit |
+| `/api/v1/auth/mfa/challenge` | ChallengeRequired หรือ Active สำหรับ step-up; คืน `{session}` พร้อม cookie ใหม่ |
+| `/api/v1/auth/mfa/recover` | JSON `{code}` เป็น recovery code; คืน session แบบ EnrollmentRequired โดยไม่มี assurance พร้อมยกเลิก factor/codes/session เดิมทั้งหมด |
+
+เก็บ recovery codes ทั้ง10ชุดไว้ในที่ปลอดภัยนอกอุปกรณ์ authenticator จะแสดงครั้งเดียวและไม่อ่านกลับจากฐานข้อมูล เมื่อกู้สำเร็จต้อง enroll และ confirm factor ใหม่; รหัสเก่าและ cookie เก่าใช้ไม่ได้ การกู้ไม่ขยายเวลาสูงสุดของ login เดิม
+
+หลัง confirm/challenge/recover ต้องขอ CSRF ใหม่ Token เก่าถูกปฏิเสธ TOTPใช้ได้ครั้งเดียวต่อ timestep แม้ส่งจาก session อื่น ยอมรับเวลาต่างกัน ±30วินาที ควร sync เวลาเครื่อง/API กับแหล่งเวลาที่เชื่อถือได้
+
+Enrollment และ restricted challenge หมดอายุ10นาที ให้ logout/login ใหม่; pending enrollment ที่หมดอายุเริ่มใหม่ได้ และจะยกเลิก pending เดิม Confirmation ที่ไม่สำเร็จไม่เปิด factor จริง Assuranceครบ15นาทีจะเห็น `MfaChallengeRequired`/permissionsว่างและต้องส่ง challenge ใหม่ PasswordChangeRequired ใช้ MFA ไม่ได้จน Task7เปลี่ยนรหัสผ่านครบ
+
+รหัสผิด5ครั้งใน15นาทีล็อก MFA account15นาที คำขอถัดไป429พร้อม Retry-After เปลี่ยน session หรือรอ IP rate limitครบ1นาทีไม่ล้าง account lock; keyหาย/ถอดรหัสไม่ได้503แบบไม่ให้ assurance อย่าสร้าง key ใหม่ทับแล้วคาดว่า factorเก่าจะใช้ได้
+
+Operator-assisted recovery ยังไม่เปิด HTTP ใน Task5 ต้องมี `users:recover-mfa` แยกจาก users:manage, recent MFAไม่เกิน15นาที และห้ามทำให้ตนเอง ต้องยืนยันตัวบุคคลนอกระบบตามนโยบายองค์กรก่อนบันทึกเหตุผล/เลขอ้างอิงเคส ห้ามใส่รหัสลับหรือเอกสารส่วนบุคคลดิบใน audit ไม่มี backdoor ข้าม MFA ให้ผู้ดูแลคนเดียวที่สูญเสียทั้ง factor และ recovery codes
+
+Bootstrapใหม่ seed capability `users:recover-mfa` เพิ่มด้วย ฐานข้อมูลที่มีบัญชีอยู่ก่อนแล้วจะไม่ถูกเปลี่ยน grants อัตโนมัติ; Task6ต้องตรวจ catalog/grants และ operator ที่ได้รับอนุมัติก่อนเปิด route
 
 ## สร้างผู้ดูแลเริ่มต้น (Task 4)
 
@@ -14,9 +39,9 @@ dotnet run --project backend/src/TPR10.Api -- --bootstrap-admin
 
 คำสั่งไม่เปิด web server และไม่รัน migration ให้อัตโนมัติ รับชื่อผู้ใช้ รหัสผ่าน และยืนยันรหัสผ่านจาก prompt โดยไม่แสดงรหัสผ่านทั้งสองครั้ง ถ้ายืนยันไม่ตรงกันจะไม่สร้างบัญชี/catalog/audit ห้ามใส่รหัสผ่านใน arguments, environment, pipe, log หรือเอกสาร ใช้ Escape ยกเลิกขณะกรอกรหัสผ่าน
 
-รหัสออก: `0` สร้างสำเร็จ, `2` มีบัญชีใดก็ตามอยู่แล้วจึงไม่เปลี่ยนแปลง, `1` ข้อมูลผิดหรือฐานข้อมูล/audit ล้มเหลว, `64` รูปแบบคำสั่ง/terminal/config ไม่ถูกต้อง ไม่มีบัญชีหรือรหัสผ่านเริ่มต้นให้ ใช้รหัสผ่านตามนโยบาย Argon2id ของระบบ บัญชีแรกจะต้องตั้งค่า MFA ก่อนใช้สิทธิ์ผู้ดูแล; การตั้งค่าจริงยังรอ Task 5 จึงยังใช้ privileged API ไม่ได้ใน Task 4
+รหัสออก: `0` สร้างสำเร็จ, `2` มีบัญชีใดก็ตามอยู่แล้วจึงไม่เปลี่ยนแปลง, `1` ข้อมูลผิดหรือฐานข้อมูล/audit ล้มเหลว, `64` รูปแบบคำสั่ง/terminal/config ไม่ถูกต้อง ไม่มีบัญชีหรือรหัสผ่านเริ่มต้นให้ ใช้รหัสผ่านตามนโยบาย Argon2id ของระบบ บัญชีแรกต้องตั้งค่า MFA ตามหัวข้อ Task5 ก่อนใช้สิทธิ์ผู้ดูแล และ privileged API ยังรอ Task6
 
-สอง process แข่งกันจะสร้างได้เพียงหนึ่งราย ใช้ transaction และ advisory lock `7241002` ร่วมกับ account mutations; seed 5 role classes และ permissions `users:manage`, `roles:manage`, `roles:read`, `audit:read`, `system:probe` ด้วย ID คงที่ ไม่มีบัญชีทดลอง หากเชื่อมต่อขาดระหว่าง commit ให้ตรวจสถานะฐานข้อมูลก่อน retry; ไม่รับรอง exactly-once acknowledgement
+สอง process แข่งกันจะสร้างได้เพียงหนึ่งราย ใช้ transaction และ advisory lock `7241002` ร่วมกับ account mutations; seed 5 role classes และ permissions `users:manage`, `roles:manage`, `roles:read`, `audit:read`, `system:probe`, `users:recover-mfa` ด้วย ID คงที่ ไม่มีบัญชีทดลอง หากเชื่อมต่อขาดระหว่าง commit ให้ตรวจสถานะฐานข้อมูลก่อน retry; ไม่รับรอง exactly-once acknowledgement
 
 ### ข้อตกลงบัญชีที่จะเปิดใน Task 6
 
@@ -67,7 +92,7 @@ Cookie `__Host-tpr10_session` ใช้ Secure, HttpOnly, SameSite=Lax, Path=/ �
 
 Session หมดอายุเมื่อไม่ใช้งาน 30 นาที หรือครบ 8 ชั่วโมงนับจาก Login แม้มีการใช้งานต่อเนื่อง Middleware ตรวจ revocation, account active, security version, assurance ที่จำเป็น และอ่าน permission ปัจจุบันทุกคำขอ การต่อ idle เกิดหลังผ่าน transport/CSRF/authorization เท่านั้น จึงไม่ต่ออายุจากคำขอ CSRF ผิด
 
-Stage ที่ต้องเปลี่ยนรหัสผ่านมาก่อน MFA; ถ้ามี factor ยืนยันแล้วใช้ `MfaChallengeRequired`, ถ้า role class บังคับแต่ยังไม่มี factor ใช้ `MfaEnrollmentRequired`; ทั้งสาม restricted stage คืน permissions ว่าง ไม่ได้อนุญาต business action การทำ enrollment/challenge จริงยังอยู่ Task 5
+Stage ที่ต้องเปลี่ยนรหัสผ่านมาก่อน MFA; ถ้ามี factor ยืนยันแล้วใช้ `MfaChallengeRequired`, ถ้า role class บังคับแต่ยังไม่มี factor ใช้ `MfaEnrollmentRequired`; ทั้งสาม restricted stage คืน permissions ว่างและ middleware ปฏิเสธ action นอก allowlist การทำ enrollment/challenge ใช้งานผ่าน API Task5 ตามหัวข้อข้างต้น
 
 Lockout เก็บในตารางเพิ่ม `login_attempt_windows` โดย hash ของชื่อที่ normalize แล้ว ทั้งชื่อที่มีและไม่มีบัญชี: ผิด 5 ครั้งใน 15 นาที คำขอถัดไปพัก 15 นาที ตารางจำกัด 10,000 entries และล้างเมื่อพ้นอายุ 30 นาที; เมื่อเต็มไม่เปิด bucket ใหม่ ตอบ 429 counters อยู่ข้าม restart และ row lock ป้องกันการนับขาดเมื่อส่งพร้อมกัน ค่าชุดนี้เป็นนโยบายพัฒนา/ทดสอบตามแผน ต้องประเมิน capacity และผลกระทบการล็อกบัญชีเป้าหมายก่อน production
 

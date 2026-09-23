@@ -65,6 +65,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
+app.UseMiddleware<RestrictedSessionMiddleware>();
 app.UseMiddleware<SessionActivityMiddleware>();
 app.MapAuthEndpoints();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))

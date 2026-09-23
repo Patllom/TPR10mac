@@ -73,13 +73,15 @@ public sealed class SessionService(Tpr10DbContext db, TimeProvider clock, Reques
 
     private async Task<SessionView> ViewAsync(IdentitySession session, CancellationToken ct)
     {
-        var permissions = session.Stage != SessionStage.Active ? [] : await (
+        var stage = session.Stage == SessionStage.Active && session.MfaVerifiedAtUtc is { } verified
+            && verified.AddMinutes(15) <= clock.GetUtcNow() ? SessionStage.MfaChallengeRequired : session.Stage;
+        var permissions = stage != SessionStage.Active ? [] : await (
             from ur in db.Set<UserRole>()
             join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
             join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
             where ur.UserId == session.UserId
             select p.Capability).Distinct().OrderBy(x => x).ToArrayAsync(ct);
-        return new SessionView(session.UserId, session.Stage, permissions, session.MfaVerifiedAtUtc);
+        return new SessionView(session.UserId, stage, permissions, session.MfaVerifiedAtUtc);
     }
 
     public async Task RevokeUserAsync(Guid userId, string reason, CancellationToken ct)
