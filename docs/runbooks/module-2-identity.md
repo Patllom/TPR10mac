@@ -1,8 +1,33 @@
-# คู่มือ Module 2 — Tasks 2–3: HTTPS, CSRF และ Session
+# คู่มือ Module 2 — Tasks 2–4: HTTPS, Session และบัญชีผู้ใช้
 
 ## ขอบเขต
 
-มี API สำหรับ CSRF, Login, ตรวจ Session และ Logout แล้ว ยังไม่มีหน้า Login, การสร้างบัญชีผ่านระบบ, RBAC หรือการพิสูจน์ MFA ของ Tasks 4–9 และยังไม่ใช่การอนุมัติขึ้น Production
+มี API สำหรับ CSRF, Login, ตรวจ Session และ Logout พร้อม CLI สร้างผู้ดูแลแรกและ use case จัดการบัญชีแล้ว API จัดการบัญชียังไม่เปิดจน Task 6 มี permission+MFA policy ครบ ยังไม่มีหน้า Login หรือการพิสูจน์ MFA ของ Tasks 5–9 และยังไม่ใช่การอนุมัติขึ้น Production
+
+## สร้างผู้ดูแลเริ่มต้น (Task 4)
+
+เตรียม PostgreSQL และรัน migrations ตามคู่มือฐานข้อมูลก่อน กำหนด `TPR10_CONNECTION_STRING` ของฐานข้อมูลเป้าหมายผ่านช่องทางลับที่องค์กรอนุมัติ จากนั้นเปิด terminal แบบ interactive ในรากโปรเจกต์:
+
+```sh
+dotnet run --project backend/src/TPR10.Api -- --bootstrap-admin
+```
+
+คำสั่งไม่เปิด web server และไม่รัน migration ให้อัตโนมัติ รับชื่อผู้ใช้และรหัสผ่านจาก prompt โดยไม่แสดงรหัสผ่าน ห้ามใส่รหัสผ่านใน arguments, environment, pipe, log หรือเอกสาร ใช้ Escape ยกเลิกขณะกรอกรหัสผ่าน
+
+รหัสออก: `0` สร้างสำเร็จ, `2` มีบัญชีใดก็ตามอยู่แล้วจึงไม่เปลี่ยนแปลง, `1` ข้อมูลผิดหรือฐานข้อมูล/audit ล้มเหลว, `64` รูปแบบคำสั่ง/terminal/config ไม่ถูกต้อง ไม่มีบัญชีหรือรหัสผ่านเริ่มต้นให้ ใช้รหัสผ่านตามนโยบาย Argon2id ของระบบ บัญชีแรกจะต้องตั้งค่า MFA ก่อนใช้สิทธิ์ผู้ดูแล; การตั้งค่าจริงยังรอ Task 5 จึงยังใช้ privileged API ไม่ได้ใน Task 4
+
+สอง process แข่งกันจะสร้างได้เพียงหนึ่งราย ใช้ transaction และ advisory lock `7241002` ร่วมกับ account mutations; seed 5 role classes และ permissions `users:manage`, `roles:manage`, `roles:read`, `audit:read`, `system:probe` ด้วย ID คงที่ ไม่มีบัญชีทดลอง หากเชื่อมต่อขาดระหว่าง commit ให้ตรวจสถานะฐานข้อมูลก่อน retry; ไม่รับรอง exactly-once acknowledgement
+
+### ข้อตกลงบัญชีที่จะเปิดใน Task 6
+
+- `POST /api/v1/users`: สร้างบัญชี บังคับเปลี่ยนรหัสผ่านในการเข้าใช้ครั้งแรก; ไม่มี self-registration
+- `PATCH /api/v1/users/{id}`: เปลี่ยน active หรือ roles; ต้องมี `users:manage` และเมื่อระบุ roles ต้องมี `roles:manage` เพิ่มด้วย
+- `GET /api/v1/users`: page เริ่ม 1, pageSize เริ่ม 25 และจำกัด 100; ไม่คืน credential, MFA factor หรือ token
+- ชื่อ normalize ซ้ำตอบ 409; ข้อมูลผิด 400; ไม่พบ target 404; ไม่มีสิทธิ์ 403; ห้ามปิด/ถอดผู้ดูแล active คนสุดท้าย (409)
+- เปลี่ยน active/roles จะเพิ่ม security version และ revoke session พร้อม audit ใน transaction เดียว; audit เขียนไม่ได้ต้อง rollback ทั้งรายการ
+- ตัวเชื่อม API อ่าน actor จาก authenticated principal ไม่รับจาก JSON และตั้ง no-store ใน handler; Task 6 ต้องทดสอบ permission+MFA รวม no-store ของกรณีถูกปฏิเสธ/exception ก่อนเปิด mapping ไม่ถือการทดสอบ use case ใน Task 4 เป็นหลักฐาน HTTP RBAC
+
+ชุดทดสอบ CLI ใช้ Python 3 และ PTY บน macOS/Linux พร้อม .NET 10 และ Docker PostgreSQL; ไม่สร้างบัญชีในฐานข้อมูลใช้งานจริง
 
 Next ยังคง dev **4000** และ production build **4001** ส่วน **4443** เป็น HTTPS ทางเข้าเดียวของเว็บและ API สำหรับทดสอบความปลอดภัย HTTP ใช้ดู landing page เท่านั้น ไม่ใช้เป็นหลักฐานว่า cookie/auth ทำงาน
 

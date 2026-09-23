@@ -83,6 +83,16 @@ internal sealed class IdentityTestDriver : IAsyncDisposable
     public Task<HttpResponseMessage> LoginAsync(string username, string password) => PostAsync("/api/v1/auth/login", new { username, password });
     public void Advance(TimeSpan delta) => Clock.Advance(delta);
 
+    public async Task<int> CountAsync(string table)
+    {
+        await using var db = Database.CreateContext();
+        return table switch
+        {
+            "users" => await db.Set<IdentityUser>().CountAsync(),
+            _ => throw new ArgumentException("Table is not allowlisted", nameof(table))
+        };
+    }
+
     public async ValueTask DisposeAsync()
     {
         Client.Dispose();

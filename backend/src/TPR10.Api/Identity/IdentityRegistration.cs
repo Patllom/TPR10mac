@@ -1,4 +1,5 @@
 using TPR10.Api.Identity.Passwords;
+using TPR10.Api.Identity.Accounts;
 using TPR10.Api.Identity.Sessions;
 using Microsoft.AspNetCore.Authentication;
 using System.Text.Json.Serialization;
@@ -13,6 +14,8 @@ public static class IdentityRegistration
         services.AddScoped<IIdentityProvider, LocalIdentityProvider>();
         services.AddScoped<RequestSession>();
         services.AddScoped<LoginService>();
+        services.AddScoped<AccountProvisioning>();
+        services.AddScoped<BootstrapService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddAuthentication(SessionAuthenticationHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(SessionAuthenticationHandler.SchemeName, _ => { });

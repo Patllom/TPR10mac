@@ -5,7 +5,7 @@ namespace TPR10.Api.Auditing;
 
 public sealed class AuditEventWriter(Tpr10DbContext db, ICorrelationContext correlation, TimeProvider clock) : IAuditEventWriter
 {
-    public Task WriteAsync(string eventType, Guid targetId, IReadOnlyDictionary<string, string> metadata, CancellationToken cancellationToken)
+    public Task WriteAsync(string eventType, Guid targetId, IReadOnlyDictionary<string, string> metadata, CancellationToken cancellationToken, Guid? actorId = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var id = Guid.NewGuid();
@@ -14,7 +14,7 @@ public sealed class AuditEventWriter(Tpr10DbContext db, ICorrelationContext corr
             Id = id,
             EventType = eventType,
             TargetId = targetId,
-            ActorId = eventType is "identity.login" or "identity.logout" ? targetId : null,
+            ActorId = actorId ?? (eventType is "identity.login" or "identity.logout" ? targetId : null),
             OccurredAtUtc = clock.GetUtcNow(),
             CorrelationId = correlation.CorrelationId.ToString("D")
         });

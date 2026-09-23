@@ -11,6 +11,13 @@ using Microsoft.AspNetCore.HttpOverrides;
 using TPR10.Api.Identity;
 using TPR10.Api.Identity.Csrf;
 using TPR10.Api.Identity.Sessions;
+using TPR10.Api.Identity.Accounts;
+
+if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
+{
+    Environment.ExitCode = await BootstrapCommand.RunAsync(args);
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
