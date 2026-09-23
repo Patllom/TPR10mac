@@ -15,14 +15,24 @@ public static class RoleEndpoints
     public static void MapRoleEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/roles").RequireAuthorization("roles:manage");
-        group.MapGet("", async (Tpr10DbContext db, CancellationToken ct) => Results.Ok(await db.Set<IdentityRole>()
-            .AsNoTracking().OrderBy(x => x.Name).Select(x => new
-            {
-                x.Id,
-                x.Name,
-                x.RoleClass,
-                PermissionIds = db.Set<RolePermission>().Where(p => p.RoleId == x.Id).Select(p => p.PermissionId).ToArray()
-            }).ToArrayAsync(ct)));
+        group.MapGet("", async (Tpr10DbContext db, int? page, int? pageSize, CancellationToken ct) =>
+        {
+            var number = page ?? 1;
+            var size = Math.Min(pageSize ?? 25, 100);
+            var offset = ((long)number - 1) * size;
+            if (number < 1 || size < 1 || offset > int.MaxValue)
+                return Results.Problem(statusCode: 400, title: "เลขหน้าหรือจำนวนรายการต่อหน้าไม่ถูกต้อง");
+            var total = await db.Set<IdentityRole>().CountAsync(ct);
+            var items = await db.Set<IdentityRole>().AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id)
+                .Skip((int)offset).Take(size).Select(x => new
+                {
+                    x.Id,
+                    x.Name,
+                    x.RoleClass,
+                    PermissionIds = db.Set<RolePermission>().Where(p => p.RoleId == x.Id).Select(p => p.PermissionId).ToArray()
+                }).ToArrayAsync(ct);
+            return Results.Ok(new { items, total, page = number, pageSize = size });
+        });
         group.MapPost("", (RoleAdministration roles, CreateRoleRequest request, CancellationToken ct) => roles.CreateAsync(request, ct));
         group.MapPatch("/{id:guid}", (RoleAdministration roles, Guid id, RenameRoleRequest request, CancellationToken ct) => roles.RenameAsync(id, request, ct));
         group.MapPut("/{id:guid}/permissions", (RoleAdministration roles, Guid id, RoleGrantsRequest request, CancellationToken ct) => roles.GrantsAsync(id, request, ct));

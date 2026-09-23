@@ -11,7 +11,7 @@
 | Endpoint | Capability | ข้อมูลเข้า |
 | --- | --- | --- |
 | GET/POST `/api/v1/users`, PATCH `/api/v1/users/{id}` | `users:manage`; ระบุRoleIdsต้อง`roles:manage`เพิ่ม | สัญญาบัญชีด้านล่าง |
-| GET/POST `/api/v1/roles` | `roles:manage` | POST `{name,roleClass}` |
+| GET/POST `/api/v1/roles` | `roles:manage` | GET `page`เริ่ม1/`pageSize`เริ่ม25สูงสุด100 คืน`{items,total,page,pageSize}`; POST `{name,roleClass}` |
 | PATCH `/api/v1/roles/{id}` | `roles:manage` | `{name}` classเปลี่ยนไม่ได้ |
 | PUT `/api/v1/roles/{id}/permissions` | `roles:manage` | `{permissionIds:[UUID]}` แทนรายการเดิมทั้งชุด |
 | PUT `/api/v1/users/{id}/roles` | `roles:manage` | `{roleIds:[UUID]}` แทนรายการเดิมทั้งชุด |
@@ -28,6 +28,8 @@ GET `/api/v1/system/identity-probe` และ POST `/api/v1/system/technical-pro
 Auditใหม่เก็บactor/roleที่APIเลือกจริง/action/target/outcome/correlationและscopenullจนModule3 คอลัมน์ใหม่ในauditเก่าnullไม่ใช่ข้อมูลสูญหาย Audit+mutationrollbackพร้อมกัน ห้ามใส่password/token/secret/หลักฐานบุคคลดิบในreason/evidenceReference; metadataallowlistไม่ตรวจsecretที่แฝงในข้อความอิสระได้ทั้งหมด
 
 HTTPSsmokeใช้sessionfixtureเฉพาะฐานทดสอบ ไม่ใช่login/TOTPในbrowser; APIintegrationtestsใช้login/enroll/confirmจริง
+
+ข้อค้างMinor Task6: test audit failure ของการเปลี่ยน grants ตรวจ rollback grants/security version แล้ว แต่ยังไม่ได้ให้targetloginก่อนfault จึงไม่ใช่หลักฐานเฉพาะว่าsessionrow/cookieย้อนกลับครบ โค้ดใช้transactionเดียวกัน; เก็บเพิ่มregressionกรณีนี้แยกในรอบถัดไป
 
 ## MFA (Task 5)
 
@@ -66,7 +68,7 @@ dotnet run --project backend/src/TPR10.Api -- --bootstrap-admin
 
 คำสั่งไม่เปิด web server และไม่รัน migration ให้อัตโนมัติ รับชื่อผู้ใช้ รหัสผ่าน และยืนยันรหัสผ่านจาก prompt โดยไม่แสดงรหัสผ่านทั้งสองครั้ง ถ้ายืนยันไม่ตรงกันจะไม่สร้างบัญชี/catalog/audit ห้ามใส่รหัสผ่านใน arguments, environment, pipe, log หรือเอกสาร ใช้ Escape ยกเลิกขณะกรอกรหัสผ่าน
 
-รหัสออก: `0` สร้างสำเร็จ, `2` มีบัญชีใดก็ตามอยู่แล้วจึงไม่เปลี่ยนแปลง, `1` ข้อมูลผิดหรือฐานข้อมูล/audit ล้มเหลว, `64` รูปแบบคำสั่ง/terminal/config ไม่ถูกต้อง ไม่มีบัญชีหรือรหัสผ่านเริ่มต้นให้ ใช้รหัสผ่านตามนโยบาย Argon2id ของระบบ บัญชีแรกต้องตั้งค่า MFA ตามหัวข้อ Task5 ก่อนใช้สิทธิ์ผู้ดูแล และ privileged API ยังรอ Task6
+รหัสออก: `0` สร้างสำเร็จ, `2` มีบัญชีใดก็ตามอยู่แล้วจึงไม่เปลี่ยนแปลง, `1` ข้อมูลผิดหรือฐานข้อมูล/audit ล้มเหลว, `64` รูปแบบคำสั่ง/terminal/config ไม่ถูกต้อง ไม่มีบัญชีหรือรหัสผ่านเริ่มต้นให้ ใช้รหัสผ่านตามนโยบาย Argon2id ของระบบ บัญชีแรกต้องตั้งค่า MFA ตามหัวข้อ Task5 ก่อนใช้ privileged API ตามตาราง Task6
 
 สอง process แข่งกันจะสร้างได้เพียงหนึ่งราย ใช้ transaction และ advisory lock `7241002` ร่วมกับ account mutations; seed 5 role classes และ permissions `users:manage`, `roles:manage`, `roles:read`, `audit:read`, `system:probe`, `users:recover-mfa` ด้วย ID คงที่ ไม่มีบัญชีทดลอง หากเชื่อมต่อขาดระหว่าง commit ให้ตรวจสถานะฐานข้อมูลก่อน retry; ไม่รับรอง exactly-once acknowledgement
 
@@ -77,7 +79,7 @@ dotnet run --project backend/src/TPR10.Api -- --bootstrap-admin
 - `GET /api/v1/users`: page เริ่ม 1, pageSize เริ่ม 25 และจำกัด 100; ไม่คืน credential, MFA factor หรือ token
 - ชื่อ normalize ซ้ำตอบ 409; ข้อมูลผิด 400; ไม่พบ target 404; ไม่มีสิทธิ์ 403; ห้ามปิด/ถอดผู้ดูแล active คนสุดท้าย (409)
 - เปลี่ยน active/roles จะเพิ่ม security version และ revoke session พร้อม audit ใน transaction เดียว; audit เขียนไม่ได้ต้อง rollback ทั้งรายการ
-- ตัวเชื่อม API อ่าน actor จาก authenticated principal ไม่รับจาก JSON และตั้ง no-store ใน handler; Task 6 ต้องทดสอบ permission+MFA รวม no-store ของกรณีถูกปฏิเสธ/exception ก่อนเปิด mapping ไม่ถือการทดสอบ use case ใน Task 4 เป็นหลักฐาน HTTP RBAC
+- ตัวเชื่อม API อ่าน actor จาก authenticated principal ไม่รับจาก JSON; middlewareตั้ง no-store ก่อนauthorization ส่วนTask6ทดสอบ permission+MFA และdenialทุกadminrouteจริง ไม่ใช้ผลusecaseTask4แทนHTTP RBAC
 
 ชุดทดสอบ CLI ใช้ Python 3 และ PTY บน macOS/Linux พร้อม .NET 10 และ Docker PostgreSQL; ไม่สร้างบัญชีในฐานข้อมูลใช้งานจริง
 
@@ -127,7 +129,7 @@ Migration เพิ่มตารางใหม่เท่านั้น ไ
 
 `ISessionService.IssueAsync`, `RevokeUserAsync`, `RotateAsync` เปลี่ยน tracked entities ไม่ commit เอง ผู้เรียกเป็นเจ้าของ transaction/audit/SaveChanges โดย Rotate ต้องอยู่ใน transaction และต้องพิสูจน์ stage/MFA จากฝั่ง server ก่อนเรียก ไม่เปิดเป็น public endpoint ใหม่; token เก่าถูก revoke และ CSRF เก่าใช้กับ token ใหม่ไม่ได้ โดยรักษาเวลาเริ่ม/หมดอายุสูงสุดเดิม
 
-Tasks 4–7 ที่เปลี่ยนบัญชี รหัสผ่าน role หรือ assurance ต้องใช้ security version/revocation/rotation ใน transaction เดียวกับ mutation; `RevokeUserAsync` เพิ่ม security version ของ user ด้วยเพื่อครอบคลุม session ที่ออกพร้อมกับการเพิกถอน caller ต้องจัดการ concurrency conflict แบบ fail closed ไม่แก้ role แล้วถือว่า cookie เก่าถูกเพิกถอนอัตโนมัติ การป้องกัน business permission และความสดของ MFA ยังต้องทำ Task 6
+Tasks 4–7 ที่เปลี่ยนบัญชี รหัสผ่าน role หรือ assurance ต้องใช้ security version/revocation/rotation ใน transaction เดียวกับ mutation; `RevokeUserAsync` เพิ่ม security version ของ user ด้วยเพื่อครอบคลุม session ที่ออกพร้อมกับการเพิกถอน caller ต้องจัดการ concurrency conflict แบบ fail closed ไม่แก้ role แล้วถือว่า cookie เก่าถูกเพิกถอนอัตโนมัติ Task6บังคับnamedpermission/MFAแล้ว ส่วนscopeธุรกิจอยู่Module3
 
 Audit Login/Logout สำเร็จมี actor/target user และ correlation; Login ผิด/ถูกล็อกไม่บันทึกชื่อที่กรอกหรือรหัสผ่าน หาก audit ล้มเหลว session/การ consume pre-auth/การ revoke จะ rollback ด้วย ไม่มีการส่ง session cookie ก่อน commit ผล commit ที่ไม่แน่นอนจากเครือข่ายต้องตรวจ session ก่อน retry ไม่รับรอง exactly-once delivery
 

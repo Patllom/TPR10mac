@@ -12,6 +12,33 @@ namespace TPR10.Api.IntegrationTests;
 [Collection("database")]
 public sealed class RoleAuthorizationTests(PostgresFixture postgres)
 {
+    [Theory]
+    [InlineData("", 200, 25, 1, 25)]
+    [InlineData("?page=2&pageSize=10", 200, 10, 2, 10)]
+    [InlineData("?pageSize=999", 200, 100, 1, 100)]
+    [InlineData("?page=0", 400, 0, 0, 0)]
+    [InlineData("?pageSize=0", 400, 0, 0, 0)]
+    [InlineData("?page=2147483647&pageSize=100", 400, 0, 0, 0)]
+    public async Task Role_listing_is_paginated_bounded_and_rejects_invalid_offsets(string query, int status, int count, int page, int size)
+    {
+        using var keys = new TestKeyMaterial();
+        await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString, keys.Settings);
+        await AdminAsync(driver);
+        await using var db = driver.Database.CreateContext();
+        for (var i = 0; i < 105; i++) db.Add(new IdentityRole { Id = Guid.NewGuid(), Name = $"Custom-{i:D3}", RoleClass = "staff", CreatedAtUtc = driver.Clock.GetUtcNow() });
+        await db.SaveChangesAsync();
+        using var response = await driver.Client.GetAsync("/api/v1/roles" + query);
+        Assert.Equal(status, (int)response.StatusCode);
+        if (status != 200) return;
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Object, json.RootElement.ValueKind);
+        Assert.Equal(count, json.RootElement.GetProperty("items").GetArrayLength());
+        Assert.Equal(110, json.RootElement.GetProperty("total").GetInt32());
+        Assert.Equal(page, json.RootElement.GetProperty("page").GetInt32());
+        Assert.Equal(size, json.RootElement.GetProperty("pageSize").GetInt32());
+        if (page == 2) Assert.Equal("Custom-008", json.RootElement.GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
     [Fact]
     public async Task Role_lifecycle_catalog_and_validation_are_available_to_authorized_admin()
     {

@@ -23,7 +23,8 @@
 | Upgrade catalog | RED:1แทน6 → GREENในfullsuite |
 | Last admin class เมื่อ operator เป็น staff | RED:204แทน409 → GREEN |
 | Full regression รอบแรก | 237ผ่าน/3Malformed_cookieล้มเหลว:503แทน401; แก้ handler ให้ทำงานเฉพาะ named permission → focused36ผ่าน |
-| Full backend หลังแก้ | `dotnet test backend/TPR10.sln --verbosity minimal`:253/253ผ่าน ไม่มีskipped รวม concurrent grant removal |
+| Full backend ก่อน review | `dotnet test backend/TPR10.sln --verbosity minimal`:253/253ผ่าน ไม่มีskipped รวม concurrent grant removal |
+| Full backend หลัง review fix | คำสั่งเดิม259/259ผ่าน ไม่มีskipped; pagination6RED→6GREENก่อนfullsuite |
 | Backend build/format | `dotnet build backend/TPR10.sln --no-restore --verbosity minimal`:0warnings/errors; `dotnet format backend/TPR10.sln --verify-no-changes --no-restore`:ผ่าน |
 | เว็บ | `npm test`:23/23; `npm run lint`, `npm run build`:ผ่าน |
 | HTTPSจริง | smoke4000และ4001ผ่าน CA trust, cookie flags, CSRF403/anonymous401/authorized201, hostile Host; ไม่เปลี่ยน system trust |
@@ -44,7 +45,22 @@ Tests ใช้ PostgreSQL แยกต่อ test ไม่มี production da
 
 ## Code Review และขอบเขตที่ยังไม่ผ่าน
 
-รอ Code Review อิสระก่อนปิด Task6 ยังไม่อ้างว่าส่งมอบครบ
+Pascal ตรวจ read-only หนึ่งรอบ `585f08e..001658a` พบ Critical0/Important0/Minor2 ผู้ทำหลักตรวจข้อค้นพบกับโค้ดและbaselineแล้ว ยกระดับunboundedGETrolesเป็นImportantจากผลresponse/memoryไร้เพดานและbaseline11.2 เพิ่มpagination default25/max100พร้อมstableName/Idและinvalid-offset400 โดยมี6testsREDก่อนแก้ ไม่ส่งreviewรอบสองตามexecuting-plans ผู้ตรวจรันdiffcheckแต่ไม่รันsuiteซ้ำ ผลTest/Build/Lint/TLSเป็นหลักฐานของผู้ทำหลัก
+
+Minorที่เลื่อน1ข้อ: test audit failure ของgrant mutationยังไม่มีtargetsessionจึงตรวจเฉพาะgrant/versionrollback ไม่ใช่sessionrow/cookieโดยตรง แม้productiontransactionครอบคลุมอยู่แล้ว ต้องเพิ่มtest targetloginก่อนfault+freshcontextตรวจsession/cookieในรอบแยก
+
+ขอบเขตที่ผู้ตรวจไม่รับรองและข้อตัดสินใจ:
+
+1. Reset/forced-changecompletionอยู่Task7 ตรวจเมื่อทำ ไม่อ้างพร้อม — หากผิดผู้ใช้อาจติดrestrictedstage
+2. TOTP/recoverymatrixทั้งชุดของTask5ไม่reviewใหม่; fullregressionตรวจinteraction — หากผิดอาจพลาดบั๊กเดิม
+3. Nextcache/returnURL/browserUIอยู่Task8 ไม่มีfrontenddiff — หากผิดเสี่ยงsessionรั่ว/redirect
+4. OpenAPI/ExitGateอยู่Task9 ไม่อ้างcontractครบ — หากผิดconsumerเรียกผิด
+5. Assignment/crossscopeอยู่Module3; scopenullไม่ใช่crossscopeprotection — หากผิดรั่วข้อมูลข้ามscope
+6. Capacity/distributed/directSQL/recoverypolicy/freetextsecretsยังต้องproductiongate; TLSfixtureไม่ใช่browserE2E — หากผิดavailabilityหรือsecretรั่ว
+
+เอกสารที่แก้หลังreviewHEADและpaginationfixไม่ได้รับreviewรอบใหม่ ผู้ทำหลักรับผิดชอบTDD/fullverificationและcheckpointก่อนส่งมอบ
+
+ผลหลังแก้reviewครบแล้ว: backend259/259, Node23/23, .NETbuild0warnings/errors+formatverify, Nextlint/build และHTTPS4000/4001ผ่านซ้ำทั้งหมด ไม่มีCritical/Importantค้าง Minor1ข้อเลื่อนไว้ตามข้างต้น รอบfullbackendสุดท้ายใช้9นาที53วินาทีสำเร็จ ไม่ยืนยันสาเหตุที่ช้ากว่ารอบก่อน
 
 Tasks7 reset/forced-change, Task8 browser UI, Task9 OpenAPI/ExitGate และ policy approval โดยSecurityowner ยังไม่เสร็จ ข้อค้างMinorเดิมของTasks1–5คงตามรายงานเดิม
 

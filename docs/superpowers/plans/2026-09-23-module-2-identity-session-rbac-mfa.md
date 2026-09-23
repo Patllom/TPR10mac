@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** Tasks 1–5 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md) และ [Task 5](../../architecture/module-2-task-5-verification.md) รวม backend215/Node23ผ่าน มี Minor ที่เปิดเผยในแต่ละรายงาน Tasks 6–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Tasks 1–6 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md), [Task 5](../../architecture/module-2-task-5-verification.md) และ [Task 6](../../architecture/module-2-task-6-verification.md) รวม backend259/Node23ผ่าน มี Minor ที่เปิดเผยในแต่ละรายงาน Tasks 7–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -281,11 +281,13 @@ var valid = totp.VerifyTotp(clock.GetUtcNow().UtcDateTime, code,
 
 ## Task 6: Named permissions, revocation และ audit contract
 
+สถานะ: implementation commit `001658a` และreviewfixpagination6RED→6GREEN; backend259/259, Node23/23, Build/Lint/HTTPS4000/4001ผ่านหลังแก้ ไม่มีCritical/Importantค้าง Minor1ข้อด้านsessionrollbacktest ดู [รายงาน Task6](../../architecture/module-2-task-6-verification.md)
+
 **ไฟล์:** สร้าง `backend/src/TPR10.Api/Identity/Authorization/PermissionRequirement.cs`, `PermissionHandler.cs`, `Identity/Accounts/RoleEndpoints.cs`, `Auditing/SecurityAuditRequest.cs`; แก้ `backend/src/TPR10.Api/Auditing/IAuditEventWriter.cs`, `AuditEventWriter.cs`, `Data/Entities/AuditEvent.cs`, `Data/Tpr10DbContext.cs`, `TechnicalProbes/TechnicalProbeEndpoints.cs`, `Identity/IdentityRegistration.cs`; สร้าง `backend/tests/TPR10.Api.IntegrationTests/AuthorizationTests.cs`; แก้ `CorrelationAndAuditTests.cs`
 
 **รับ/ส่ง:** `PermissionRequirement(string Capability, bool RequireMfa)` เป็น authorization requirement; เพิ่ม audit overload `Task WriteAsync(SecurityAuditRequest request, CancellationToken ct)` โดยคง signature เดิมให้ Module 1; request มี ActorId, ActingRoleId, WorkspaceId/ProjectId/SiteId nullable, Action, TargetType, TargetId, Outcome, Metadata
 
-- [ ] เขียน rejection matrix โดย test fixture seed ใหม่ต่อ test:
+- [x] เขียน rejection matrix โดย test fixture seed ใหม่ต่อ test:
 
 ```csharp
 [Fact]
@@ -296,18 +298,18 @@ public async Task Anonymous_cannot_read_protected_probe() {
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AuthorizationTests` ให้แดง (routeยังไม่มี)
-- [ ] map GET protected identity probe ใน Testing/Development ด้วย capability `system:probe`; POST technical-probes เดิมเพิ่ม capability และ MFA ไม่ทิ้ง bypass; identity schema ไม่มี scope record จึงบันทึก scope เป็น null ไม่สร้างสิทธิ์ cross-project:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AuthorizationTests` ให้แดง (routeยังไม่มี)
+- [x] map GET protected identity probe ใน Testing/Development ด้วย capability `system:probe`; POST technical-probes เดิมเพิ่ม capability และ MFA ไม่ทิ้ง bypass; identity schema ไม่มี scope record จึงบันทึก scope เป็น null ไม่สร้างสิทธิ์ cross-project:
 
 ```csharp
 options.AddPolicy("system:probe", policy => policy.RequireAuthenticatedUser()
     .AddRequirements(new PermissionRequirement("system:probe", RequireMfa: true)));
 ```
 
-- [ ] เพิ่ม matrix valid session ไม่มี permission403, privileged ไม่มี/หมดอายุ MFA403, restricted stage403, valid permission+fresh MFAสำเร็จ; problem types `urn:tpr10:session-required`, `permission-denied`, `mfa-required`, `stage-restricted` พร้อม correlation
-- [ ] map users/roles/permissions endpoints: roles GET/POST/PATCH และ PUT `/roles/{id}/permissions`, PUT `/users/{id}/roles` ต้อง `roles:manage`+MFA; GET permissions ต้อง `roles:read`; catalog capabilities เป็นรายการระบบห้ามสร้าง arbitrary capability; การเปลี่ยน grants เพิ่ม security_version/revoke affected users ใน transaction, client ไม่เลือก acting role ที่ตนไม่มี
-- [ ] เพิ่ม tests ถอด role/เปลี่ยน permission ขณะถือ cookie, admin sign-out-everywhere, ไม่ลบ adminสุดท้าย, audit failure rollback user mutation, denialไม่มี probe row และ immutable audit triggersยังทำงาน; เพิ่ม migration `ExpandIdentityAudit` สำหรับ acting role/target type/outcome โดยไม่ UPDATE audit rows เดิม ให้ historical nullable columns
-- [ ] ปรับ CorrelationAndAuditTests ให้ขอ session+MFA+CSRF ก่อน POST เดิม ตรวจ intended validation/rollback ยังถึง handler จริง ไม่ผ่านเพราะ403; รันทั้งสอง test classes ผ่าน แล้ว commit `feat: enforce permissions and auditable revocation`
+- [x] เพิ่ม matrix valid session ไม่มี permission403, privileged ไม่มี/หมดอายุ MFA403, restricted stage403, valid permission+fresh MFAสำเร็จ; problem types `urn:tpr10:session-required`, `permission-denied`, `mfa-required`, `stage-restricted` พร้อม correlation
+- [x] map users/roles/permissions endpoints: roles GET/POST/PATCH และ PUT `/roles/{id}/permissions`, PUT `/users/{id}/roles` ต้อง `roles:manage`+MFA; GET permissions ต้อง `roles:read`; catalog capabilities เป็นรายการระบบห้ามสร้าง arbitrary capability; การเปลี่ยน grants เพิ่ม security_version/revoke affected users ใน transaction, client ไม่เลือก acting role ที่ตนไม่มี
+- [x] เพิ่ม tests ถอด role/เปลี่ยน permission ขณะถือ cookie, admin sign-out-everywhere, ไม่ลบ adminสุดท้าย, audit failure rollback user mutation, denialไม่มี probe row และ immutable audit triggersยังทำงาน; เพิ่ม migration `ExpandIdentityAudit` สำหรับ acting role/target type/outcome โดยไม่ UPDATE audit rows เดิม ให้ historical nullable columns
+- [x] ปรับ CorrelationAndAuditTests ให้ขอ session+MFA+CSRF ก่อน POST เดิม ตรวจ intended validation/rollback ยังถึง handler จริง ไม่ผ่านเพราะ403; รันทั้งสอง test classes ผ่าน แล้ว commit `feat: enforce permissions and auditable revocation`
 
 ## Task 7: Password reset และ forced password change
 
