@@ -23,6 +23,8 @@
 
 Enrollment และ restricted challenge หมดอายุ10นาที ให้ logout/login ใหม่; pending enrollment ที่หมดอายุเริ่มใหม่ได้ และจะยกเลิก pending เดิม Confirmation ที่ไม่สำเร็จไม่เปิด factor จริง Assuranceครบ15นาทีจะเห็น `MfaChallengeRequired`/permissionsว่างและต้องส่ง challenge ใหม่ PasswordChangeRequired ใช้ MFA ไม่ได้จน Task7เปลี่ยนรหัสผ่านครบ
 
+ข้อค้าง Minor Task5: หาก logout หรือ provisioning response สูญหายก่อน confirm ต้องรอ pending factor ครบ10นาทีนับจาก enroll แล้ว logout/login ใหม่ก่อนเริ่มใหม่ แม้ session เดิมหมดเวลาเร็วกว่านั้นก็ยังต้องรอ factor ไม่มี endpoint ยกเลิก pending ในรอบนี้
+
 รหัสผิด5ครั้งใน15นาทีล็อก MFA account15นาที คำขอถัดไป429พร้อม Retry-After เปลี่ยน session หรือรอ IP rate limitครบ1นาทีไม่ล้าง account lock; keyหาย/ถอดรหัสไม่ได้503แบบไม่ให้ assurance อย่าสร้าง key ใหม่ทับแล้วคาดว่า factorเก่าจะใช้ได้
 
 Operator-assisted recovery ยังไม่เปิด HTTP ใน Task5 ต้องมี `users:recover-mfa` แยกจาก users:manage, recent MFAไม่เกิน15นาที และห้ามทำให้ตนเอง ต้องยืนยันตัวบุคคลนอกระบบตามนโยบายองค์กรก่อนบันทึกเหตุผล/เลขอ้างอิงเคส ห้ามใส่รหัสลับหรือเอกสารส่วนบุคคลดิบใน audit ไม่มี backdoor ข้าม MFA ให้ผู้ดูแลคนเดียวที่สูญเสียทั้ง factor และ recovery codes

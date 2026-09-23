@@ -2,7 +2,7 @@
 
 ## ขอบเขต
 
-พัฒนาเฉพาะ Task 5 จากฐาน `065d5ae` บน `codex/module-2-identity` ตามแผนที่อนุมัติ ยังไม่รวม Tasks 6–9 ไม่ merge/push และยังไม่ใช่การรับรอง production สถานะรายงาน: กำลังตรวจ regression และรอ Code Review
+ส่งมอบเฉพาะ Task 5 จากฐาน `065d5ae` บน `codex/module-2-identity` ตามแผนที่อนุมัติ ผ่าน TDD, Code Review และ Test/Build/Lint ยังไม่รวม Tasks 6–9 ไม่ merge/push และยังไม่ใช่การรับรอง production มี Minor ที่เลื่อนตามรายการด้านล่าง
 
 ## สิ่งที่เพิ่ม
 
@@ -47,4 +47,31 @@ Pin [Otp.NET 1.4.1](https://www.nuget.org/packages/Otp.NET/1.4.1) พร้อ�
 
 ## ผลตรวจสุดท้ายและ Review
 
-ก่อน review: backend215/215 และ Node23/23 ผ่าน; Next lint/build และ .NET build/format ผ่าน (0 warnings/errors), git diff --check ผ่าน รอผล HTTPS และผู้ตรวจอิสระก่อนส่งมอบ
+ผลตรวจวันที่ 23 กันยายน 2026 บนโค้ด `bb2b4d0` ซึ่งไม่มีการแก้ production code หลัง review:
+
+- `dotnet test backend/TPR10.sln --verbosity minimal`: 215/215 ผ่าน ไม่มี skipped
+- `dotnet build backend/TPR10.sln --no-restore --verbosity minimal`: ผ่าน 0 warnings/errors
+- `dotnet format backend/TPR10.sln --verify-no-changes --no-restore`: ผ่าน
+- `npm test`: 23/23 ผ่าน; `npm run lint` และ `npm run build`: ผ่าน
+- `node infra/nginx/smoke-identity-https.mjs 4001` และ `4000`: ผ่าน CA trust, cookie flags/no-store, CSRF403/201 และ hostile Host โดยไม่เปลี่ยน system trust
+- `dotnet list backend/TPR10.sln package --vulnerable --include-transitive`: ไม่พบจากแหล่ง advisory ที่ใช้ ณ เวลาตรวจ ไม่รับรองว่าจะไม่มี advisory ในอนาคต
+- `git diff --check`: ผ่าน
+
+ผู้ตรวจอิสระ Cicero ตรวจ `065d5ae..bb2b4d0` หนึ่งรอบแบบ read-only พบ Critical0, Important0, Minor1 และรัน MFA-related tests จาก binary เดิมด้วย no-build/no-restore ผ่าน37/37 ไม่ใช่ independent rebuild ไม่มี fix pass หรือ review รอบสอง เพราะไม่มี Critical/Important
+
+### Minor ที่เลื่อน
+
+Pending enrollment ยังขวาง session ใหม่จน factor ครบ10นาที แม้ session เจ้าของ logout หรือ provisioning response สูญหายแล้ว และหาก login นาที0/enrollนาที9 session จะหมดสิทธิ์ confirm นาที10 แต่ pending factor ยังคงถึงนาที19 ผู้ใช้ต้องรอครบ10นาทีนับจาก enroll แล้ว logout/login ใหม่ก่อนเริ่มใหม่ ไม่มีการข้าม MFA แต่ UX ยังติดช่วงรอ เก็บพิจารณาทางยกเลิก/เริ่ม pending ใหม่แบบ atomic แยกต่างหาก ไม่แก้ในรอบนี้ตาม Superpowers
+
+### การตัดสินขอบเขตที่ผู้ตรวจไม่รับรอง
+
+1. Tasks1–4 ตรวจเฉพาะ interaction กับ MFA ไม่ review ใหม่ทั้งหมด; ผู้ทำหลักรัน full regression และ TLS จริง หากผิดอาจพลาดบั๊กเดิมนอก diff
+2. Task6 ต้องตรวจ business permission, role/assignment revoke, operator HTTP actor binding, catalog/grants upgrade และ audit contract เต็มก่อนเปิด admin route หากผิดเสี่ยงกู้บัญชีหรือใช้สิทธิ์โดยไม่มี authority
+3. Task7 ต้องทดสอบ reset/recovery/TOTP แข่งข้าม workflow และเปลี่ยน PasswordChangeRequired เมื่อมี implementation; รอบนี้พิสูจน์เพียงห้ามข้าม stage หากผิดอาจ replay ข้าม reset
+4. Task8 ต้องตรวจ browser UX, Next cache isolation, return URL และ recovery-code handling เมื่อทำหน้าเว็บ หากผิดอาจรั่ว session หรือรหัสกู้คืน
+5. Task9 ต้องเติม OpenAPI response/security metadata และ acceptance ครบโมดูล หากผิด consumer อาจเรียกผิด contract
+6. ค่า lockout/flow/assurance และขั้นตอนพิสูจน์ตัวบุคคลต้องผ่าน Security owner; evidence reference เป็นเลขอ้างอิง ไม่ใช่หลักฐานว่าตรวจบุคคลถูกต้อง หากผิดเสี่ยง account takeover
+7. Global-lock throughput, distributed rate limit, clock skew, backup/restore/certificate rotation และ crash/network ระหว่าง commit/response เป็น production gate ที่ยังไม่ผ่าน หากผิดเสี่ยง capacity หรือผู้ใช้ไม่ทราบผล commit
+8. ผู้ทำหลักตรวจ NuGet advisory จริงในรอบนี้ แต่ reviewer ตรวจเฉพาะ pin/license จึงไม่อ้าง independent advisory review หรือความปลอดภัยตลอดไป หากผิดประเมิน dependency เกินหลักฐาน
+9. ไม่รับรอง direct SQL ที่ไม่ร่วม lock/version/revocation; ต้องจำกัดสิทธิ์ operator DB และใช้ lifecycle ที่กำหนด หากผิด session/factor อาจไม่สอดคล้องกัน
+10. เอกสารหลัง review HEAD และ checkpoint เป็นหน้าที่ผู้ทำหลัก ไม่อ้าง reviewer รับรองเนื้อหาใหม่; เก็บ provenance และผล save จริง หากผิดบริบทหรือหลักฐานอาจไม่ durable

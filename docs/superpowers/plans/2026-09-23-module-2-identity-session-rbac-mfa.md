@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** Tasks 1–3 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md) (Minor ค้าง 2 ข้อ), [รายงาน Task 2](../../architecture/module-2-task-2-verification.md) (Important แก้แล้ว, Minor ค้าง 1 ข้อ) และ [รายงาน Task 3](../../architecture/module-2-task-3-verification.md) (Important แก้แล้ว, Minor ค้าง 1 ข้อ; รวม 166 tests ผ่าน) Tasks 4–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Tasks 1–5 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md) และ [Task 5](../../architecture/module-2-task-5-verification.md) รวม backend215/Node23ผ่าน มี Minor ที่เปิดเผยในแต่ละรายงาน Tasks 6–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -250,7 +250,7 @@ await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct
 
 **รับ/ส่ง:** `MfaService.VerifyTotpAsync(Guid userId, string code, CancellationToken ct): Task<bool>`; POST `/api/v1/auth/mfa/enroll`, `/mfa/confirm`, `/mfa/challenge`, `/mfa/recover` ผูก session/flow ที่พิสูจน์ password แล้ว; enroll ไม่ใช่ public anonymous flow
 
-- [ ] เขียน test จำกัด stage ก่อน MFA:
+- [x] เขียน test จำกัด stage ก่อน MFA:
 
 ```csharp
 [Fact]
@@ -263,8 +263,8 @@ public async Task Privileged_login_requires_mfa_enrollment() {
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~MfaTests` ให้แดง
-- [ ] ใช้ `Otp.NET` หลังตรวจ/pin dependency; encrypt secret ด้วย Data Protection purpose เฉพาะและ persistent protected keyring; enroll คืน provisioning URI ครั้งจำเป็นผ่าน no-store และไม่ log; confirm code ก่อนเปิด factor จริง:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~MfaTests` ให้แดง
+- [x] ใช้ `Otp.NET` หลังตรวจ/pin dependency; encrypt secret ด้วย Data Protection purpose เฉพาะและ persistent protected keyring; enroll คืน provisioning URI ครั้งจำเป็นผ่าน no-store และไม่ log; confirm code ก่อนเปิด factor จริง:
 
 ```csharp
 var totp = new OtpNet.Totp(secret);
@@ -272,10 +272,12 @@ var valid = totp.VerifyTotp(clock.GetUtcNow().UtcDateTime, code,
     out var step, new OtpNet.VerificationWindow(previous: 1, future: 1));
 ```
 
-- [ ] การรับ code ต้อง update last-used-step แบบ conditional ใน transaction และตรวจ affected rows=1 ก่อนให้ assurance; การตรวจ library อย่างเดียวไม่ป้องกัน replay เพิ่ม test concurrent code สอง request ผ่านเพียงหนึ่ง, drift เกิน window, brute-force429 และ expired challenge
-- [ ] restricted stage อนุญาตเฉพาะ session/logout/CSRF และ action ที่ตรง stage; successful confirm/challenge rotate session+CSRF, assurance expiry ต้อง step-up ใหม่ ไม่เชื่อ MFA boolean จาก client
-- [ ] recovery codes เก็บ hash, consume ด้วย conditional update; recovery ลดเป็น `MfaEnrollmentRequired`, revoke session/factor เก่าและต้องตั้ง factor ใหม่ก่อน privileged access; operator-assisted recovery ต้องสิทธิ์แยก `users:recover-mfa`, recent MFA, ห้าม self-recovery ผ่าน admin route และต้อง audit เหตุผล ไม่ข้ามหลักฐานยืนยันตัวบุคคลนอกระบบ
-- [ ] ทดสอบ restart โดยใช้ keyring เดิม decrypt factor ได้, key สูญหาย fail closed, recovery replay/concurrency, audit ไม่มี secret/code; รัน MfaTests ผ่านแล้ว commit `feat: add MFA assurance and recovery controls`
+- [x] การรับ code ต้อง update last-used-step แบบ conditional ใน transaction และตรวจ affected rows=1 ก่อนให้ assurance; การตรวจ library อย่างเดียวไม่ป้องกัน replay เพิ่ม test concurrent code สอง request ผ่านเพียงหนึ่ง, drift เกิน window, brute-force429 และ expired challenge
+- [x] restricted stage อนุญาตเฉพาะ session/logout/CSRF และ action ที่ตรง stage; successful confirm/challenge rotate session+CSRF, assurance expiry ต้อง step-up ใหม่ ไม่เชื่อ MFA boolean จาก client
+- [x] recovery codes เก็บ hash, consume ด้วย conditional update; recovery ลดเป็น `MfaEnrollmentRequired`, revoke session/factor เก่าและต้องตั้ง factor ใหม่ก่อน privileged access; operator-assisted recovery ต้องสิทธิ์แยก `users:recover-mfa`, recent MFA, ห้าม self-recovery ผ่าน admin route และต้อง audit เหตุผล ไม่ข้ามหลักฐานยืนยันตัวบุคคลนอกระบบ
+- [x] ทดสอบ restart โดยใช้ keyring เดิม decrypt factor ได้, key สูญหาย fail closed, recovery replay/concurrency, audit ไม่มี secret/code; รัน MfaTests ผ่านแล้ว commit `feat: add MFA assurance and recovery controls`
+
+ผลส่งมอบ Task5: [รายงานและข้อค้าง](../../architecture/module-2-task-5-verification.md) — commit `bb2b4d0`; backend215/215, Node23/23, Build/Lint/HTTPS4000/4001ผ่าน; reviewไม่มีCritical/Important มีMinor pending enrollment1ข้อ; operator recoveryยังเป็นusecaseไม่mapHTTPจนTask6
 
 ## Task 6: Named permissions, revocation และ audit contract
 
