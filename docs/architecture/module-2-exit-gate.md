@@ -1,14 +1,14 @@
 # ผลตรวจและ Exit Gate — Module 2
 
 วันที่ตรวจ: 2026-09-23 (หลักฐานคำสั่งใช้ UTC)
-สถานะฉบับนี้: กำลังตรวจรับ Task 9 — ยังไม่ปิด technical gate หรือ production gate
+สถานะฉบับนี้: Task 9 ผ่านทางเทคนิค — ยังไม่ผ่าน production gate และยังไม่ push/merge
 Branch: `codex/module-2-identity`; ฐาน Task 9: `55caced27d8b5f455764a9cddea654279cb6b127`; ฐานทั้ง Module 2: `6c7f1aef13fd0e2a64dce27366440479b5d74946`
 
 ## 1. แยกสถานะสามส่วน
 
 | ส่วน | สถานะ | เงื่อนไขและผู้รับผิดชอบ |
 | --- | --- | --- |
-| ผ่านทางเทคนิค | กำลังตรวจ Test/Build/Lint/E2E และ review ทั้ง branch | ผู้พัฒนารวบรวมหลักฐาน ไม่มี Critical/Important ค้างจึงรับ technical deliverable ได้ |
+| ผ่านทางเทคนิค | ผ่าน Test/Build/Lint/E2E และ review พร้อมแก้ Important | ไม่มี Critical/Important ค้าง; Minor ใหม่ 2 และเดิม 9 เปิดเผยไว้ ไม่ถือว่าได้รับการยอมรับความเสี่ยง production |
 | รอ Security owner | ยังไม่อนุมัติ | ต้องระบุผู้มีอำนาจและลงนาม policy/session/CSRF/lockout/reset/MFA/recovery รวมยอมรับข้อจำกัดคงค้าง ไม่ถือคำอนุมัติแผนพัฒนาเป็นการลงนาม production policy |
 | รอ delivery adapter | ยังไม่ส่งอีเมล production | Module 5 ต่อ Gmail adapter/worker, dedup/retry/retention/monitoring; production ปัจจุบันปฏิเสธ EmailEnabled=true และไม่มี development sink |
 
@@ -70,6 +70,23 @@ Branch: `codex/module-2-identity`; ฐาน Task 9: `55caced27d8b5f455764a9cdde
 
 ใช้ Node 22.23.2 แยกจาก runtime เครื่อง, .NET SDK ตาม `global.json`, Docker PostgreSQL แยก ไม่ทดสอบฐานข้อมูลใช้งานจริง Browser ใช้ Firefox พร้อม trust CA เฉพาะ profile/Node process ไม่มี TLS bypass และไม่แก้ macOS trust store
 
+### ผลตรวจสุดท้ายหลังแก้ review
+
+โค้ดที่ตรวจอยู่ใน commit `7ab2f799cc36b36960d53cb6b5cf03b128753212` (ต่อจาก OpenAPI `b29d851`); ตรวจผลครบ **2026-09-23 16:01:24 UTC** หลังจากนี้เปลี่ยนเฉพาะเอกสาร ไม่เปลี่ยน runtime หรือ tests
+
+| คำสั่ง / หลักฐาน | ผลจริง |
+| --- | --- |
+| ConditionalPermissionAuditTests | RED 8/8 → GREEN 8/8 (13 วินาที), ไม่ข้าม test |
+| dotnet restore / test | exit0; 356/356, 0 skipped, 4 นาที 9 วินาที รวม OpenAPI39 และ regression8 |
+| dotnet build / format --verify-no-changes | exit0; build 0 warnings/errors |
+| npm ci / npm test / npm run lint | exit0; Node28/28, lintไม่มี warning |
+| HTTPS E2E dev4000 | exit0; 13/13 (40.4s) และ TLS smoke ผ่าน |
+| npm run build / HTTPS E2E prod4001 | exit0; 13/13 (28.7s) และ TLS smoke ผ่าน |
+| NuGet vulnerable transitive / npm audit | exit0; ไม่พบช่องโหว่จาก feed ณ เวลาตรวจ |
+| git diff --check / local documentation links | exit0; ลิงก์ภายในรายงาน8และrunbook3ถูกต้อง |
+
+หลักฐานคำสั่งเต็มเก็บใน workspace ของแผน: `task9-review-red.log`, `task9-review-green.log`, `task9-final-backend.log`, `task9-final-node.log`, `task9-final-browser.log` ใช้ทดสอบจริงกับ PostgreSQL และ Firefox; harness ปิด container แล้ว ผล dev รอบสุดท้ายผ่านแต่ไม่ลบข้อจำกัด root cause ของ timeout รอบแรก
+
 ## 5. Security owner / Operations decision register
 
 รายการทั้งหมดนี้ **ยังไม่มีผู้ลงนาม** ในรอบนี้ ให้บันทึกผู้อนุมัติ วันที่ และ reference ของหลักฐานที่ควบคุมการเข้าถึงได้ ไม่คัดลอก secret มาลงเอกสาร
@@ -106,7 +123,39 @@ Task 8 เคยพบ dev hydration ไม่พร้อมหนึ่งร�
 
 ## 7. Code Review ทั้ง branch
 
-ยังไม่เริ่ม ณ ฉบับนี้ จะตรวจช่วง `6c7f1ae..HEAD` กับ baseline/plan โดยผู้ตรวจ fresh context หนึ่งคน เน้น cookie/role revoke, CSRF/forwarded spoof, reset/recovery/TOTP races, privileged restricted stages, Next cache/return URL รวม crypto/dependency, ทุก route และ audit/delivery boundary
+ผู้ตรวจอิสระ Ramanujan ตรวจ `6c7f1ae..b29d851` ทั้ง branch เทียบ baseline/plan หนึ่งรอบ ผล Critical 0 / Important 1 / Minor ใหม่ 2 และ Minor เดิม 9 ข้อ ผู้ตรวจรัน auth helper 5/5 และ diff check เอง ส่วน full suite ใช้หลักฐานผู้ทำหลัก ไม่อ้างว่าเป็น independent full rerun
+
+Important I1: POST/PATCH บัญชีโดยผู้มี users:manage แต่ไม่มี roles:manage ถูกปฏิเสธถูกต้อง แต่ conditional denial ไม่เขียน audit เพราะผ่าน route policy ไปแล้ว แก้ด้วย helper ร่วมเขียน actor/capability/target/outcome/correlation และ commit audit ก่อนคืน 403 โดยเรียกก่อน business mutation ทั้งสองเส้นทาง Audit ล้มต้อง fail closed 503 และไม่แก้บัญชี เพิ่ม HTTP regression 8 กรณี POST/PATCH × roleIds ว่าง/ไม่ว่าง × audit ปกติ/ล้ม; RED 8/8 จาก audit หายหรือได้ 403 แทน 503 ก่อนแก้ ไม่ถือ namespace compile error ของ test เป็น RED
+
+Minor ใหม่ที่เลื่อนแก้โดยแจ้งชัดเจน:
+
+1. Self logout-all ใช้ compatibility writer ทำให้ actor_id เป็น null แต่ target_id ยังระบุผู้ใช้และ audit/revoke อยู่ transaction เดียวกัน จัดเป็น Minor เพราะยังระบุตัวบุคคลจาก target ได้ ไม่ใช่ event หาย; query ด้วย actor อย่างเดียวจะตกหล่น
+2. OpenAPI ยังไม่ระบุ generic 500/default ของ anonymous CSRF denial เมื่อ audit ล้มบน non-auth route ที่ไม่มี session cookie; runtime fail closed และมี test อยู่แล้ว แต่ consumer ต้องรองรับ unexpected server error ไม่ใช่เฉพาะ 503
+
+ไม่มี review รอบสอง: fix หลัง review ตรวจด้วย TDD และ full verification โดยผู้ทำหลัก ส่วน Minor ไม่ปะปนใน fix pass นี้
+
+ข้อสรุปหลัง verification: I1 แก้แล้วตาม regression และ full suite; Critical/Important ค้าง 0 รับเฉพาะ technical deliverable เท่านั้น
+
+### เรื่องที่ผู้ตรวจไม่ตัดสิน และคำวินิจฉัยของผู้ทำหลัก
+
+| เรื่อง | คำวินิจฉัย / ผลหากถือว่าผ่านโดยไม่มีหลักฐาน |
+| --- | --- |
+| 1. Security owner policy/known limitations | ยังรอลงนาม ไม่ใช้การอนุมัติแผนแทน; หากข้ามอาจใช้นโยบายไม่ตรงองค์กร |
+| 2. Production hostname/TLS/firewall/private routing/proxy | localhost fixture เท่านั้น ต้อง Operations ตรวจ deployment จริง; หากข้ามอาจเปิด API หรือเชื่อ forwarded header ผิด |
+| 3. Gmail production delivery | ยังไม่มี adapter/worker; generic 202 ไม่ยืนยันว่าส่งอีเมลแล้ว หากตีความผิดผู้ใช้จะกู้บัญชีไม่ได้ |
+| 4. Adapter exactly-once/retry/dedup/retention/monitoring | รอ Module 5 และ acceptance จริง; หากข้ามอาจส่งซ้ำ สูญหาย หรือเก็บข้อมูลเกินอายุ |
+| 5. Assignment/data/field/cross-project scope | รอ Module 3 ไม่อ้าง identity permission เป็น business scope; หากข้ามเสี่ยงข้อมูลข้ามโครงการ |
+| 6. AD/LDAP/SSO | มี boundary เท่านั้น ไม่ใช่ provider พร้อมใช้; หากข้ามจะวาง rollout บนความสามารถที่ไม่มี |
+| 7. Argon/global lock capacity และ targeted lockout/DoS | ต้อง benchmark เครื่องเป้าหมาย; หากข้ามอาจทำให้ระบบช้าหรือปฏิเสธผู้ใช้ที่ถูกต้อง |
+| 8. หลาย replica/distributed limiter | budget เป็นราย process; ต้องออกแบบก่อน scale หากข้ามจะใช้เพดานรวมเกิน policy |
+| 9. Key backup/restore/certificate rotation/lost key | restart tests ไม่ใช่ recovery drill ขององค์กร; หากข้ามอาจกู้ MFA/CSRF keys ไม่ได้ |
+| 10. Operator identity proof/recovery channel/break-glass | reason/reference ไม่พิสูจน์ตัวบุคคล ต้อง Security owner อนุมัติกระบวนการ; หากข้ามเสี่ยง social engineering |
+| 11. Chrome/WebKit/multitab/history/BFCache ทุก path | หลักฐาน Firefox เฉพาะ cases ที่มี รวมไม่รับรอง MFA secret ทุก browser/history; ต้องทดสอบเพิ่มก่อนรองรับอย่างเป็นทางการ |
+| 12. Dev timeout/hydration root cause | ยังไม่ทราบและไม่ยืนยันว่าเหตุเดียวกัน; rerun ผ่านไม่เท่ากับแก้แล้ว หากละเลยอาจพบ flaky navigation อีก |
+| 13. Dependency security/source audit/override compatibility | pin และ audit ณ เวลาตรวจ ไม่รับรองถาวรหรือทุก dependency path; ต้องติดตาม advisory/compatibility ต่อเนื่อง |
+| 14. Free text/logs/APM/proxy secret leak | metadata allowlist ไม่ใช่ DLP และไม่ได้ตรวจระบบ logging production; หากข้ามอาจมี secret จากผู้ใช้หรือ infrastructure |
+| 15. Crash/network commit-response ambiguity/direct SQL/downgrade | ทดสอบ transaction ตาม API ไม่รับรองทุก failure หรือ bypass; ห้าม retry mutation/downgrade credential โดยไม่มี recovery plan มิฉะนั้นอาจทำซ้ำหรือสูญเสีย one-time protection |
+| 16. หลัง b29d851 / handoff / merge / deploy / pilot | ผู้ทำหลักตรวจ fix และหลักฐานใหม่เอง ไม่อ้าง independent review ครอบคลุม commit หลังจากนั้น; การเผยแพร่ยังรอคำสั่ง หากข้ามจะรับรองเกินขอบเขต |
 
 ## 8. ข้อวินิจฉัยของ Task 9 และผลหากผิด
 

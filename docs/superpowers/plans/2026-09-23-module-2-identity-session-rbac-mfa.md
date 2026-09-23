@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** Tasks 1–8 ผ่าน implementation, review อิสระและ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md), [Task 5](../../architecture/module-2-task-5-verification.md), [Task 6](../../architecture/module-2-task-6-verification.md), [Task 7](../../architecture/module-2-task-7-verification.md) และ [Task 8](../../architecture/module-2-task-8-verification.md) ล่าสุด backend309/Node28 และ Firefox HTTPS E2E13/13 ผ่านทั้ง dev4000/prod4001; Task8 review Critical0 Important0 Minor1 เรื่อง login หลัง session หมดอายุต้องกดซ้ำ มี Minor เดิมตามรายงานแต่ละ task; Task 9 ยังไม่เริ่ม อีเมล production รอ Module 5 จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Tasks 1–9 ผ่านทางเทคนิคเมื่อ 2026-09-23 ดู [รายงาน Exit Gate](../../architecture/module-2-exit-gate.md): backend356/356, Node28/28, Firefox HTTPS E2E13/13 ทั้ง dev4000/prod4001 พร้อม Test/Build/Lint ครบ; whole-branch review Critical0 Important1 แก้ด้วย regression8RED→8GREENแล้ว ไม่มี Critical/Important ค้าง มี Minor ใหม่2และเดิม9ตามรายงาน ยังรอ Security owner และอีเมล production Module5 จึงไม่ใช่การอนุมัติ production และยังไม่ push/merge
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -386,7 +386,7 @@ export function safeReturnPath(value: string | null): string {
 
 **รับ/ส่ง:** ใช้ route metadataจากTasks2–7 ส่ง OpenAPIและหลักฐานexit gate ไม่เพิ่มbusinesscapability
 
-- [ ] เขียน contract testก่อน transformer:
+- [x] เขียน contract testก่อน transformer:
 
 ```csharp
 [Fact]
@@ -400,9 +400,9 @@ public async Task OpenApi_documents_csrf_on_login() {
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~IdentityOpenApiTests` ให้แดง; transformerเพิ่มcsrfทุกunsafe method, cookie scheme, permission/MFA/stage metadata, request/response schemaและ400/401/403/409/429/503 problemsที่endpointใช้จริง; test enumerateทุกoperation ไม่ตรวจloginตัวเดียว
-- [ ] ตรวจ requirements coverage กับbaseline8/11/20; ทำ runbook bootstrap/migrate/restore-keyring/revoke/reset/recovery/HTTPS/no-secret-log และ gateแยก “ผ่านทางเทคนิค”, “รอ Security owner”, “รอ delivery adapter” ห้ามรวมเป็นพร้อมproduction
-- [ ] รันคำสั่งเต็มต่อไปนี้จากworktreeและบันทึกเวลาUTC/commit/exitcode/จำนวนtestจริง ไม่ใช้ผล Module1แทน:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~IdentityOpenApiTests` ให้แดง; transformerเพิ่มcsrfทุกunsafe method, cookie scheme, permission/MFA/stage metadata, request/response schemaและ400/401/403/409/429/503 problemsที่endpointใช้จริง; test enumerateทุกoperation ไม่ตรวจloginตัวเดียว
+- [x] ตรวจ requirements coverage กับbaseline8/11/20; ทำ runbook bootstrap/migrate/restore-keyring/revoke/reset/recovery/HTTPS/no-secret-log และ gateแยก “ผ่านทางเทคนิค”, “รอ Security owner”, “รอ delivery adapter” ห้ามรวมเป็นพร้อมproduction
+- [x] รันคำสั่งเต็มต่อไปนี้จากworktreeและบันทึกเวลาUTC/commit/exitcode/จำนวนtestจริง ไม่ใช้ผล Module1แทน:
 
 ```bash
 export PATH="/private/tmp/tpr10-dotnet:/Applications/Docker.app/Contents/Resources/bin:$PATH"
@@ -420,8 +420,8 @@ git diff --check
 ```
 
   SDK pathเป็นruntimeที่เคยติดตั้งชั่วคราว ต้องตรวจว่ามีจริง ถ้าไม่มีติดตั้งSDKตามglobal.jsonก่อน ไม่เปลี่ยนversionเพื่อให้คำสั่งผ่าน Dockerต้องพร้อมและbrowserstackใช้เฉพาะฐานทดสอบ ปิดserversหลังตรวจ
-- [ ] ขอ reviewerอิสระตรวจdiffทั้งbranchกับแผนและbaseline โดยเน้น5failure modesด้านบน, crypto/dependency, authorizationทุกroute, resetdeliveryboundaryและauditatomicity; ถ้าพบข้อบกพร่องใช้receiving-code-reviewและsystematic-debuggingตามเหตุ แล้วเพิ่มregressiontestก่อนfix
-- [ ] รันTest/Build/Lint/E2Eครบอีกครั้งหลังแก้review บันทึกข้อจำกัดที่ยังไม่ผ่าน ห้ามแจ้งเสร็จหากคำสั่งใดไม่ผ่าน; commit `docs: record module 2 security verification and exit gate` และส่งสรุปภาษาไทย ไม่push/mergeโดยถือว่าการอนุมัติแผนเท่ากับอนุมัติเผยแพร่
+- [x] ขอ reviewerอิสระตรวจdiffทั้งbranchกับแผนและbaseline โดยเน้น5failure modesด้านบน, crypto/dependency, authorizationทุกroute, resetdeliveryboundaryและauditatomicity; ถ้าพบข้อบกพร่องใช้receiving-code-reviewและsystematic-debuggingตามเหตุ แล้วเพิ่มregressiontestก่อนfix
+- [x] รันTest/Build/Lint/E2Eครบอีกครั้งหลังแก้review บันทึกข้อจำกัดที่ยังไม่ผ่าน ห้ามแจ้งเสร็จหากคำสั่งใดไม่ผ่าน; commit `docs: record module 2 security verification and exit gate` และส่งสรุปภาษาไทย ไม่push/mergeโดยถือว่าการอนุมัติแผนเท่ากับอนุมัติเผยแพร่
 
 ## เกณฑ์รับงานและลำดับการเริ่ม
 

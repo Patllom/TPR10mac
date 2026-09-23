@@ -291,12 +291,14 @@ Dependency อัปเกรดตามการอนุมัติผู้
 
 Error client ต้องใช้ status และตรวจ Content-Type ก่อน parse JSON: Login ซ้ำ 409 และ revalidation/binding บางกรณี body ว่างได้ Response ของ auth อาจมีข้อมูลลับที่แสดงครั้งเดียว เช่น provisioning URI, recovery codes หรือ temporary password ห้าม log body หรือเก็บ screenshot/trace ของผู้ใช้จริง
 
+ข้อจำกัด OpenAPI ที่ยังค้าง: anonymous CSRF denial บน non-auth route อาจเป็น generic 500 เมื่อ audit ล้ม ซึ่งยังไม่อยู่ใน response metadata; client ต้องรองรับ server error ที่ไม่คาดไว้ด้วย ไม่ retry mutation อัตโนมัติ การปฏิเสธ roles:manage แบบ conditional ของ POST/PATCH บัญชีบันทึก audit ก่อนคืน 403 และเมื่อ audit ล้มจะ fail closed 503 โดยไม่แก้ข้อมูลบัญชี
+
 ### Migrate และตรวจหลังอัปเกรด
 
 1. Operations ตรวจ connection destination/backup/restore approval ก่อนเสมอ ไม่ใช้ฐาน production กับ test suite
 2. กำหนด connection string ผ่าน secret management แล้ว `dotnet tool restore` และ `dotnet ef database update --project backend/src/TPR10.Api` โดยใช้ SDK ตาม global.json; ไม่ให้ web startup migrate อัตโนมัติ
 3. ตรวจ applied migration/health/audit preservation และสิทธิ์ catalog ปัจจุบัน ไม่ downgrade temporary credential lifecycle หรือแก้ migration เก่าย้อนหลัง
-4. Task 9 เปลี่ยนเอกสาร/schema ไม่เพิ่ม migration หรือ grant ผู้ใช้โดยอัตโนมัติ ผู้ดูแลต้องอนุมัติ role grants ตามขั้นตอนเดิม
+4. Task 9 เพิ่มเอกสาร/schema และแก้ audit ของ conditional role denial ไม่เพิ่ม migration หรือ grant ผู้ใช้โดยอัตโนมัติ ผู้ดูแลต้องอนุมัติ role grants ตามขั้นตอนเดิม
 
 ### Restore key ring และตรวจการกู้คืน
 
