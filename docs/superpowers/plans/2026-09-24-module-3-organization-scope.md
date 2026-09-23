@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec Module 3 ที่อนุมัติ](../specs/2026-09-24-module-3-organization-scope-design.md) และ [Baseline](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) ส่วน6–8/11/17/20
 
-สถานะ: Task1–3 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว โดยข้อสำคัญจาก review Task3 แก้และตรวจด้วย TDD แล้ว; Tasks4–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md) และ [Task3](../../architecture/module-3-task-3.md)
+สถานะ: Task1–4 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว; Tasks5–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md), [Task3](../../architecture/module-3-task-3.md) และ [Task4](../../architecture/module-3-task-4.md)
 ฐานที่สำรวจ: runtime `ab6f30e`, Design Spec commit `99523a8` บน main; เมื่อเริ่ม implementation ให้ใช้ HEAD ที่มีแผนนี้และบันทึก SHA จริง ห้าม checkout กลับจนทำเอกสารที่อนุมัติหาย
 
 ## Global Constraints — ข้อกำหนดร่วม
@@ -290,7 +290,7 @@ public sealed record AssignmentView(Guid Id, Guid UserId, ScopeKey Scope, Guid R
     long Version, DateTimeOffset? RevokedAtUtc);
 ```
 
-- [ ] RED selfgrant403ก่อนเปิดendpoint; grantuserอื่นpositive201พร้อมoldcookie401; ใช้actorจากRequestSessionเท่านั้น:
+- [x] RED selfgrant403ก่อนเปิดendpoint; grantuserอื่นpositive201พร้อมoldcookie401; ใช้actorจากRequestSessionเท่านั้น:
 
 ```csharp
 [Fact]
@@ -308,12 +308,12 @@ public async Task Administrator_cannot_grant_business_assignment_to_self()
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AssignmentApiTests` คาด404ไม่ใช่403 แล้วmapGET/POST `/api/v1/scope-assignments`, POST `/{id}/replace`, POST `/{id}/revoke` Require scope-assignments:manage recentMFA ทุกmethod; GETfilter userId/scope/revoked+page25/max100
-- [ ] เพิ่มGET `/api/v1/scope-assignments/options/users` และ`/options/roles` ด้วยcapabilityเดียวกันเพื่อUIที่ไม่มีusers:manage/roles:read: paginateและsearchprefixสูงสุด100; usersคืนId/Username/IsActiveเท่านั้น ไม่email/MFA/credential; rolesคืนId/Name/RoleClass/BusinessCapabilities ไม่grantAdministratorclass เส้นทางนี้ไม่แก้สิทธิ์Module2
-- [ ] Grantตรวจactiveuser/ancestors+tuple+roleclass/reasonก่อนinsert; duplicate409; Replaceห้ามเปลี่ยนUserId, optimisticversion, revokeเก่า+createใหม่atomic; Revokeซ้ำversionเก่าตอบ409; no-opreplaceคืน200เดิมไม่เพิ่มversion/revoke ไม่คืนrolepermissionจากscopeอื่น
-- [ ] Revocationและauditต้องใช้actorจากsessionในTX7241002; auditstatusdeniedก่อนmutationสำหรับselfgrant/roleclassinvalid; เพิ่มtestsbodyactorIdfake, systemrole forbidden400, targetinactive409, crossparent404, duplicateconcurrency201+409, replaceconflictไม่revokerows/session
-- [ ] Auditfaulttestติดtriggerหลังเตรียมadminและtargetlogin (รวมCSRFtokenก่อนtrigger): POSTgrant/replace/revokeได้503, assignment/user.SecurityVersion/sessionrowsเท่าเดิม, targetcookieGETsessionยัง200หลังยกfault; ไม่ใช้fixtureGrantAsyncเป็นassertproductionbehavior
-- [ ] GREENและcommit:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AssignmentApiTests` คาด404ไม่ใช่403 แล้วmapGET/POST `/api/v1/scope-assignments`, POST `/{id}/replace`, POST `/{id}/revoke` Require scope-assignments:manage recentMFA ทุกmethod; GETfilter userId/scope/revoked+page25/max100
+- [x] เพิ่มGET `/api/v1/scope-assignments/options/users` และ`/options/roles` ด้วยcapabilityเดียวกันเพื่อUIที่ไม่มีusers:manage/roles:read: paginateและsearchprefixสูงสุด100; usersคืนId/Username/IsActiveเท่านั้น ไม่email/MFA/credential; rolesคืนId/Name/RoleClass/BusinessCapabilities ไม่grantAdministratorclass เส้นทางนี้ไม่แก้สิทธิ์Module2
+- [x] Grantตรวจactiveuser/ancestors+tuple+roleclass/reasonก่อนinsert; duplicate409; Replaceห้ามเปลี่ยนUserId, optimisticversion, revokeเก่า+createใหม่atomic; Revokeซ้ำversionเก่าตอบ409; no-opreplaceคืน200เดิมไม่เพิ่มversion/revoke ไม่คืนrolepermissionจากscopeอื่น
+- [x] Revocationและauditต้องใช้actorจากsessionในTX7241002; auditstatusdeniedก่อนmutationสำหรับselfgrant/roleclassinvalid; เพิ่มtestsbodyactorIdfake, systemrole forbidden400, targetinactive409, crossparent404, duplicateconcurrency201+409, replaceconflictไม่revokerows/session
+- [x] Auditfaulttestติดtriggerหลังเตรียมadminและtargetlogin (รวมCSRFtokenก่อนtrigger): POSTgrant/replace/revokeได้503, assignment/user.SecurityVersion/sessionrowsเท่าเดิม, targetcookieGETsessionยัง200หลังยกfault; ไม่ใช้fixtureGrantAsyncเป็นassertproductionbehavior
+- [x] GREENและcommit:
 
 ```bash
 dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AssignmentApiTests|FullyQualifiedName~AssignmentAtomicityTests'

@@ -14,6 +14,7 @@ using TPR10.Api.Identity.Sessions;
 using TPR10.Api.Identity.Accounts;
 using TPR10.Api.Identity.Reset;
 using TPR10.Api.Organization;
+using TPR10.Api.Scopes.Assignments;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -72,10 +73,12 @@ app.UseAuthorization();
 app.UseMiddleware<RestrictedSessionMiddleware>();
 app.UseMiddleware<SessionActivityMiddleware>();
 app.UseMiddleware<OrganizationBindingAuditMiddleware>();
+app.UseMiddleware<AssignmentBindingAuditMiddleware>();
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapRoleEndpoints();
 app.MapOrganizationEndpoints();
+app.MapAssignmentEndpoints();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");

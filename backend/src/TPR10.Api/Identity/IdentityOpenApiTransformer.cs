@@ -48,8 +48,10 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         var stages = (metadata.OfType<AllowedSessionStages>().LastOrDefault()?.Stages ?? []).Append(SessionStage.Active).Distinct();
         operation.Extensions["x-tpr10-session-stages"] = Strings(stages.Select(x => x.ToString()));
         var organization = context.Description.RelativePath.StartsWith("api/v1/organization/", StringComparison.Ordinal);
-        operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create(organization ? "organization-control-plane" : "identity-only-no-business-scope"));
-        var scopeDescription = organization ? "\nAPI จัดการโครงสร้างองค์กร ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ; ตรวจ parent ตาม route และ version ใน transaction. "
+        var assignments = context.Description.RelativePath.StartsWith("api/v1/scope-assignments", StringComparison.Ordinal);
+        operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create(assignments ? "assignment-control-plane" : organization ? "organization-control-plane" : "identity-only-no-business-scope"));
+        var scopeDescription = assignments ? "\nAPI มอบหมายบทบาทให้ผู้อื่นตาม exact scope; ห้ามจัดการ assignment ของตนเอง; ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ. "
+            : organization ? "\nAPI จัดการโครงสร้างองค์กร ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ; ตรวจ parent ตาม route และ version ใน transaction. "
             : "\nAPI เป็น authority; ขอบเขต Module 2 ไม่มี business workspace/project/site scope. ";
         operation.Description = (operation.Description + scopeDescription +
             "Stage metadata อธิบาย session ที่มีอยู่ ไม่ได้บังคับ login ใน route สาธารณะ; service ยังตรวจ state เพิ่มเติม. " +

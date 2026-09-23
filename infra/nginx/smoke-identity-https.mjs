@@ -108,6 +108,9 @@ try {
     });
     if (browserTests.status !== 0) throw new Error('Browser E2E ไม่ผ่าน');
     console.log('Browser E2E ผ่าน HTTPS ที่เชื่อถือ CA เฉพาะ profile ทดสอบ');
+    // The outage test restarts Docker, which returns before the API is ready.
+    // Wait only on readiness; never retry an uncertain mutation.
+    await waitFor(() => tls('/api/health/ready', ['--fail']).includes('ready'), 'API หลัง browser outage test');
   }
   console.log('TLS และหน้าเว็บผ่าน; ตรวจ cookie/CSRF ผ่าน proxy จริง');
   const untrusted = spawnSync('curl', ['--silent', '--max-time', '10', 'https://localhost:4443/api/health/live']);
