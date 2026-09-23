@@ -54,7 +54,8 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
         { "/api/v1/scope-assignments/{id}/replace", "post", "scope-assignments:manage", 200, "id,userId,scope,roleId,version,revokedAtUtc" },
         { "/api/v1/scope-assignments/{id}/revoke", "post", "scope-assignments:manage", 200, "id,userId,scope,roleId,version,revokedAtUtc" },
         { "/api/v1/scope-assignments/options/users", "get", "scope-assignments:manage", 200, "items,total,pageNumber,pageSize" },
-        { "/api/v1/scope-assignments/options/roles", "get", "scope-assignments:manage", 200, "items,total,pageNumber,pageSize" }
+        { "/api/v1/scope-assignments/options/roles", "get", "scope-assignments:manage", 200, "items,total,pageNumber,pageSize" },
+        { "/api/v1/scopes", "get", "session", 200, "items,total,pageNumber,pageSize" }
     };
 
     [Theory]
@@ -79,7 +80,7 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
         Assert.Equal(permission.Contains(':') ? new[] { permission } : [],
             operation.GetProperty("x-tpr10-permissions").EnumerateArray().Select(x => x.GetString()).ToArray());
         Assert.Equal(permission.Contains(':'), operation.GetProperty("x-tpr10-mfa-required").GetBoolean());
-        Assert.Equal(path.StartsWith("/api/v1/scope-assignments", StringComparison.Ordinal) ? "assignment-control-plane"
+        Assert.Equal(path == "/api/v1/scopes" ? "scope-discovery" : path.StartsWith("/api/v1/scope-assignments", StringComparison.Ordinal) ? "assignment-control-plane"
             : path.StartsWith("/api/v1/organization/", StringComparison.Ordinal) ? "organization-control-plane" : "identity-only-no-business-scope", operation.GetProperty("x-tpr10-scope").GetString());
 
         var response = operation.GetProperty("responses").GetProperty(success.ToString());

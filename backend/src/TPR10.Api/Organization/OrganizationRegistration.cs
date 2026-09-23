@@ -6,6 +6,9 @@ public static class OrganizationRegistration
     {
         services.AddScoped<OrganizationService>();
         services.AddScoped<Scopes.Assignments.AssignmentService>();
+        services.AddScoped<Scopes.ScopeAccess>();
+        services.AddScoped<Scopes.ScopeOperation>();
+        services.AddScoped<Scopes.ScopeDiscovery>();
         return services;
     }
 }

@@ -49,8 +49,10 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         operation.Extensions["x-tpr10-session-stages"] = Strings(stages.Select(x => x.ToString()));
         var organization = context.Description.RelativePath.StartsWith("api/v1/organization/", StringComparison.Ordinal);
         var assignments = context.Description.RelativePath.StartsWith("api/v1/scope-assignments", StringComparison.Ordinal);
-        operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create(assignments ? "assignment-control-plane" : organization ? "organization-control-plane" : "identity-only-no-business-scope"));
-        var scopeDescription = assignments ? "\nAPI มอบหมายบทบาทให้ผู้อื่นตาม exact scope; ห้ามจัดการ assignment ของตนเอง; ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ. "
+        var discovery = context.Description.RelativePath == "api/v1/scopes";
+        operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create(discovery ? "scope-discovery" : assignments ? "assignment-control-plane" : organization ? "organization-control-plane" : "identity-only-no-business-scope"));
+        var scopeDescription = discovery ? "\nคืนเฉพาะ exact tuples ที่มอบหมายและ active พร้อม breadcrumb และ business capabilities ของแต่ละ tuple; ไม่ให้สิทธิ์ parent/sibling และไม่ส่งข้อมูลธุรกิจ; page เริ่ม1 pageSize เริ่ม25 สูงสุด100; audit ก่อนส่งผล. "
+            : assignments ? "\nAPI มอบหมายบทบาทให้ผู้อื่นตาม exact scope; ห้ามจัดการ assignment ของตนเอง; ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ. "
             : organization ? "\nAPI จัดการโครงสร้างองค์กร ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ; ตรวจ parent ตาม route และ version ใน transaction. "
             : "\nAPI เป็น authority; ขอบเขต Module 2 ไม่มี business workspace/project/site scope. ";
         operation.Description = (operation.Description + scopeDescription +

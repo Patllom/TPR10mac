@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec Module 3 ที่อนุมัติ](../specs/2026-09-24-module-3-organization-scope-design.md) และ [Baseline](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) ส่วน6–8/11/17/20
 
-สถานะ: Task1–4 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว; Tasks5–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md), [Task3](../../architecture/module-3-task-3.md) และ [Task4](../../architecture/module-3-task-4.md)
+สถานะ: Task1–5 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว; Tasks6–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md), [Task3](../../architecture/module-3-task-3.md), [Task4](../../architecture/module-3-task-4.md) และ [Task5](../../architecture/module-3-task-5.md)
 ฐานที่สำรวจ: runtime `ab6f30e`, Design Spec commit `99523a8` บน main; เมื่อเริ่ม implementation ให้ใช้ HEAD ที่มีแผนนี้และบันทึก SHA จริง ห้าม checkout กลับจนทำเอกสารที่อนุมัติหาย
 
 ## Global Constraints — ข้อกำหนดร่วม
@@ -327,7 +327,7 @@ git commit -m "feat: manage explicit scoped role assignments atomically"
 **แก้:** `Organization/OrganizationRegistration.cs`, `Program.cs`
 **รับ:** ScopeKey/schema/RequestSession/IEffectiveRolePolicy; **ส่ง:** `ScopeAccess.ResolveAsync(ScopeKey key,string capability,bool requireMfa,CancellationToken):Task<ScopeDecision>` (ต้องอยู่TX7241002); `ScopeDiscovery.ListAsync(int page,int pageSize,CancellationToken):Task<IResult>`; `ScopeOperation.RunAsync(ScopeKey,string,bool,Func<ScopeContext,CancellationToken,Task<IResult>>,CancellationToken):Task<IResult>` เป็นเจ้าของtransaction
 
-- [ ] RED discoveryไม่คืนparentสิทธิ์หรือsibling:
+- [x] RED discoveryไม่คืนparentสิทธิ์หรือsibling:
 
 ```csharp
 [Fact]
@@ -345,8 +345,8 @@ public async Task Site_discovery_does_not_inherit_parent_or_sibling_permissions(
 }
 ```
 
-- [ ] `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeDiscoveryTests` คาด404ก่อนmap; GET/scopesใช้authenticatedActive policyที่ไม่ต้องglobalnamedpermission มิฉะนั้นscoped-onlyuserเข้าไม่ได้ ใช้stageguardเดิมและservice recheck
-- [ ] ResolveAsyncrevalidate session DBภายในlock (id/user/securityversion/expiry/revoked/idle/account/forcedchange/stage) ก่อนqueryscope; checkshape400→session401→stage/MFA403→hierarchy/assignment404→capability403 ในschemaที่ไม่leakunknownscope
+- [x] `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeDiscoveryTests` คาด404ก่อนmap; GET/scopesใช้authenticatedActive policyที่ไม่ต้องglobalnamedpermission มิฉะนั้นscoped-onlyuserเข้าไม่ได้ ใช้stageguardเดิมและservice recheck
+- [x] ResolveAsyncrevalidate session DBภายในlock (id/user/securityversion/expiry/revoked/idle/account/forcedchange/stage) ก่อนqueryscope; checkshape400→session401→stage/MFA403→hierarchy/assignment404→capability403 ในschemaที่ไม่leakunknownscope
 
 ```csharp
 var grants = await (from a in db.Set<ScopeAssignment>()
@@ -361,11 +361,11 @@ var selected = grants.Where(g => g.Capability == capability)
     .OrderBy(g => g.RoleId).ThenBy(g => g.Id).FirstOrDefault();
 ```
 
-- [ ] CanReadRestrictedต้องมีrestricted-readในexactscopeและrecentMFAจริง ไม่ให้fieldเพิ่มเพราะglobalrole; export/privilegedrolesmissingMFAให้403 ส่วนordinaryreadที่ไม่มีrestrictedpermissionomitfield; ผู้มีrestrictedpermissionแต่assuranceหมดไม่ปล่อยrestricteddata
-- [ ] Discoveryqueryassignmentก่อนjoinsmetadata คืน`ScopeChoice(ScopeKey Scope,string WorkspaceName,string? ProjectName,string? SiteName,string[] Capabilities)` paginateexacttuplesหลังdedupe stableordertuple; รวมcapabilitiesเฉพาะtuple ไม่ส่งuserlist/auditdata; emptylist200เมื่อไม่มีassignment; ไม่มีrestricteddata
-- [ ] Discovery เป็นเจ้าของ transaction ของตนเอง: acquire advisory lock7241002, ตรวจ session/stage ปัจจุบัน, materialize รายการและ audit ก่อน commit เช่นเดียวกับ read data plane ไม่ใช้ผลจาก middleware อย่างเดียว
-- [ ] ScopeOperationสร้างcontextแล้วmaterializeoperation/save/auditcommitก่อนreturn; แยกdenialauditในtransactionที่ไม่มีbusinesschanges หากcallbackตอบerrorหลังมีchangesต้องrollbackแล้วauditใหม่ ไม่commitpartialstate; auditfailure503ปิดresponse; mapเฉพาะknownDBfault ไม่เผยrawexception
-- [ ] เพิ่มunit/serviceHTTPtestsสามระดับ+NoAssignmentAdmin+globalbusinessgrant+scopedusersmanage+revoked/inactive/unknownsite+forgedtuple, compare404bodyexceptcorrelation; discoveryauditต้องสำเร็จก่อนคืนlist; runGREENแล้วcommit:
+- [x] CanReadRestrictedต้องมีrestricted-readในexactscopeและrecentMFAจริง ไม่ให้fieldเพิ่มเพราะglobalrole; export/privilegedrolesmissingMFAให้403 ส่วนordinaryreadที่ไม่มีrestrictedpermissionomitfield; ผู้มีrestrictedpermissionแต่assuranceหมดไม่ปล่อยrestricteddata
+- [x] Discoveryqueryassignmentก่อนjoinsmetadata คืน`ScopeChoice(ScopeKey Scope,string WorkspaceName,string? ProjectName,string? SiteName,string[] Capabilities)` paginateexacttuplesหลังdedupe stableordertuple; รวมcapabilitiesเฉพาะtuple ไม่ส่งuserlist/auditdata; emptylist200เมื่อไม่มีassignment; ไม่มีrestricteddata
+- [x] Discovery เป็นเจ้าของ transaction ของตนเอง: acquire advisory lock7241002, ตรวจ session/stage ปัจจุบัน, materialize รายการและ audit ก่อน commit เช่นเดียวกับ read data plane ไม่ใช้ผลจาก middleware อย่างเดียว
+- [x] ScopeOperationสร้างcontextแล้วmaterializeoperation/save/auditcommitก่อนreturn; แยกdenialauditในtransactionที่ไม่มีbusinesschanges หากcallbackตอบerrorหลังมีchangesต้องrollbackแล้วauditใหม่ ไม่commitpartialstate; auditfailure503ปิดresponse; mapเฉพาะknownDBfault ไม่เผยrawexception
+- [x] เพิ่มunit/serviceHTTPtestsสามระดับ+NoAssignmentAdmin+globalbusinessgrant+scopedusersmanage+revoked/inactive/unknownsite+forgedtuple, compare404bodyexceptcorrelation; discoveryauditต้องสำเร็จก่อนคืนlist; runGREENแล้วcommit:
 
 ```bash
 dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~ScopeAuthorizationTests|FullyQualifiedName~ScopeDiscoveryTests'
@@ -629,4 +629,4 @@ git commit -m "docs: record module 3 scope security contract and exit gate"
 - การรวบรวมbusinessscopepermissionsไม่เปลี่ยนความหมายSessionView.Permissionsเดิม; MFAตรวจeffectiveprivilegedrolesแยกจากรายการpermissions
 - การอนุมัติแผนนี้ยังไม่อนุมัติproductionpolicyหรือdeployment; Module2Minorและownerregisterคงอยู่ในรายงานเดิม
 
-ขั้นถัดไป: เริ่ม Task2 ใน worktree Module3 เดิมเมื่อผู้ใช้สั่ง ใช้ Native/inline และอ่าน ledger/รายงาน Task1 ก่อน ไม่ทำ Task1 ซ้ำ และไม่ถามเลือกวิธีทำงานซ้ำ
+ขั้นถัดไป: เริ่ม Task6 ใน worktree Module3 เดิมเมื่อผู้ใช้สั่ง ใช้ Native/inline และอ่าน ledger/รายงาน Task5 ก่อน ไม่ทำ Task1–5 ซ้ำ และไม่ถามเลือกวิธีทำงานซ้ำ
