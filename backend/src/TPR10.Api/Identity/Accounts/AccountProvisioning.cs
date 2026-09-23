@@ -23,7 +23,8 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct);
         if (guard is not null && !await guard.AllowsAsync(actorId, "users:manage", ct)) return Denied();
         if (!await CanManageAsync(actorId, ct)) return Denied();
-        if (request.RoleIds is not null && !await CanManageAsync(actorId, ct, "roles:manage")) return Denied();
+        if (request.RoleIds is not null && !await CanManageAsync(actorId, ct, "roles:manage"))
+            return await DenyRoleAssignmentAsync(actorId, null, transaction, ct);
         var normalized = UsernameNormalizer.Normalize(request.Username);
         var roles = request.RoleIds ?? [IdentityCatalog.StaffRoleId];
         if (normalized is null || normalized.Any(char.IsControl) || !ValidEmail(request.Email) || !await ValidRolesAsync(roles, ct)) return Invalid();
@@ -56,7 +57,8 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct);
         if (guard is not null && !await guard.AllowsAsync(actorId, "users:manage", ct)) return Denied();
         if (!await CanManageAsync(actorId, ct)) return Denied();
-        if (request.RoleIds is not null && !await CanManageAsync(actorId, ct, "roles:manage")) return Denied();
+        if (request.RoleIds is not null && !await CanManageAsync(actorId, ct, "roles:manage"))
+            return await DenyRoleAssignmentAsync(actorId, userId, transaction, ct);
         if ((request.IsActive is null && request.RoleIds is null) || (request.RoleIds is not null && !await ValidRolesAsync(request.RoleIds, ct))) return Invalid();
         var user = await db.Set<IdentityUser>().FromSqlInterpolated($"SELECT * FROM users WHERE id={userId} FOR UPDATE").SingleOrDefaultAsync(ct);
         if (user is null) return Results.Problem(statusCode: 404, title: "ไม่พบบัญชีผู้ใช้");
@@ -123,6 +125,17 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
         && MailAddress.TryCreate(email, out var parsed) && parsed.Address == email;
     private static AccountView View(IdentityUser user, Guid[] roles) => new(user.Id, user.Username, user.Email, user.IsActive, roles.OrderBy(x => x).ToArray());
     private static IResult Denied() => Results.Problem(statusCode: 403, title: "ไม่มีสิทธิ์จัดการบัญชีผู้ใช้");
+    private async Task<IResult> DenyRoleAssignmentAsync(Guid actorId, Guid? targetId,
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, CancellationToken ct)
+    {
+        // Both callers invoke this before any business mutation; commit only the denial audit.
+        await audit.WriteAsync(new SecurityAuditRequest(actorId, null, null, null, null,
+            "identity.authorization.denied", "user", targetId, "denied", new Dictionary<string, string>
+            { ["reason"] = "permission-denied", ["capability"] = "roles:manage" }), ct);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return Denied();
+    }
     private static IResult Invalid() => Results.Problem(statusCode: 400, title: "ข้อมูลบัญชีผู้ใช้ไม่ถูกต้อง");
     private async Task WriteAuditAsync(string action, Guid actorId, Guid targetId, string changes, CancellationToken ct)
     {
