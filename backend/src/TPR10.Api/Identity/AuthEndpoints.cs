@@ -29,22 +29,23 @@ public static class AuthEndpoints
             context.Response.Cookies.Delete(CsrfService.SessionCookieName, SessionAuthenticationHandler.CookieOptions());
             context.Response.Cookies.Delete(CsrfService.CookieName, SessionAuthenticationHandler.CookieOptions());
             return Results.NoContent();
-        }).RequireAuthorization().WithMetadata(AllowedSessionStages.Common);
+        }).RequireAuthorization().WithMetadata(AllowedSessionStages.Common).Produces(204);
         endpoints.MapPost("/api/v1/auth/password/change", (Reset.PasswordChangeRequest request, Reset.PasswordResetService reset,
             HttpContext context, RequestSession current, CancellationToken ct) => reset.ChangeAsync(request, context, current, ct))
-            .RequireAuthorization().WithMetadata(new AllowedSessionStages(SessionStage.PasswordChangeRequired, SessionStage.Active));
+            .RequireAuthorization().WithMetadata(new AllowedSessionStages(SessionStage.PasswordChangeRequired, SessionStage.Active),
+                new IdentityProblemTypes(400, "urn:tpr10:reset-invalid"), new IdentityProblemTypes(429, "urn:tpr10:password-change-throttled")).Produces(204);
         endpoints.MapPost("/api/v1/auth/password-reset/request", (Reset.ResetRequest request, Reset.PasswordResetService reset, CancellationToken ct)
-            => reset.RequestAsync(request, ct));
+            => reset.RequestAsync(request, ct)).Produces<string>(202, "text/plain");
         endpoints.MapPost("/api/v1/auth/password-reset/complete", (Reset.ResetCompleteRequest request, Reset.PasswordResetService reset, RequestSession current, CancellationToken ct)
-            => reset.CompleteAsync(request, current, ct));
+            => reset.CompleteAsync(request, current, ct)).Produces(204).WithMetadata(new IdentityProblemTypes(400, "urn:tpr10:reset-invalid"));
         endpoints.MapGet("/api/v1/auth/csrf", async (HttpContext context, CsrfService csrf, CancellationToken cancellationToken) =>
         {
             try { return Results.Ok(new { token = await csrf.IssueAsync(context, cancellationToken) }); }
             catch (PreAuthCapacityException) { return Results.Problem(statusCode: 503, title: "ระบบยังไม่พร้อมออกโทเคน กรุณาลองใหม่ภายหลัง"); }
-        }).WithMetadata(new CsrfIssuerMetadata(), AllowedSessionStages.Common);
+        }).WithMetadata(new CsrfIssuerMetadata(), AllowedSessionStages.Common).Produces<CsrfTokenResponse>();
         endpoints.MapPost("/api/v1/auth/login", (LoginRequest request, HttpContext context, LoginService login, CancellationToken ct)
-            => login.LoginAsync(request, context, ct));
-        endpoints.MapGet("/api/v1/auth/session", (RequestSession session) => Results.Ok(session.View)).RequireAuthorization().WithMetadata(AllowedSessionStages.Common);
+            => login.LoginAsync(request, context, ct)).Produces<SessionView>().Produces(409);
+        endpoints.MapGet("/api/v1/auth/session", (RequestSession session) => Results.Ok(session.View)).RequireAuthorization().WithMetadata(AllowedSessionStages.Common).Produces<SessionView>();
         endpoints.MapPost("/api/v1/auth/logout", async (HttpContext context, RequestSession session, Tpr10DbContext db,
             IAuditEventWriter audit, TimeProvider clock, CancellationToken ct) =>
         {
@@ -62,7 +63,7 @@ public static class AuthEndpoints
             context.Response.Cookies.Delete(CsrfService.SessionCookieName, SessionAuthenticationHandler.CookieOptions());
             context.Response.Cookies.Delete(CsrfService.CookieName, SessionAuthenticationHandler.CookieOptions());
             return Results.NoContent();
-        }).RequireAuthorization().WithMetadata(AllowedSessionStages.Common);
+        }).RequireAuthorization().WithMetadata(AllowedSessionStages.Common).Produces(204);
     }
 }
 

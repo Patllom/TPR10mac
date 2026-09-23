@@ -1,8 +1,8 @@
-# คู่มือ Module 2 — Tasks 2–6: HTTPS, Session บัญชีผู้ใช้ MFA และสิทธิ์
+# คู่มือ Module 2 — HTTPS, Session บัญชีผู้ใช้ MFA สิทธิ์ และ Exit Gate
 
 ## ขอบเขต
 
-มี API สำหรับ CSRF, Login, ตรวจ Session, Logout และ MFA พร้อม CLI สร้างผู้ดูแลแรกและ API จัดการบัญชี/role ภายใต้ permission+MFA แล้ว ยังไม่มีหน้า Login และยังไม่ใช่การอนุมัติขึ้น Production
+มี API สำหรับ CSRF, Login, Session, Logout, MFA และ reset พร้อม CLI สร้างผู้ดูแลแรก, API จัดการบัญชี/role ภายใต้ permission+MFA และหน้า Login/Portal แล้ว ผล technical verification แยกจากการอนุมัติขึ้น Production ดู [Exit Gate Module 2](../architecture/module-2-exit-gate.md)
 
 ## สิทธิ์และ Audit (Task 6)
 
@@ -27,7 +27,7 @@ GET `/api/v1/system/identity-probe` และ POST `/api/v1/system/technical-pro
 
 Auditใหม่เก็บactor/roleที่APIเลือกจริง/action/target/outcome/correlationและscopenullจนModule3 คอลัมน์ใหม่ในauditเก่าnullไม่ใช่ข้อมูลสูญหาย Audit+mutationrollbackพร้อมกัน ห้ามใส่password/token/secret/หลักฐานบุคคลดิบในreason/evidenceReference; metadataallowlistไม่ตรวจsecretที่แฝงในข้อความอิสระได้ทั้งหมด
 
-HTTPSsmokeใช้sessionfixtureเฉพาะฐานทดสอบ ไม่ใช่login/TOTPในbrowser; APIintegrationtestsใช้login/enroll/confirmจริง
+HTTPS smoke แบบไม่ใส่ `--e2e` ใช้ session fixture เฉพาะฐานทดสอบ; แบบ `--e2e` ตรวจ login/TOTP ใน browser จริงร่วมกับ API integration tests
 
 ข้อค้างMinor Task6: test audit failure ของการเปลี่ยน grants ตรวจ rollback grants/security version แล้ว แต่ยังไม่ได้ให้targetloginก่อนfault จึงไม่ใช่หลักฐานเฉพาะว่าsessionrow/cookieย้อนกลับครบ โค้ดใช้transactionเดียวกัน; เก็บเพิ่มregressionกรณีนี้แยกในรอบถัดไป
 
@@ -101,7 +101,7 @@ Next ยังคง dev **4000** และ production build **4001** ส่ว�
 
 หลัง Login สำเร็จ server consume pre-auth flow ใน transaction เดียวกับ session/audit แล้วลบ pre-auth cookie ผู้ใช้ต้องเรียก CSRF ใหม่ซึ่งผูกกับ session ID; ใช้ได้ทั้ง restricted/active session แต่ไม่ใช่หลักฐานสิทธิ์ ถ้ามี session cookie ที่ไม่ผ่านการตรวจ จะไม่ลดกลับไปใช้ pre-auth ในคำขอเดียวกัน cookie ที่หมดอายุ/ผิดรูปจะถูกลบเพื่อให้คำขอถัดไปเริ่ม flow ใหม่ได้
 
-Login ที่ไม่มี CSRF ได้ 403; ถ้า CSRF ถูกต้องจึงตรวจรหัสผ่าน ส่วน technical-probe เดิมยังเปิดเฉพาะ Development/Testing ไม่ใช่ endpoint ทางธุรกิจที่ผ่าน RBAC แล้ว
+Login ที่ไม่มี CSRF ได้ 403; ถ้า CSRF ถูกต้องจึงตรวจรหัสผ่าน ส่วน technical-probe เปิดเฉพาะ Development/Testing และตรวจ named permission/MFA แล้ว แต่ไม่ใช่ business endpoint ที่ผ่าน scope authorization
 
 ## สัญญา Login และ Session
 
@@ -279,6 +279,41 @@ Dependency อัปเกรดตามการอนุมัติผู้
 
 ## จุดตรวจรับก่อนขั้นถัดไป
 
-รัน backend tests/build/format, Node tests, ESLint/Next build, browser E2E และ independent code review ก่อนปิด Task 8 ลำดับ API คือ authentication → CSRF → authorization → idle activity → endpoint; ห้ามถือว่า pre-auth validation หรือ stage เป็นหลักฐาน business permission
+รัน backend tests/build/format, Node tests, ESLint/Next build, browser E2E และ independent code review ก่อนปิด technical gate ลำดับ API คือ authentication → CSRF → authorization → restricted stage → idle activity → endpoint; ห้ามถือว่า pre-auth validation หรือ stage เป็นหลักฐาน business permission
 
-ยังต้องตรวจ production capacity, key backup/rotation, deployment topology และ Task 9 ก่อน deploy ไม่รับรองความพร้อมทั้ง Module 2 จากผล Task 8 เพียงอย่างเดียว
+ยังต้องผ่าน Security owner, production capacity, key backup/rotation, deployment topology และเงื่อนไขใน Exit Gate ก่อน deploy ไม่รับรองพร้อม production จากผล Test/Build/Lint เพียงอย่างเดียว
+
+## Task 9: OpenAPI และการรับงาน
+
+เรียก `GET /api/openapi/v1.json` ผ่าน origin ของ API/proxy ที่กำหนด จะได้ cookie scheme, required CSRF header, named permissions/MFA/stage, conditional role permission และ request/response schemas ของ route ปัจจุบัน OpenAPI metadata ไม่ใช่ตัว enforcement; API guards เดิมเป็น authority
+
+`x-tpr10-session-stages` อธิบาย session ที่มีอยู่และไม่แทนเงื่อนไขของ service; anonymous route ไม่บังคับมี cookie เพียงเพราะ extension นี้ระบุ Active ทุก mutation ขอ CSRF ใหม่หลัง session เปลี่ยน และห้าม retry POST/PUT/PATCH/DELETE อัตโนมัติเมื่อไม่ทราบผล commit
+
+Error client ต้องใช้ status และตรวจ Content-Type ก่อน parse JSON: Login ซ้ำ 409 และ revalidation/binding บางกรณี body ว่างได้ Response ของ auth อาจมีข้อมูลลับที่แสดงครั้งเดียว เช่น provisioning URI, recovery codes หรือ temporary password ห้าม log body หรือเก็บ screenshot/trace ของผู้ใช้จริง
+
+### Migrate และตรวจหลังอัปเกรด
+
+1. Operations ตรวจ connection destination/backup/restore approval ก่อนเสมอ ไม่ใช้ฐาน production กับ test suite
+2. กำหนด connection string ผ่าน secret management แล้ว `dotnet tool restore` และ `dotnet ef database update --project backend/src/TPR10.Api` โดยใช้ SDK ตาม global.json; ไม่ให้ web startup migrate อัตโนมัติ
+3. ตรวจ applied migration/health/audit preservation และสิทธิ์ catalog ปัจจุบัน ไม่ downgrade temporary credential lifecycle หรือแก้ migration เก่าย้อนหลัง
+4. Task 9 เปลี่ยนเอกสาร/schema ไม่เพิ่ม migration หรือ grant ผู้ใช้โดยอัตโนมัติ ผู้ดูแลต้องอนุมัติ role grants ตามขั้นตอนเดิม
+
+### Restore key ring และตรวจการกู้คืน
+
+1. ต้องมี incident/restore approval และสำรองฐานข้อมูล, key-ring directory, encryption certificate/private key ที่สัมพันธ์กัน ผ่านช่องทางลับแยกกัน; ห้ามเขียน secret ลง ticket/log/Git
+2. ใช้ environment กู้คืนที่แยกจาก production หยุด API/worker ของ environment เป้าหมายตามแผน ไม่ copy ทับ service ที่กำลังเขียน key
+3. Operations restore snapshot ที่เลือกพร้อม ownership/permission ของ service account; กำหนด application name `TPR10.Identity`, path และ certificate ที่ตรงกัน ห้ามลบ key เก่าหรือสร้างใหม่ทับโดยหวังถอดรหัส factor เดิม
+4. ตรวจ certificate/private key/password โดยเรียก key-dependent operation จริงด้วยบัญชีทดสอบที่ได้รับอนุมัติ ไม่ถือเพียง startup สำเร็จเป็นหลักฐาน เพราะ PFX โหลดแบบ lazy
+5. ตรวจ CSRF, MFA challenge ของ factor ที่มีอยู่ และ encrypted reset payload เฉพาะใน isolated development/test sink; ห้ามส่งอีเมลจริงหรือเปิดเผยค่า secret เพื่อพิสูจน์
+6. หากถอดรหัสไม่ได้ ให้ fail closed และใช้ snapshot/incident escalation ที่องค์กรอนุมัติ ไม่ข้าม MFA หรือแก้ SQL ให้มีสิทธิ์โดยพลการ บันทึกเฉพาะผล/เวลา/correlation และผู้อนุมัติ
+7. ใช้ admin sign-out-everywhere/revoke ตาม policy หลัง restore หากมีความเสี่ยง session เก่าฟื้นกลับมา; เปิด traffic ได้เมื่อ Security/Operations ยอมรับผล ไม่ใช่เมื่อ agent รัน tests ผ่าน
+
+ชุด `CsrfTests.Persistent_keys_survive_restart_and_are_encrypted_at_rest` และ `MfaResilienceTests.Restart_with_same_keys_works_but_lost_keys_fail_closed` เป็นหลักฐาน integration เฉพาะเครื่องทดสอบ ยังไม่ใช่การซ้อม restore ขององค์กร
+
+### Revoke / reset / recovery / no-secret-log
+
+- บัญชีถูกปิดหรือ role/grant เปลี่ยนต้องตรวจ cookie เดิมถูกปฏิเสธใน request ถัดไป; self logout-all ใช้ auth endpoint ส่วน administrator ใช้ users endpoint ตาม permission ของตน
+- Admin reset ออกรหัสครั้งเดียวผ่านช่องทางยืนยันตัวบุคคลที่องค์กรอนุมัติ ผู้รับต้อง forced change แล้ว login/MFA ใหม่; ไม่เก็บรหัสใน ticket หรือ command history
+- Operator MFA recovery ต้องมี `users:recover-mfa` และ recent MFA ห้าม self recovery; เหตุผล/เลขเคสไม่ใช่ที่เก็บเอกสารบุคคลหรือ secret
+- ไม่เปิด HTTP body logging, cookie/header logging, browser trace/video/screenshot ของ flow จริง; ตรวจ reverse proxy/access log ไม่บันทึก query ที่มี secret ให้ reset link ใช้ fragment ตาม UI contract
+- Audit ใช้ allowlist ของ metadata แต่ไม่รับรองตรวจ secret ที่แฝงใน free text ได้ทั้งหมด เมื่อสงสัยรั่วให้ revoke/rotate ตาม incident policy ไม่เผยค่าที่พบในเอกสาร

@@ -11,7 +11,23 @@ test.beforeEach(async ({ page }) => {
   });
 });
 async function login(page: Page, username = 'e2e-staff', secret = password, target = '/login') {
-  await page.goto(target, { waitUntil: 'domcontentloaded' });
+  const pending = new Set<string>();
+  const started = (request: import('@playwright/test').Request) => {
+    // Paths/types only: never query, body, credentials or response contents.
+    pending.add(request.resourceType() + ' ' + new URL(request.url()).pathname);
+  };
+  const ended = (request: import('@playwright/test').Request) => {
+    pending.delete(request.resourceType() + ' ' + new URL(request.url()).pathname);
+  };
+  page.on('request', started); page.on('requestfinished', ended); page.on('requestfailed', ended);
+  try {
+    await page.goto(target, { waitUntil: 'domcontentloaded' });
+  } catch (error) {
+    console.log('login navigation pending resource types/paths:', [...pending]);
+    throw error;
+  } finally {
+    page.off('request', started); page.off('requestfinished', ended); page.off('requestfailed', ended);
+  }
   await page.getByLabel('ชื่อผู้ใช้', { exact: true }).fill(username);
   await page.getByLabel('รหัสผ่าน', { exact: true }).fill(secret);
   await page.getByRole('button', { name: 'เข้าสู่ระบบ', exact: true }).click();

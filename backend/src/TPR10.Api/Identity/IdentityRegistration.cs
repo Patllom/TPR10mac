@@ -11,6 +11,11 @@ public static class IdentityRegistration
 {
     public static IServiceCollection AddIdentityFoundation(this IServiceCollection services)
     {
+        services.AddOpenApi(options =>
+        {
+            options.AddOperationTransformer<IdentityOpenApiTransformer>();
+            options.AddDocumentTransformer<IdentityOpenApiTransformer>();
+        });
         services.AddSingleton<IPasswordHasher, ArgonPasswordHasher>();
         services.AddScoped<IIdentityProvider, LocalIdentityProvider>();
         services.AddScoped<RequestSession>();

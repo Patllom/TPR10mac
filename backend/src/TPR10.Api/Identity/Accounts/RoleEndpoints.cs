@@ -32,19 +32,23 @@ public static class RoleEndpoints
                     PermissionIds = db.Set<RolePermission>().Where(p => p.RoleId == x.Id).Select(p => p.PermissionId).ToArray()
                 }).ToArrayAsync(ct);
             return Results.Ok(new { items, total, page = number, pageSize = size });
-        });
-        group.MapPost("", (RoleAdministration roles, CreateRoleRequest request, CancellationToken ct) => roles.CreateAsync(request, ct));
-        group.MapPatch("/{id:guid}", (RoleAdministration roles, Guid id, RenameRoleRequest request, CancellationToken ct) => roles.RenameAsync(id, request, ct));
-        group.MapPut("/{id:guid}/permissions", (RoleAdministration roles, Guid id, RoleGrantsRequest request, CancellationToken ct) => roles.GrantsAsync(id, request, ct));
+        }).Produces<RolePage>();
+        group.MapPost("", (RoleAdministration roles, CreateRoleRequest request, CancellationToken ct) => roles.CreateAsync(request, ct))
+            .Produces<RoleResponse>(201).WithMetadata(new IdentityProblemTypes(409));
+        group.MapPatch("/{id:guid}", (RoleAdministration roles, Guid id, RenameRoleRequest request, CancellationToken ct) => roles.RenameAsync(id, request, ct))
+            .Produces<RoleResponse>().WithMetadata(new IdentityProblemTypes(404), new IdentityProblemTypes(409));
+        group.MapPut("/{id:guid}/permissions", (RoleAdministration roles, Guid id, RoleGrantsRequest request, CancellationToken ct) => roles.GrantsAsync(id, request, ct))
+            .Produces(204).WithMetadata(new IdentityProblemTypes(404), new IdentityProblemTypes(409));
         endpoints.MapPut("/api/v1/users/{id:guid}/roles", (RoleAdministration roles, Guid id, UserRolesRequest request, CancellationToken ct) => roles.AssignAsync(id, request, ct))
-            .RequireAuthorization("roles:manage");
+            .RequireAuthorization("roles:manage").Produces(204).WithMetadata(new IdentityProblemTypes(404), new IdentityProblemTypes(409));
         endpoints.MapPost("/api/v1/users/{id:guid}/sign-out-everywhere", (RoleAdministration roles, Guid id, CancellationToken ct) => roles.SignOutAsync(id, ct))
-            .RequireAuthorization("users:manage");
+            .RequireAuthorization("users:manage").Produces(204).WithMetadata(new IdentityProblemTypes(404));
         endpoints.MapPost("/api/v1/users/{id:guid}/mfa/recover", (Mfa.OperatorMfaRecovery recovery, RequestSession session, Guid id, OperatorRecoveryRequest request, CancellationToken ct) =>
-            recovery.RecoverAsync(session.Entity!.Id, id, request.Reason, request.EvidenceReference, ct)).RequireAuthorization("users:recover-mfa");
+            recovery.RecoverAsync(session.Entity!.Id, id, request.Reason, request.EvidenceReference, ct)).RequireAuthorization("users:recover-mfa")
+            .Produces(204).WithMetadata(new IdentityProblemTypes(404));
         endpoints.MapGet("/api/v1/permissions", async (Tpr10DbContext db, CancellationToken ct) => Results.Ok(await db.Set<IdentityPermission>()
             .AsNoTracking().Where(x => IdentityCatalog.Capabilities.Contains(x.Capability)).OrderBy(x => x.Capability).ToArrayAsync(ct)))
-            .RequireAuthorization("roles:read");
+            .RequireAuthorization("roles:read").Produces<IdentityPermission[]>();
     }
     public sealed record OperatorRecoveryRequest(string Reason, string EvidenceReference);
 }

@@ -8,18 +8,19 @@ public static class AccountEndpoints
     {
         var group = endpoints.MapGroup("/api/v1/users").RequireAuthorization("users:manage");
         group.MapPost("/{id:guid}/password-reset", (HttpContext context, Reset.PasswordResetService reset, Guid id, CancellationToken ct)
-            => Actor(context, out var actor) ? reset.AdminResetAsync(actor, id, ct) : Task.FromResult(Results.Unauthorized()));
-        group.MapGet("", ListAsync);
+            => Actor(context, out var actor) ? reset.AdminResetAsync(actor, id, ct) : Task.FromResult(Results.Unauthorized()))
+            .Produces<TemporaryPasswordResponse>().WithMetadata(new IdentityProblemTypes(404));
+        group.MapGet("", ListAsync).Produces<AccountPage>();
         group.MapPost("", async (HttpContext context, AccountProvisioning accounts, CreateAccountRequest request, CancellationToken ct) =>
         {
             context.Response.Headers.CacheControl = "no-store";
             return Actor(context, out var actor) ? await accounts.CreateAsync(actor, request, ct) : Results.Unauthorized();
-        });
+        }).Produces<AccountView>(201).WithMetadata(new IdentityProblemTypes(409), new IdentityConditionalPermission("roleIds", "roles:manage"));
         group.MapPatch("/{id:guid}", async (HttpContext context, AccountProvisioning accounts, Guid id, UpdateAccountRequest request, CancellationToken ct) =>
         {
             context.Response.Headers.CacheControl = "no-store";
             return Actor(context, out var actor) ? await accounts.UpdateAsync(actor, id, request, ct) : Results.Unauthorized();
-        });
+        }).Produces<AccountView>().WithMetadata(new IdentityProblemTypes(404), new IdentityProblemTypes(409), new IdentityConditionalPermission("roleIds", "roles:manage"));
     }
 
     public static async Task<IResult> ListAsync(HttpContext context, AccountProvisioning accounts, int? page, int? pageSize, CancellationToken ct)
