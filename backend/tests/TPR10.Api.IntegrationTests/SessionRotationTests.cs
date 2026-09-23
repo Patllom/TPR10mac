@@ -16,10 +16,10 @@ public sealed class SessionRotationTests(PostgresFixture postgres)
         await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString);
         var id = await driver.SeedUserAsync("staff", "รหัสทดสอบยาวพอ-123456", []);
         await using var revoking = driver.Database.CreateContext();
-        var revoke = new SessionService(revoking, driver.Clock, new RequestSession());
+        var revoke = new SessionService(revoking, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(revoking));
         await revoke.RevokeUserAsync(id, "test", default);
         await using var issuing = driver.Database.CreateContext();
-        var issue = new SessionService(issuing, driver.Clock, new RequestSession());
+        var issue = new SessionService(issuing, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(issuing));
         var late = await issue.IssueAsync(id, SessionStage.Active, default);
         await issuing.SaveChangesAsync();
         await revoking.SaveChangesAsync();
@@ -39,7 +39,7 @@ public sealed class SessionRotationTests(PostgresFixture postgres)
         await using var db = driver.Database.CreateContext();
         var original = await db.Set<IdentitySession>().AsNoTracking().SingleAsync();
         await using var transaction = await db.Database.BeginTransactionAsync();
-        var service = new SessionService(db, driver.Clock, new RequestSession());
+        var service = new SessionService(db, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(db));
         var rotated = await service.RotateAsync(oldToken, SessionStage.Active, null, default);
         await using (var observer = driver.Database.CreateContext())
         {
@@ -66,7 +66,7 @@ public sealed class SessionRotationTests(PostgresFixture postgres)
         await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString);
         var id = await driver.SeedUserAsync("staff", "รหัสทดสอบยาวพอ-123456", []);
         await using var db = driver.Database.CreateContext();
-        var service = new SessionService(db, driver.Clock, new RequestSession());
+        var service = new SessionService(db, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(db));
         var issued = await service.IssueAsync(id, SessionStage.Active, default);
         await using var observer = driver.Database.CreateContext();
         Assert.Empty(await observer.Set<IdentitySession>().ToListAsync());

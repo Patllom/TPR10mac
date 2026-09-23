@@ -179,7 +179,7 @@ git commit -m "feat: add organization scope schema and permission domains"
 **รับ:** entitiesTask1, `ISessionService.RevokeUserAsync(Guid,string,CancellationToken)` เดิม
 **ส่ง:** `IEffectiveRolePolicy.RequiresMfaAsync(Guid,CancellationToken):Task<bool>`; `AffectedUsersAsync(Guid roleId,CancellationToken):Task<Guid[]>`; `AssignmentLifecycle.RevokeForUserAsync(Guid userId,Guid actorId,string reason,CancellationToken):Task<int>` และ `RevokeForScopeAsync(ScopeKey,Guid,string,CancellationToken):Task<Guid[]>` (ต้องมีcallertransaction, ไม่commit/revokeSessionเอง)
 
-- [ ] เพิ่มREDใช้scopedApproverโดยไม่มีglobalprivilegedrole:
+- [x] เพิ่มREDใช้scopedApproverโดยไม่มีglobalprivilegedrole:
 
 ```csharp
 [Fact]
@@ -195,7 +195,7 @@ public async Task Scoped_approver_requires_enrollment_without_global_privilege()
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopedMfaTests` คาดActiveแทนEnrollment แล้วใช้policyกลางที่ OR globalprivileged กับ activeassignment/activeancestors/privilegedclass; accountinactive=false; ไม่รวมpermissionsข้ามscope
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopedMfaTests` คาดActiveแทนEnrollment แล้วใช้policyกลางที่ OR globalprivileged กับ activeassignment/activeancestors/privilegedclass; accountinactive=false; ไม่รวมpermissionsข้ามscope
 
 ```csharp
 // ในLoginService และSessionService ใช้interfaceเดียวกัน แทนqueryglobal-only
@@ -206,11 +206,11 @@ where p.Domain == "system"
 var affected = globalUsers.Union(scopedUsers).Distinct().OrderBy(id => id);
 ```
 
-- [ ] Testsเพิ่ม: revoke/inactiveancestorไม่สร้างmandatoryจากassignmentนั้น, confirmedfactorยังบังคับMFA, expiry15min, forcedchangeแล้วloginเข้าMFA, recoveryไม่ให้recentassurance, directValidateAsyncactivecookieไม่มีMFAเมื่อgrantprivilegedใหม่ถูกปฏิเสธ
-- [ ] GlobalPermissionHandler/MutationGuard/SessionViewกรองDomain=system; เพิ่มtestว่าglobalroleมีscope-probe:readไม่ปรากฏในglobalSessionView; scopedroleมีusers:manageไม่เปิดmanagementroute ไม่เปลี่ยนlastadmininvariantเดิม
-- [ ] ImplementAssignmentLifecycleให้setRevokedAt/By/ReasonและVersion++เฉพาะactive ระบุauditสำหรับแต่ละassignmentร่วมtransaction; disableaccountเรียกก่อนRevokeUserAsync; enableไม่unrevoke; RoleAdministration.GrantsAsyncใช้affectedunionและrevokeแต่ละuserครั้งเดียว ทั้งหมดภายใต้lock7241002เดิม
-- [ ] Fault-injectionaudittriggerตรวจdisable/grantchange rollbackบัญชี/assignment/securityversion/sessionจริง; ใช้targetclientloginและGETsessionยืนยันcookieยังvalidเมื่อrollback ไม่ตรวจเฉพาะrowcount
-- [ ] รันfocusedรวมidentityregressionก่อนcommit:
+- [x] Testsเพิ่ม: revoke/inactiveancestorไม่สร้างmandatoryจากassignmentนั้น, confirmedfactorยังบังคับMFA, expiry15min, forcedchangeแล้วloginเข้าMFA, recoveryไม่ให้recentassurance, directValidateAsyncactivecookieไม่มีMFAเมื่อgrantprivilegedใหม่ถูกปฏิเสธ
+- [x] GlobalPermissionHandler/MutationGuard/SessionViewกรองDomain=system; เพิ่มtestว่าglobalroleมีscope-probe:readไม่ปรากฏในglobalSessionView; scopedroleมีusers:manageไม่เปิดmanagementroute ไม่เปลี่ยนlastadmininvariantเดิม
+- [x] ImplementAssignmentLifecycleให้setRevokedAt/By/ReasonและVersion++เฉพาะactive ระบุauditสำหรับแต่ละassignmentร่วมtransaction; disableaccountเรียกก่อนRevokeUserAsync; enableไม่unrevoke; RoleAdministration.GrantsAsyncใช้affectedunionและrevokeแต่ละuserครั้งเดียว ทั้งหมดภายใต้lock7241002เดิม
+- [x] Fault-injectionaudittriggerตรวจdisable/grantchange rollbackบัญชี/assignment/securityversion/sessionจริง; ใช้targetclientloginและGETsessionยืนยันcookieยังvalidเมื่อrollback ไม่ตรวจเฉพาะrowcount
+- [x] รันfocusedรวมidentityregressionก่อนcommit (Task2 focused29 และ full regression424 ผ่าน; task-done รัน filter ด้านล่างซ้ำหลัง commit):
 
 ```bash
 dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~ScopedMfaTests|FullyQualifiedName~ScopedIdentityLifecycleTests|FullyQualifiedName~Mfa|FullyQualifiedName~Session|FullyQualifiedName~RoleAuthorizationTests'

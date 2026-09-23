@@ -19,6 +19,8 @@ public static class IdentityRegistration
         services.AddSingleton<IPasswordHasher, ArgonPasswordHasher>();
         services.AddScoped<IIdentityProvider, LocalIdentityProvider>();
         services.AddScoped<RequestSession>();
+        services.AddScoped<IEffectiveRolePolicy, Organization.EffectiveRolePolicy>();
+        services.AddScoped<Scopes.Assignments.AssignmentLifecycle>();
         services.AddScoped<LoginService>();
         services.AddScoped<Reset.PasswordResetService>();
         services.AddScoped<IResetDelivery, Reset.ResetDelivery>();

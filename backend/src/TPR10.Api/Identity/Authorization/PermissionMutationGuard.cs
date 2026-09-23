@@ -22,7 +22,7 @@ public sealed class PermissionMutationGuard(Tpr10DbContext db, RequestSession cu
         var role = await (from ur in db.Set<UserRole>()
                           join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
                           join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
-                          where ur.UserId == actorId && p.Capability == capability
+                          where ur.UserId == actorId && p.Capability == capability && p.Domain == "system"
                           orderby ur.RoleId
                           select (Guid?)ur.RoleId).FirstOrDefaultAsync(ct);
         if (role is null) return false;
@@ -38,11 +38,11 @@ public sealed class PermissionMutationGuard(Tpr10DbContext db, RequestSession cu
         && (from ur in db.Set<UserRole>()
             join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
             join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
-            where ur.UserId == u.Id && p.Capability == "users:manage"
+            where ur.UserId == u.Id && p.Capability == "users:manage" && p.Domain == "system"
             select p.Id).Any()
         && (from ur in db.Set<UserRole>()
             join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
             join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
-            where ur.UserId == u.Id && p.Capability == "roles:manage"
+            where ur.UserId == u.Id && p.Capability == "roles:manage" && p.Domain == "system"
             select p.Id).Any(), ct);
 }

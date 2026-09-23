@@ -15,7 +15,7 @@ public sealed record AccountPage(AccountView[] Items, int Total, int Page, int P
 
 // Use-case boundary: owns transaction/audit/Save. HTTP callers must also require the Task 6 MFA policy.
 public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passwords, ISessionService sessions, IAuditEventWriter audit, TimeProvider clock,
-    PermissionMutationGuard? guard = null)
+    Scopes.Assignments.AssignmentLifecycle assignments, PermissionMutationGuard? guard = null)
 {
     public async Task<IResult> CreateAsync(Guid actorId, CreateAccountRequest request, CancellationToken ct)
     {
@@ -87,6 +87,7 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
         await db.SaveChangesAsync(ct);
         if (hadManagingAdmin && !await PermissionMutationGuard.HasManagingAdminAsync(db, ct))
             return Results.Problem(statusCode: 409, title: "ไม่สามารถถอดสิทธิ์จัดการของผู้ดูแลคนสุดท้ายได้");
+        if (!active) await assignments.RevokeForUserAsync(userId, actorId, "account-disabled", ct);
         await sessions.RevokeUserAsync(userId, "account-or-role-change", ct);
         await WriteAuditAsync("identity.user.updated", actorId, userId, rolesChanged ? "active,roles" : "active", ct);
         await db.SaveChangesAsync(ct);
@@ -116,7 +117,7 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
                                                                                                                   join ur in db.Set<UserRole>() on user.Id equals ur.UserId
                                                                                                                   join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
                                                                                                                   join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
-                                                                                                                  where user.Id == actorId && user.IsActive && p.Capability == capability
+                                                                                                                  where user.Id == actorId && user.IsActive && p.Capability == capability && p.Domain == "system"
                                                                                                                   select user.Id).AnyAsync(ct);
 
     private async Task<bool> ValidRolesAsync(Guid[] roles, CancellationToken ct) => roles.Length <= 20

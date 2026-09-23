@@ -8,7 +8,7 @@ using TPR10.Api.Identity.Sessions;
 namespace TPR10.Api.Identity.Accounts;
 
 public sealed class RoleAdministration(Tpr10DbContext db, RequestSession current, PermissionMutationGuard guard,
-    PermissionContext permission, ISessionService sessions, IAuditEventWriter audit, TimeProvider clock)
+    PermissionContext permission, ISessionService sessions, IAuditEventWriter audit, TimeProvider clock, IEffectiveRolePolicy roles)
 {
     public Task<IResult> CreateAsync(CreateRoleRequest request, CancellationToken ct) => MutateAsync("roles:manage", async () =>
     {
@@ -43,7 +43,7 @@ public sealed class RoleAdministration(Tpr10DbContext db, RequestSession current
         foreach (var permissionId in ids.Except(mappings.Select(x => x.PermissionId))) db.Add(new RolePermission { RoleId = id, PermissionId = permissionId });
         await db.SaveChangesAsync(ct);
         if (hadAdmin && !await PermissionMutationGuard.HasManagingAdminAsync(db, ct)) return LastAdmin();
-        foreach (var userId in await db.Set<UserRole>().Where(x => x.RoleId == id).Select(x => x.UserId).OrderBy(x => x).ToArrayAsync(ct))
+        foreach (var userId in await roles.AffectedUsersAsync(id, ct))
             await sessions.RevokeUserAsync(userId, "role-grants-changed", ct);
         await AuditAsync("identity.role.permissions.changed", "role", id, "permissions", ct);
         return Results.NoContent();
