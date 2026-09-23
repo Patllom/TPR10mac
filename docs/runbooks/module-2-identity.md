@@ -34,6 +34,10 @@ Login ที่ไม่มี CSRF ได้ 403; ถ้า CSRF ถูกต�
 
 ทุก response ในกลุ่ม auth มี `Cache-Control: no-store` ทั้งสำเร็จและล้มเหลว Login ขณะมี session ที่ใช้ได้ตอบ 409 ให้ Logout ก่อนเปลี่ยนบัญชี ไม่มี remember-me และไม่รับ stage/permission จากผู้ส่ง
 
+ข้อค้าง Minor ของ Task 3: 409 กรณี Login ซ้ำยังไม่มี body แบบ Problem Details; consumer ต้องรับ body ว่างได้ จะแก้มาตรฐาน error แยกตามรายการตรวจทาน
+
+Logout ใช้ conditional revoke ใน transaction: หาก rotation เปลี่ยน session หลังผ่าน authentication แล้ว Logout จะตอบ 401 ให้ตรวจสถานะใหม่ ไม่แจ้ง 204 เท็จ หาก Logout ชนะก่อน การหมุน token เก่าจะถูกปฏิเสธ ไม่เกิด session ใหม่
+
 Cookie `__Host-tpr10_session` ใช้ Secure, HttpOnly, SameSite=Lax, Path=/ ไม่มี Domain ค่า random 32 bytes ส่งเป็น base64url และเก็บเฉพาะ SHA-256 ใน DB ไม่ส่ง token ใน body หรือบันทึกใน application/audit log
 
 Session หมดอายุเมื่อไม่ใช้งาน 30 นาที หรือครบ 8 ชั่วโมงนับจาก Login แม้มีการใช้งานต่อเนื่อง Middleware ตรวจ revocation, account active, security version, assurance ที่จำเป็น และอ่าน permission ปัจจุบันทุกคำขอ การต่อ idle เกิดหลังผ่าน transport/CSRF/authorization เท่านั้น จึงไม่ต่ออายุจากคำขอ CSRF ผิด

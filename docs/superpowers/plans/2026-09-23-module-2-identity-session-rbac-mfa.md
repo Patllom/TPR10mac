@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** Tasks 1–2 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md) (Minor ค้าง 2 ข้อ) และ [รายงาน Task 2](../../architecture/module-2-task-2-verification.md) (Important แก้แล้ว, Minor ค้าง 1 ข้อ) Tasks 3–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Tasks 1–3 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md) (Minor ค้าง 2 ข้อ), [รายงาน Task 2](../../architecture/module-2-task-2-verification.md) (Important แก้แล้ว, Minor ค้าง 1 ข้อ) และ [รายงาน Task 3](../../architecture/module-2-task-3-verification.md) (Important แก้แล้ว, Minor ค้าง 1 ข้อ; รวม 166 tests ผ่าน) Tasks 4–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -185,7 +185,7 @@ await next(context);
 
 **รับ/ส่ง:** ใช้ `IIdentityProvider`, ส่ง `ISessionService`; `POST /api/v1/auth/login` `{username,password}`, `GET /api/v1/auth/session` คืน `SessionView`, `POST /api/v1/auth/logout` คืน204; session stage serialize เป็นชื่อ string ไม่ใช่เลข
 
-- [ ] เขียน test การเพิกถอน:
+- [x] เขียน test การเพิกถอน:
 
 ```csharp
 [Fact]
@@ -199,8 +199,8 @@ public async Task Logout_invalidates_the_old_cookie() {
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~SessionTests` ให้แดง
-- [ ] ออก random token 32 bytes; token transport base64url, DB ใช้ SHA-256 hash; authentication handler ตรวจ session active, user active/version, idle/absolute expiry และอ่าน permission ปัจจุบัน ไม่ใช้ cached role claim เป็นแหล่งอำนาจ:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~SessionTests` ให้แดง
+- [x] ออก random token 32 bytes; token transport base64url, DB ใช้ SHA-256 hash; authentication handler ตรวจ session active, user active/version, idle/absolute expiry และอ่าน permission ปัจจุบัน ไม่ใช้ cached role claim เป็นแหล่งอำนาจ:
 
 ```csharp
 var raw = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
@@ -208,9 +208,9 @@ var token = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(raw);
 var tokenHash = System.Security.Cryptography.SHA256.HashData(raw);
 ```
 
-- [ ] หลัง login เปลี่ยน pre-auth binding เป็น session binding ยกเลิก flow เก่า; rotate token เมื่อ privilege/assurance เปลี่ยน; csrf เก่าต้องใช้ไม่ได้ กำหนด login fail เป็น401 generic, locked/rate limited เป็น429 generic พร้อม Retry-After; nonexistent user ใช้ dummy hash path ไม่เปิดเผย account existence
-- [ ] เพิ่ม tests idle/absolute expiry ด้วยเวลาจำลอง, malformed cookie, DB unavailable fail closed, token raw ไม่อยู่ DB/log/response body, session fixation, cross-session CSRF, logout replay cookie ด้วย client ใหม่, session endpoint no-store และ responses ไม่ cache
-- [ ] รัน SessionTests/CsrfTests ให้ผ่าน แล้ว commit `feat: add authoritative revocable sessions`
+- [x] หลัง login เปลี่ยน pre-auth binding เป็น session binding ยกเลิก flow เก่า; rotate token เมื่อ privilege/assurance เปลี่ยน; csrf เก่าต้องใช้ไม่ได้ กำหนด login fail เป็น401 generic, locked/rate limited เป็น429 generic พร้อม Retry-After; nonexistent user ใช้ dummy hash path ไม่เปิดเผย account existence
+- [x] เพิ่ม tests idle/absolute expiry ด้วยเวลาจำลอง, malformed cookie, DB unavailable fail closed, token raw ไม่อยู่ DB/log/response body, session fixation, cross-session CSRF, logout replay cookie ด้วย client ใหม่, session endpoint no-store และ responses ไม่ cache
+- [x] รัน SessionTests/CsrfTests ให้ผ่าน แล้ว commit `feat: add authoritative revocable sessions`
 
 ## Task 4: บัญชีผู้ใช้และผู้ดูแลเริ่มต้น
 

@@ -23,8 +23,13 @@ public static class AuthEndpoints
             IAuditEventWriter audit, TimeProvider clock, CancellationToken ct) =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            var entity = await db.Set<IdentitySession>().SingleAsync(x => x.Id == session.Entity!.Id, ct);
-            entity.RevokedAtUtc = clock.GetUtcNow();
+            var entity = session.Entity!;
+            var now = clock.GetUtcNow();
+            // UPDATE locks and rechecks the current row; a winning rotation must not yield false logout success.
+            var revoked = await db.Set<IdentitySession>().Where(x => x.Id == entity.Id && x.RevokedAtUtc == null
+                && x.ExpiresAtUtc > now && db.Set<IdentityUser>().Any(u => u.Id == x.UserId && u.IsActive && u.SecurityVersion == x.SecurityVersion))
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAtUtc, now), ct);
+            if (revoked != 1) return Results.Problem(statusCode: 401, title: "Session เปลี่ยนแปลงแล้ว กรุณาตรวจสถานะอีกครั้ง");
             await audit.WriteAsync("identity.logout", entity.UserId, new Dictionary<string, string> { ["outcome"] = "success" }, ct);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
