@@ -14,6 +14,23 @@ public sealed class AccountTests(PostgresFixture postgres)
     private const string Password = "รหัสทดสอบยาวพอ-123456";
 
     [Theory]
+    [InlineData("ยืนยันไม่ตรงกัน-123456")]
+    [InlineData("\u001b")]
+    public async Task Bootstrap_confirmation_mismatch_or_cancel_does_not_create_account(string confirmation)
+    {
+        await using var driver = await IdentityTestDriver.CreateAsync(postgres.ConnectionString);
+        var result = await BootstrapAsync(driver.Database.ConnectionString, "first-admin", confirmation);
+        Assert.Equal(1, result.ExitCode);
+        Assert.DoesNotContain(Password, result.Output);
+        if (confirmation.Length > 1) Assert.DoesNotContain(confirmation, result.Output);
+        await using var db = driver.Database.CreateContext();
+        Assert.Empty(await db.Set<IdentityUser>().ToListAsync());
+        Assert.Empty(await db.Set<LocalCredential>().ToListAsync());
+        Assert.Empty(await db.Set<IdentityRole>().ToListAsync());
+        Assert.Empty(await db.AuditEvents.ToListAsync());
+    }
+
+    [Theory]
     [InlineData("", Password)]
     [InlineData("admin\u001bcontrol", Password)]
     [InlineData("admin", "short")]
@@ -104,7 +121,7 @@ public sealed class AccountTests(PostgresFixture postgres)
         Assert.Single(await db.AuditEvents.Where(x => x.EventType == "identity.bootstrap").ToListAsync());
     }
 
-    internal static async Task<(int ExitCode, string Output)> BootstrapAsync(string connectionString, string username)
+    internal static async Task<(int ExitCode, string Output)> BootstrapAsync(string connectionString, string username, string confirmation = Password)
     {
         var start = new ProcessStartInfo("python3") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         start.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "BootstrapPty.py"));
@@ -114,7 +131,7 @@ public sealed class AccountTests(PostgresFixture postgres)
         using var process = Process.Start(start)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
-        await process.StandardInput.WriteAsync(JsonSerializer.Serialize(new { username, password = Password }));
+        await process.StandardInput.WriteAsync(JsonSerializer.Serialize(new { username, password = Password, confirmation }));
         process.StandardInput.Close();
         await process.WaitForExitAsync();
         return (process.ExitCode, await output + await error);

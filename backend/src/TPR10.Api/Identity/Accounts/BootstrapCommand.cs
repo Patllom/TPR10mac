@@ -27,6 +27,13 @@ public static class BootstrapCommand
         Console.Write("รหัสผ่าน: ");
         var password = ReadPassword();
         if (username is null || password is null) return 1;
+        Console.Write("ยืนยันรหัสผ่าน: ");
+        var confirmation = ReadPassword();
+        if (confirmation is null || !string.Equals(password, confirmation, StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine("ยกเลิก: รหัสผ่านยืนยันไม่ตรงกันหรือผู้ใช้ยกเลิก ไม่มีการสร้างบัญชี");
+            return 1;
+        }
         try
         {
             await using var db = new Tpr10DbContext(new DbContextOptionsBuilder<Tpr10DbContext>().UseNpgsql(connection).Options);

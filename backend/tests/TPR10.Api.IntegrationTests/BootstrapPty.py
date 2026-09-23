@@ -14,7 +14,7 @@ master, slave = pty.openpty()
 child = subprocess.Popen([sys.argv[1], sys.argv[2], "--bootstrap-admin"], stdin=slave,
                          stdout=slave, stderr=slave, close_fds=True)
 output = bytearray()
-sent_name = sent_password = False
+sent_name = sent_password = sent_confirmation = False
 deadline = time.monotonic() + 15
 try:
     while time.monotonic() < deadline:
@@ -36,6 +36,9 @@ try:
         if not sent_password and "รหัสผ่าน:" in text and not (termios.tcgetattr(slave)[3] & termios.ECHO):
             os.write(master, (data["password"] + "\r").encode())
             sent_password = True
+        if not sent_confirmation and "ยืนยันรหัสผ่าน:" in text and not (termios.tcgetattr(slave)[3] & termios.ECHO):
+            os.write(master, (data["confirmation"] + "\r").encode())
+            sent_confirmation = True
         if child.poll() is not None and not ready:
             break
     if child.poll() is None:

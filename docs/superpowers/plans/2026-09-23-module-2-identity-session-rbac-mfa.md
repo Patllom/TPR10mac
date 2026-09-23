@@ -218,7 +218,7 @@ var tokenHash = System.Security.Cryptography.SHA256.HashData(raw);
 
 **รับ/ส่ง:** bootstrap เป็น CLI branch ก่อน `app.Run` ใช้ `--bootstrap-admin` รับ username ผ่าน prompt และ password แบบไม่ echo ไม่มี default password; `POST /api/v1/users` และ `PATCH /api/v1/users/{id}` ใช้ permission `users:manage` + MFA เมื่อ Task 6 เปิด mapping; ก่อนนั้นไม่ map admin endpoints บน production
 
-- [ ] เขียน test ไม่มี self-registration:
+- [x] เขียน test ไม่มี self-registration:
 
 ```csharp
 [Fact]
@@ -230,8 +230,8 @@ public async Task Public_registration_is_not_available() {
 }
 ```
 
-- [ ] เพิ่ม bootstrap test สอง process แข่งกันสร้าง admin ต้องสำเร็จหนึ่งครั้ง, password ไม่ปรากฏ stdout, บัญชีแรก stage `MfaEnrollmentRequired`; รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AccountTests` ให้แดงที่ bootstrap behavior (registration404 เดิมอาจผ่านอยู่แล้ว)
-- [ ] ทำ bootstrap transaction พร้อม PostgreSQL advisory transaction lock; หากมี user อยู่แล้วให้ปฏิเสธ ไม่ overwrite; seed named permissions/role classes ด้วย deterministic IDs ไม่ seed demo accounts:
+- [x] เพิ่ม bootstrap test สอง process แข่งกันสร้าง admin ต้องสำเร็จหนึ่งครั้ง, password ไม่ปรากฏ stdout, บัญชีแรก stage `MfaEnrollmentRequired`; รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AccountTests` ให้แดงที่ bootstrap behavior (registration404 เดิมอาจผ่านอยู่แล้ว)
+- [x] ทำ bootstrap transaction พร้อม PostgreSQL advisory transaction lock; หากมี user อยู่แล้วให้ปฏิเสธ ไม่ overwrite; seed named permissions/role classes ด้วย deterministic IDs ไม่ seed demo accounts:
 
 ```csharp
 await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -239,8 +239,10 @@ await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct
 // ตรวจ users ว่างใน transaction ก่อนสร้าง user, credential, role mapping และ audit
 ```
 
-- [ ] สร้างบัญชีโดย admin ให้ must-change-password; update active=false ต้องเพิ่ม security_version และ revoke ใน transaction เดียว; ป้องกันปิด/ถอดผู้ดูแล active คนสุดท้ายด้วย lock; GET users pagination default25 max100 ไม่คืน credential/factor/token
-- [ ] ทดสอบ normalized username duplicate409, field validation400, disabled login401, bootstrap ซ้ำไม่เพิ่ม row และ account audit rollback; รัน AccountTests ผ่าน แล้ว commit `feat: add controlled account provisioning`
+- [x] สร้างบัญชีโดย admin ให้ must-change-password; update active=false ต้องเพิ่ม security_version และ revoke ใน transaction เดียว; ป้องกันปิด/ถอดผู้ดูแล active คนสุดท้ายด้วย lock; GET users pagination default25 max100 ไม่คืน credential/factor/token
+- [x] ทดสอบ normalized username duplicate409, field validation400, disabled login401, bootstrap ซ้ำไม่เพิ่ม row และ account audit rollback; รัน AccountTests ผ่าน แล้ว commit `feat: add controlled account provisioning`
+
+ผลส่งมอบ Task 4: [รายงานตรวจสอบและข้อค้าง](../../architecture/module-2-task-4-verification.md) — backend179/179, Node23/23, Build/Lint/HTTPS4000/4001ผ่านหลังแก้ review; API จัดการบัญชียังไม่เปิดจน Task 6
 
 ## Task 5: MFA enrollment, challenge และ recovery
 
