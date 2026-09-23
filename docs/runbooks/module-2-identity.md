@@ -241,7 +241,9 @@ Testing/Development เปิดได้เมื่อมี persistent key ri
 
 Migration `AddTemporaryCredentialLifecycle` เพิ่ม nullable expiry/consumed ใน local credential ไม่เปลี่ยน credential เดิม ห้าม downgrade หลังเปิดใช้ temporary password โดยไม่มีแผนรักษาการ consume/expiry ไม่ล้าง MFA หรือ lockout เดิมเมื่อ reset; หากยังติด lockout ต้องรอเวลานโยบายเดิม
 
-รายละเอียดหลักฐานและข้อจำกัดอยู่ใน [รายงาน Task 7](../architecture/module-2-task-7-verification.md)
+`password/change` ใช้ persistent account budget ร่วมกับ login: ยืนยัน current password ผิด 5 ครั้งใน 15 นาทีจะพัก 15 นาที ครอบคลุมทุก session และการยิงพร้อมกัน เมื่อถูกพักคืน 429 พร้อม `Retry-After` แม้ current password ถูกต้อง ต้องรอจนหมด lockout ไม่สามารถสลับระหว่าง login/change เพื่อหลบ budget; บันทึก failed/throttled audit โดยไม่มีรหัสผ่าน
+
+รายละเอียดหลักฐานและข้อจำกัด รวม Minor เรื่อง eligible-account enumeration coverage อยู่ใน [รายงาน Task 7](../architecture/module-2-task-7-verification.md)
 
 ## จุดตรวจรับก่อนขั้นถัดไป
 

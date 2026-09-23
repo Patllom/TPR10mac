@@ -85,7 +85,27 @@ public sealed class PasswordResetService(Tpr10DbContext db, IPasswordHasher hash
     public async Task<IResult> ChangeAsync(PasswordChangeRequest request, HttpContext context, RequestSession current, CancellationToken ct)
     {
         if (current.Entity is not { } candidate) return Results.Unauthorized();
+        var normalized = await db.Set<IdentityUser>().AsNoTracking().Where(x => x.Id == candidate.UserId).Select(x => x.NormalizedUsername).SingleAsync(ct);
+        var key = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(normalized));
+        // A long-lived session may outlive the bounded login bucket. Recreate it under the same admission lock.
+        await using (var admission = await db.Database.BeginTransactionAsync(ct))
+        {
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241004)", ct);
+            var admittedAt = clock.GetUtcNow();
+            await db.Set<LoginAttemptWindow>().Where(x => x.ExpiresAtUtc <= admittedAt).ExecuteDeleteAsync(ct);
+            if (!await db.Set<LoginAttemptWindow>().AnyAsync(x => x.IdentifierHash == key, ct))
+            {
+                if (await db.Set<LoginAttemptWindow>().CountAsync(ct) >= 10000) return Limited(context, 60);
+                db.Add(new LoginAttemptWindow { IdentifierHash = key, WindowStartedAtUtc = admittedAt, ExpiresAtUtc = admittedAt.AddMinutes(30) });
+                await db.SaveChangesAsync(ct);
+            }
+            await admission.CommitAsync(ct);
+        }
+        db.ChangeTracker.Clear();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        // Match login's bucket-before-user order. Never lock this bucket after holding a user row.
+        var attempts = await db.Set<LoginAttemptWindow>().FromSqlInterpolated($"SELECT * FROM login_attempt_windows WHERE identifier_hash={key} FOR UPDATE").SingleOrDefaultAsync(ct);
+        if (attempts is null) return Limited(context, 1);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)", ct);
         var user = await db.Set<IdentityUser>().FromSqlInterpolated($"SELECT * FROM users WHERE id={candidate.UserId} FOR UPDATE").SingleAsync(ct);
         var session = await db.Set<IdentitySession>().FromSqlInterpolated($"SELECT * FROM sessions WHERE id={candidate.Id} FOR UPDATE").SingleAsync(ct);
@@ -94,7 +114,36 @@ public sealed class PasswordResetService(Tpr10DbContext db, IPasswordHasher hash
             || session.ExpiresAtUtc <= now || session.LastSeenAtUtc <= now.AddMinutes(-30)) return Results.Unauthorized();
         if (session.Stage is not (SessionStage.Active or SessionStage.PasswordChangeRequired)) return Results.Forbid();
         var credential = await db.Set<LocalCredential>().SingleAsync(x => x.UserId == user.Id, ct);
-        if (!await hasher.VerifyAsync(request.CurrentPassword, credential.PasswordHash, ct) || request.CurrentPassword == request.NewPassword) return Invalid();
+        var lockedUntil = attempts.LockedUntilUtc > credential.LockedUntilUtc ? attempts.LockedUntilUtc : credential.LockedUntilUtc;
+        // Nullable comparisons cannot select the non-null operand reliably.
+        lockedUntil ??= attempts.LockedUntilUtc;
+        if (lockedUntil > now)
+        {
+            await audit.WriteAsync(new SecurityAuditRequest(user.Id, null, null, null, null, "identity.password.change.throttled", "user", user.Id, "denied", new Dictionary<string, string>()), ct);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return Limited(context, (int)Math.Ceiling((lockedUntil.Value - now).TotalSeconds));
+        }
+        if (attempts.WindowStartedAtUtc <= now.AddMinutes(-15) || attempts.LockedUntilUtc is not null)
+        {
+            attempts.FailedAttempts = 0;
+            attempts.WindowStartedAtUtc = now;
+            attempts.LockedUntilUtc = null;
+        }
+        if (!await hasher.VerifyAsync(request.CurrentPassword, credential.PasswordHash, ct))
+        {
+            attempts.FailedAttempts++;
+            if (attempts.FailedAttempts == 5) attempts.LockedUntilUtc = now.AddMinutes(15);
+            attempts.ExpiresAtUtc = now.AddMinutes(30);
+            credential.FailedAttempts = attempts.FailedAttempts;
+            credential.FailureWindowStartedAtUtc = attempts.WindowStartedAtUtc;
+            credential.LockedUntilUtc = attempts.LockedUntilUtc;
+            await audit.WriteAsync(new SecurityAuditRequest(user.Id, null, null, null, null, "identity.password.change.failed", "user", user.Id, "denied", new Dictionary<string, string>()), ct);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return Invalid();
+        }
+        if (request.CurrentPassword == request.NewPassword) return Invalid();
         string encoded;
         try { encoded = await hasher.HashAsync(request.NewPassword, ct); }
         catch (ArgumentException) { return Invalid(); }
@@ -102,6 +151,11 @@ public sealed class PasswordResetService(Tpr10DbContext db, IPasswordHasher hash
         credential.MustChangePassword = false;
         credential.TemporaryExpiresAtUtc = credential.TemporaryConsumedAtUtc = null;
         credential.PasswordChangedAtUtc = now;
+        credential.FailedAttempts = attempts.FailedAttempts = 0;
+        credential.FailureWindowStartedAtUtc = null;
+        credential.LockedUntilUtc = attempts.LockedUntilUtc = null;
+        attempts.WindowStartedAtUtc = now;
+        attempts.ExpiresAtUtc = now.AddMinutes(30);
         await InvalidateAsync(user.Id, ct);
         await AuditAsync("identity.password.change", user.Id, user.Id, ct);
         await db.SaveChangesAsync(ct);
@@ -137,4 +191,10 @@ public sealed class PasswordResetService(Tpr10DbContext db, IPasswordHasher hash
 
     private Task AuditAsync(string action, Guid? actor, Guid target, CancellationToken ct) => audit.WriteAsync(
         new SecurityAuditRequest(actor, actor is null ? null : permission.ActingRoleId, null, null, null, action, "user", target, "success", new Dictionary<string, string>()), ct);
+
+    private static IResult Limited(HttpContext context, int seconds)
+    {
+        context.Response.Headers.RetryAfter = Math.Max(1, seconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Results.Problem(statusCode: 429, type: "urn:tpr10:password-change-throttled", title: "ยืนยันรหัสผ่านผิดเกินกำหนด กรุณาลองใหม่ภายหลัง");
+    }
 }

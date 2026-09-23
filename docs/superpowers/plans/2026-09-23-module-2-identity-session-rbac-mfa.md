@@ -10,7 +10,7 @@
 
 **ข้อกำหนดอ้างอิง:** [Architecture Baseline ที่อนุมัติแล้ว](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) หัวข้อ 8, 11, 18 และ 20
 
-**สถานะ:** Tasks 1–6 ผ่าน implementation, review อิสระ และ Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md), [Task 5](../../architecture/module-2-task-5-verification.md) และ [Task 6](../../architecture/module-2-task-6-verification.md) รวม backend259/Node23ผ่าน มี Minor ที่เปิดเผยในแต่ละรายงาน Tasks 7–9 ยังไม่เริ่ม จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
+**สถานะ:** Tasks 1–7 ผ่าน implementation, review อิสระและการแก้ finding พร้อม Test/Build/Lint เมื่อ 2026-09-23 ดู [รายงาน Task 1](../../architecture/module-2-task-1-verification.md), [Task 2](../../architecture/module-2-task-2-verification.md), [Task 3](../../architecture/module-2-task-3-verification.md), [Task 4](../../architecture/module-2-task-4-verification.md), [Task 5](../../architecture/module-2-task-5-verification.md), [Task 6](../../architecture/module-2-task-6-verification.md) และ [Task 7](../../architecture/module-2-task-7-verification.md) รวม backend305/Node23ผ่านหลังแก้ review มี Minor ที่เปิดเผยในแต่ละรายงาน Tasks 8–9 ยังไม่เริ่ม อีเมล production รอ Module 5 จึงยังไม่ใช่หลักฐานผ่าน Security Exit Gate
 
 ## ข้อกำหนดร่วมทุก Task
 
@@ -317,7 +317,7 @@ options.AddPolicy("system:probe", policy => policy.RequireAuthenticatedUser()
 
 **รับ/ส่ง:** `POST /api/v1/auth/password-reset/request` `{username}` คืน202เหมือนกัน, `/password-reset/complete` `{token,password}` คืน204, `/password/change` `{currentPassword,newPassword}` คืน204; admin `POST /api/v1/users/{id}/password-reset` ต้อง `users:manage`+MFA
 
-- [ ] เขียน enumeration test:
+- [x] เขียน enumeration test:
 
 ```csharp
 [Theory]
@@ -332,8 +332,8 @@ public async Task Reset_request_does_not_reveal_account(string username) {
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~PasswordResetTests` ให้แดง
-- [ ] สร้าง token 32 random bytes; request tableเก็บ hash/expiry; queue payloadเข้ารหัสสำหรับ delivery ใน transactionเดียวกับ request/audit ไม่เก็บ raw token plaintextใน outbox; test sink เปิดเฉพาะ Testing/Development อ่านผ่าน DI ไม่ใช่ public HTTP และไม่ log token:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~PasswordResetTests` ให้แดง
+- [x] สร้าง token 32 random bytes; request tableเก็บ hash/expiry; queue payloadเข้ารหัสสำหรับ delivery ใน transactionเดียวกับ request/audit ไม่เก็บ raw token plaintextใน outbox; test sink เปิดเฉพาะ Testing/Development อ่านผ่าน DI ไม่ใช่ public HTTP และไม่ log token:
 
 ```csharp
 await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -342,9 +342,9 @@ await db.SaveChangesAsync(ct);
 await tx.CommitAsync(ct);
 ```
 
-- [ ] production ที่ยังไม่มี delivery adapter ต้องไม่อ้างว่าส่งแล้ว: startup/config gateปิด email-reset readiness แต่ generic endpointไม่เผย account; document dependency Module5 ชัดเจน ทดสอบ fake delivery failure ไม่ทำให้ credential เปลี่ยนและ outbox retryไม่สร้าง token ใหม่
-- [ ] complete reset ล็อก request/consume once, hash passwordใหม่, revokeทุก session และ requestเก่า, auditในtransactionเดียว ไม่มี auto-login; admin resetสร้าง one-use temporary credential ผ่านช่องทางผู้ดูแลที่ได้รับอนุญาต ไม่ส่ง credentialในemail/log บังคับ stage PasswordChangeRequired และ revokeทันที
-- [ ] เพิ่ม tests expiry, replay, concurrent completeสำเร็จหนึ่งครั้ง, reset tokenจากบัญชีอื่น, forced changeเข้า probeไม่ได้, หลังchangeต้องloginใหม่/MFAตามrole และ audit rollbackไม่ consume token; รัน PasswordResetTestsผ่าน แล้ว commit `feat: add one-time reset and forced password change`
+- [x] production ที่ยังไม่มี delivery adapter ต้องไม่อ้างว่าส่งแล้ว: startup/config gateปิด email-reset readiness แต่ generic endpointไม่เผย account; document dependency Module5 ชัดเจน ทดสอบ fake delivery failure ไม่ทำให้ credential เปลี่ยนและ outbox retryไม่สร้าง token ใหม่
+- [x] complete reset ล็อก request/consume once, hash passwordใหม่, revokeทุก session และ requestเก่า, auditในtransactionเดียว ไม่มี auto-login; admin resetสร้าง one-use temporary credential ผ่านช่องทางผู้ดูแลที่ได้รับอนุญาต ไม่ส่ง credentialในemail/log บังคับ stage PasswordChangeRequired และ revokeทันที
+- [x] เพิ่ม tests expiry, replay, concurrent completeสำเร็จหนึ่งครั้ง, reset tokenจากบัญชีอื่น, forced changeเข้า probeไม่ได้, หลังchangeต้องloginใหม่/MFAตามrole และ audit rollbackไม่ consume token; รัน PasswordResetTestsผ่าน แล้ว commit `feat: add one-time reset and forced password change`
 
 ## Task 8: เชื่อม Landing Page → Login → Portal
 

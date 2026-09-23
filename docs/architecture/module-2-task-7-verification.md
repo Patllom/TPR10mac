@@ -1,6 +1,6 @@
 # ผลตรวจ Task 7: รีเซ็ตรหัสผ่านและบังคับเปลี่ยนรหัสผ่าน
 
-สถานะ: Test/Build/Lint และ HTTPS ผ่าน อยู่ระหว่าง Code Review ยังไม่ส่งมอบ และยังไม่ push
+สถานะ: implementation, review อิสระ, การแก้ Important ด้วย TDD และ Test/Build/Lint หลังแก้ผ่านครบ มี Minor 1 ข้อเลื่อนไว้ ยังไม่ push และไม่ใช่การรับรอง production readiness
 
 ## ขอบเขต
 
@@ -40,7 +40,7 @@ Admin reset คืนรหัสชั่วคราวให้ผู้ด�
 
 ## Verification และ Code Review
 
-ผลรัน 2026-09-23 บน worktree ของ Task 7:
+ผลรันก่อนแก้ review เมื่อ 2026-09-23 บน worktree ของ Task 7 (ผลหลังแก้อยู่หัวข้อถัดไป):
 
 | คำสั่ง | ผล |
 | --- | --- |
@@ -60,4 +60,42 @@ HTTPS smoke ตรวจ transport ด้วย authorized fixture ในฐา�
 
 11. ปรับ route-count contract 3→4 เพื่อครอบคลุม admin reset โดยยังตรวจ named policy ทุกเส้นทางและ anonymous rejection หากผิดอาจปล่อย route ไม่มี policy จึงใช้ทั้ง metadata และ HTTP test
 
-ผลผู้ตรวจอิสระ: รอผล ยังไม่อ้างว่าจบ review
+## ผล Code Review และการแก้
+
+Carver ตรวจแบบ read-only ช่วง `ecbfeb7..097a8ef`: Critical 0, Important 1, Minor 1 ผู้ตรวจไม่ได้รัน suite ซ้ำ หลักฐาน Test/Build/Lint เป็นของผู้ทำหลัก ผู้ตรวจปิดแล้ว ไม่มี review รอบสอง
+
+Important: `password/change` เดิมตรวจ current password โดยไม่มี account-bound budget จึงไม่ติด lockout ร่วมกับ login แก้ในหนึ่ง fix pass: ใช้ `login_attempt_windows` เดียวกันตาม normalized username, ผิด 5 ครั้งใน 15 นาทีพัก 15 นาที, ตรวจ lockout ก่อน hash, บันทึก `identity.password.change.failed`/`throttled` พร้อม outcome denied และ commit counter+audit เมื่อปฏิเสธ
+
+`PasswordResetThrottleTests` 4 ข้อแดงก่อนแก้และผ่านหลังแก้ ครอบคลุมข้าม session, concurrent failures, change ทำให้ login ถูกพัก, login lockout ปิด change และสร้าง bucket กลับเมื่อถูก cleanup แล้ว Full regression หลังแก้ผ่าน 305/305 ไม่ skip
+
+12. ลำดับล็อก password change ใหม่คือ admission lock สั้นแยก transaction → attempt bucket → identity lock → user → session เพื่อให้สอดคล้อง login ที่ล็อก bucket ก่อน user; bucket จำกัด 10,000 รายการ อายุ 30 นาที ใช้กติกาเดิม ไม่สร้าง counter แยกที่สลับ endpoint เพื่อเลี่ยงได้ หากผิดเสี่ยง deadlock/lockout bypass จึงตรวจ concurrency และ full regression
+
+Minor ที่เลื่อน: enumeration test เปรียบเทียบ known/unknown ยังใช้บัญชีไม่มี email และไม่มี persistent keys จึงไม่ครอบคลุมการเทียบข้อความของ eligible-account branch แม้มี test ออก request/outbox ที่เข้าเกณฑ์แยกอยู่แล้ว คง severity Minor เพราะ production code ใช้ข้อความตอบเดียวกัน แต่ควรเพิ่ม coverage นี้ในงานทดสอบถัดไป
+
+### ขอบเขตที่ผู้ตรวจเว้นและคำตัดสินของผู้ทำหลัก
+
+- Task 8: Next cache/return URL/browser flow ไม่มีใน diff ให้ตรวจใน Task 8 ไม่อ้างพร้อม หากผิดเสี่ยง session รั่วหรือ redirect ไม่ปลอดภัย
+- Task 9: OpenAPI/Security Exit Gate ยังต้องทำตามแผนและให้ security owner อนุมัติ หากผิดผู้ใช้ API เข้าใจ contract/readiness ผิด
+- Module 5: Gmail/worker/monitoring/retention ยังไม่ทำ จึงคง production email disabled หากผิดผู้ใช้จะรออีเมลไม่ได้
+- Exactly-once/network adapter จริงยังไม่รับรอง ต้อง deduplicate request ID หากผิดอาจส่งข้อความซ้ำ
+- Load/distributed/global-lock capacity ยังไม่พิสูจน์ ต้องทดสอบก่อน production หากผิดกระทบ availability
+- Downgrade หลังใช้ temporary credential ยังไม่รับรอง คงคำเตือนห้ามใน runbook หากผิดอาจคืนความสามารถใช้ credential ซ้ำ
+- นโยบายคง lockout, response/session หายแล้วออกใหม่ และหนึ่ง active reset ต่อบัญชีคงตาม ruling พัฒนา ต้องอนุมัติก่อน deploy หากผิดกระทบการกู้บัญชีและ UX
+- Tasks 1–6 ทั้งชุด/Minor เดิม/direct SQL/Module 3 scope ไม่ใช่ขอบเขต review นี้ ใช้ full regression และตรวจจุดเชื่อม ไม่อ้างรับรองส่วนที่ยังไม่ทำ หากผิดอาจพลาดปัญหานอก diff
+
+เอกสารและ fix หลัง review ตรวจโดยผู้ทำหลัก ไม่อ้างว่าได้รับ independent re-review
+
+## Verification หลังแก้ Review
+
+| คำสั่ง | ผลเมื่อ 2026-09-23 |
+| --- | --- |
+| `dotnet test backend/TPR10.sln --verbosity minimal` | 305/305 ผ่าน ไม่ skip; 11 นาที 51 วินาที |
+| `dotnet build backend/TPR10.sln --no-restore --verbosity minimal` | ผ่าน 0 warning/error |
+| `dotnet format backend/TPR10.sln --verify-no-changes --no-restore` | ผ่าน |
+| `npm test` | 23/23 ผ่าน |
+| `npm run lint` | ผ่าน ไม่มี warning/error |
+| `npm run build` | ผ่าน |
+| `node infra/nginx/smoke-identity-https.mjs 4001` และ `4000` | ผ่านทั้งคู่หลังแก้ |
+| `git diff --check` | ผ่าน |
+
+หลักฐานอยู่ใน ledger และ logs ของแผน (`task7-post-review-full.log`, `task7-post-review-web.log`) รอบ full หลังแก้ใช้เวลานานกว่าก่อนแก้ แต่ผ่านทั้งหมด ยังไม่สรุปสาเหตุด้านประสิทธิภาพจากระยะเวลาเพียงครั้งเดียว
