@@ -13,6 +13,7 @@ using TPR10.Api.Identity.Csrf;
 using TPR10.Api.Identity.Sessions;
 using TPR10.Api.Identity.Accounts;
 using TPR10.Api.Identity.Reset;
+using TPR10.Api.Organization;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -34,6 +35,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddIdentityFoundation();
+builder.Services.AddOrganizationScope();
 builder.Services.AddPreAuthCsrf(builder.Configuration, builder.Environment);
 builder.Services.AddPasswordResetDelivery(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<CorrelationContext>();
@@ -69,9 +71,11 @@ app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<RestrictedSessionMiddleware>();
 app.UseMiddleware<SessionActivityMiddleware>();
+app.UseMiddleware<OrganizationBindingAuditMiddleware>();
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapRoleEndpoints();
+app.MapOrganizationEndpoints();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");

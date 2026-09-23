@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec Module 3 ที่อนุมัติ](../specs/2026-09-24-module-3-organization-scope-design.md) และ [Baseline](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) ส่วน6–8/11/17/20
 
-สถานะ: Task1 ผ่าน Test/Build/Lint/E2E และ Code Review เมื่อ 2026-09-24; Tasks2–9 ยังไม่เริ่ม รายละเอียดและ Minor ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md)
+สถานะ: Task1–3 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว โดยข้อสำคัญจาก review Task3 แก้และตรวจด้วย TDD แล้ว; Tasks4–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md) และ [Task3](../../architecture/module-3-task-3.md)
 ฐานที่สำรวจ: runtime `ab6f30e`, Design Spec commit `99523a8` บน main; เมื่อเริ่ม implementation ให้ใช้ HEAD ที่มีแผนนี้และบันทึก SHA จริง ห้าม checkout กลับจนทำเอกสารที่อนุมัติหาย
 
 ## Global Constraints — ข้อกำหนดร่วม
@@ -235,7 +235,7 @@ public sealed record OrganizationView(Guid Id, Guid WorkspaceId, Guid? ProjectId
 
 WorkspaceView.WorkspaceId=Id; Department/Project.ProjectId=null; Site.ProjectIdเป็นparent; code/parentimmutableในPATCH รับName+IsActiveแบบเต็มเพื่อไม่มีoptionalboolกำกวม
 
-- [ ] RED HTTPcreateโดยadminMFA (ก่อนmapได้404):
+- [x] RED HTTPcreateโดยadminMFA (ก่อนmapได้404):
 
 ```csharp
 [Fact]
@@ -251,9 +251,9 @@ public async Task Management_can_create_workspace_but_not_business_assignment()
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~OrganizationApiTests` ให้RED แล้วmapGET/POST `/api/v1/organization/workspaces`; GET/POST `/workspaces/{w}/departments`, `/workspaces/{w}/projects`, `/workspaces/{w}/projects/{p}/sites`; PATCHตามresourcepath+`/{id}` โดยทุกเส้นทางrequireorganization:manage+MFA+CSRFสำหรับunsafe
-- [ ] UpdateAsync ตรวจ expectedParent ภายใน transaction ของ service และตอบ404เมื่อ id อยู่นอก route parent; endpoint ส่ง tuple จาก route ตาม signature ข้างต้น ห้าม lookup id โดยไม่ตรวจ ancestry
-- [ ] Transactionลำดับbegin→advisorylock7241002→guardrecheck→validation/version→change→cascadeassignment→distinctaffecteduserrevoke→audit→save→commit; lifecycleTask2ไม่commitซ้อน
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~OrganizationApiTests` ให้RED แล้วmapGET/POST `/api/v1/organization/workspaces`; GET/POST `/workspaces/{w}/departments`, `/workspaces/{w}/projects`, `/workspaces/{w}/projects/{p}/sites`; PATCHตามresourcepath+`/{id}` โดยทุกเส้นทางrequireorganization:manage+MFA+CSRFสำหรับunsafe
+- [x] UpdateAsync ตรวจ expectedParent ภายใน transaction ของ service และตอบ404เมื่อ id อยู่นอก route parent; endpoint ส่ง tuple จาก route ตาม signature ข้างต้น ห้าม lookup id โดยไม่ตรวจ ancestry
+- [x] Transactionลำดับbegin→advisorylock7241002→guardrecheck→validation/version→change→cascadeassignment→distinctaffecteduserrevoke→audit→save→commit; lifecycleTask2ไม่commitซ้อน
 
 ```csharp
 await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -266,9 +266,9 @@ await db.SaveChangesAsync(ct);
 await tx.CommitAsync(ct);
 ```
 
-- [ ] เพิ่มtestsGETpaginationdefault25/max100/offsetoverflow, codecase/duplicateunicodecontrol, parentwrongworkspace, missingMFA403/anon401, disabledparentrejectcreate409, staleversion409, Departmentdeactivateไม่revokeSite, parentreactivateไม่restoreassignment, auditfail503rollbackallและไม่มีsecretmetadata
-- [ ] Auditwriterเพิ่มเฉพาะkeysตามspec; managementdenyที่เกิดหลังrouteผ่านต้องwriteauditด้วย ทำก่อนmutationหรือrollbackbusinesschangesก่อนcommitdenial ห้ามcommitdenialพร้อมtrackedchangesที่ทำไปแล้ว
-- [ ] รันtestsและcommit:
+- [x] เพิ่มtestsGETpaginationdefault25/max100/offsetoverflow, codecase/duplicateunicodecontrol, parentwrongworkspace, missingMFA403/anon401, disabledparentrejectcreate409, staleversion409, Departmentdeactivateไม่revokeSite, parentreactivateไม่restoreassignment, auditfail503rollbackallและไม่มีsecretmetadata
+- [x] Auditwriterเพิ่มเฉพาะkeysตามspec; managementdenyที่เกิดหลังrouteผ่านต้องwriteauditด้วย ทำก่อนmutationหรือrollbackbusinesschangesก่อนcommitdenial ห้ามcommitdenialพร้อมtrackedchangesที่ทำไปแล้ว
+- [x] รันtestsและcommit:
 
 ```bash
 dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~OrganizationApiTests|FullyQualifiedName~OrganizationLifecycleTests'

@@ -38,7 +38,7 @@ public static class IdentityRegistration
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, Authorization.PermissionResultHandler>();
         services.AddAuthorization(options =>
         {
-            foreach (var capability in new[] { "system:probe", "users:manage", "roles:manage", "roles:read", "users:recover-mfa" })
+            foreach (var capability in new[] { "system:probe", "users:manage", "roles:manage", "roles:read", "users:recover-mfa", "organization:manage" })
                 options.AddPolicy(capability, policy => policy.RequireAuthenticatedUser()
                     .AddRequirements(new Authorization.PermissionRequirement(capability, RequireMfa: true)));
         });
