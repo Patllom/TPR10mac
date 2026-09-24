@@ -19,4 +19,8 @@ public sealed class ScopeProbeRepository(Tpr10DbContext db)
 
     public Task<ScopeProbeRecord?> FindAsync(ScopeContext context, Guid id, CancellationToken ct) =>
         Query(context).SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public Task<ScopeProbeRecord[]> ExportAsync(ScopeContext context, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct) =>
+        Query(context).AsNoTracking().Where(r => (from == null || r.CreatedAtUtc >= from) && (to == null || r.CreatedAtUtc < to))
+            .OrderBy(r => r.CreatedAtUtc).ThenBy(r => r.Id).Take(101).ToArrayAsync(ct);
 }

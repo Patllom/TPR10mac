@@ -11,6 +11,7 @@ namespace TPR10.Api.IntegrationTests;
 public sealed class ApiFactory(string connectionString, string environment = "Testing", TimeProvider? clock = null,
     Dictionary<string, string?>? settings = null, DbCommandInterceptor? interceptor = null) : WebApplicationFactory<Program>
 {
+    public DbCommandInterceptor? CommandInterceptor { get; set; } = interceptor;
     public async Task<HttpClient> CreateCsrfClientAsync()
     {
         using var scope = Services.CreateScope();
@@ -25,8 +26,10 @@ public sealed class ApiFactory(string connectionString, string environment = "Te
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
-        if (interceptor is not null)
-            builder.ConfigureServices(services => services.AddDbContext<Tpr10DbContext>((_, options) => options.AddInterceptors(interceptor)));
+        builder.ConfigureServices(services => services.AddDbContext<Tpr10DbContext>((_, options) =>
+        {
+            if (CommandInterceptor is { } current) options.AddInterceptors(current);
+        }));
         if (clock is not null)
             builder.ConfigureServices(services => services.AddSingleton(clock));
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(

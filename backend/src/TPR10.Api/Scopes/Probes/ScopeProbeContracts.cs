@@ -11,6 +11,9 @@ public sealed record UpdateScopeRecord([property: JsonRequired] string Note, Jso
 public sealed record PublicRecordView(Guid Id, string Note, long Version, DateTimeOffset CreatedAtUtc, DateTimeOffset? UpdatedAtUtc);
 public sealed record RestrictedRecordView(Guid Id, string Note, long Version, DateTimeOffset CreatedAtUtc, DateTimeOffset? UpdatedAtUtc, string? RestrictedNote);
 public sealed record WrittenRecordView(Guid Id, long Version);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ExportScopeRecords(DateTimeOffset? CreatedFrom, DateTimeOffset? CreatedTo);
+public sealed record ExportRecordPage<T>(T[] Items, int RowCount);
 
 public static class ScopeRecordProjection
 {

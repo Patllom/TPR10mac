@@ -11,6 +11,7 @@ public static class OrganizationRegistration
         services.AddScoped<Scopes.ScopeDiscovery>();
         services.AddScoped<Scopes.Probes.ScopeProbeRepository>();
         services.AddScoped<Scopes.Probes.ScopeProbeService>();
+        services.AddScoped<Scopes.Probes.ScopeExportService>();
         return services;
     }
 }

@@ -16,6 +16,7 @@ public sealed class ScopeRecordOpenApiTests : IClassFixture<WebApplicationFactor
             yield return [path + "/{id}", "get", "scope-probe:read", 200, 2];
             yield return [path, "post", "scope-probe:write", 201, 3];
             yield return [path + "/{id}", "patch", "scope-probe:write", 200, 3];
+            yield return [path + "/export-simulation", "post", "scope-probe:export", 200, 2];
         }
     }
     [Theory]
@@ -29,7 +30,7 @@ public sealed class ScopeRecordOpenApiTests : IClassFixture<WebApplicationFactor
         var operation = json.RootElement.GetProperty("paths").GetProperty(path).GetProperty(method);
         Assert.Equal("exact-business", operation.GetProperty("x-tpr10-scope").GetString());
         Assert.Equal(capability, Assert.Single(operation.GetProperty("x-tpr10-permissions").EnumerateArray()).GetString());
-        Assert.False(operation.GetProperty("x-tpr10-mfa-required").GetBoolean());
+        Assert.Equal(capability == "scope-probe:export", operation.GetProperty("x-tpr10-mfa-required").GetBoolean());
         Assert.True(Assert.Single(operation.GetProperty("security").EnumerateArray()).TryGetProperty("SessionCookie", out _));
         var response = operation.GetProperty("responses").GetProperty(status.ToString());
         Assert.Equal(variants, response.GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("anyOf").GetArrayLength());
@@ -38,8 +39,8 @@ public sealed class ScopeRecordOpenApiTests : IClassFixture<WebApplicationFactor
         if (method != "get")
         {
             Assert.Contains(operation.GetProperty("parameters").EnumerateArray(), x => x.GetProperty("name").GetString() == "X-CSRF-Token" && x.GetProperty("required").GetBoolean());
-            Assert.True(response.GetProperty("headers").TryGetProperty("Location", out _));
-            Assert.Contains("null", operation.GetProperty("description").GetString());
+            Assert.Equal(capability != "scope-probe:export", response.GetProperty("headers").TryGetProperty("Location", out _));
+            Assert.Contains(capability == "scope-probe:export" ? "100" : "null", operation.GetProperty("description").GetString());
         }
     }
 }

@@ -38,12 +38,13 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         var authenticated = policy is not null && !metadata.OfType<IAllowAnonymous>().Any();
         var permissions = authenticated ? policy!.Requirements.OfType<PermissionRequirement>().ToArray() : [];
         var probe = metadata.OfType<ScopeProbeBoundary>().LastOrDefault();
+        var export = probe?.Capability == "scope-probe:export";
         operation.Security = authenticated
             ? [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("SessionCookie", context.Document)] = [] }]
             : [];
         operation.Extensions ??= new Dictionary<string, IOpenApiExtension>();
         operation.Extensions["x-tpr10-permissions"] = Strings(probe is null ? permissions.Select(x => x.Capability) : [probe.Capability]);
-        operation.Extensions["x-tpr10-mfa-required"] = new JsonNodeExtension(JsonValue.Create(permissions.Any(x => x.RequireMfa)));
+        operation.Extensions["x-tpr10-mfa-required"] = new JsonNodeExtension(JsonValue.Create(export || permissions.Any(x => x.RequireMfa)));
         var conditional = metadata.OfType<IdentityConditionalPermission>().Select(x => (JsonNode?)new JsonObject
         { ["field"] = x.Field, ["permission"] = x.Permission, ["condition"] = "ค่าของ field ไม่เป็น null รวม array ว่าง" }).ToArray();
         if (conditional.Length > 0) operation.Extensions["x-tpr10-conditional-permissions"] = new JsonNodeExtension(new JsonArray(conditional));
@@ -54,7 +55,8 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         var assignments = context.Description.RelativePath.StartsWith("api/v1/scope-assignments", StringComparison.Ordinal);
         var discovery = context.Description.RelativePath == "api/v1/scopes";
         operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create(probe is not null ? "exact-business" : discovery ? "scope-discovery" : assignments ? "assignment-control-plane" : organization ? "organization-control-plane" : "identity-only-no-business-scope"));
-        var scopeDescription = probe is not null ? "\nตรวจ exact workspace/project/site และ business capability จาก assignment เท่านั้น ไม่มี global-admin bypass; read/list ส่ง restrictedNote เฉพาะ restricted-read+recent MFA; write-only คืน id/version+Location; POST/PATCH ส่ง restrictedNote รวม null ต้อง write+restricted-read+recent MFA, absent คงเดิมเมื่อ PATCH, null ล้าง, string แทนค่า; Note ไม่เกิน500ไม่มี control. อ่านและ audit ภายใน transaction ก่อนส่ง DTO; page เริ่ม1 pageSize เริ่ม25 สูงสุด100. "
+        var scopeDescription = export ? "\nExport-simulation ส่ง JSON ไม่สร้างไฟล์; exact scope+export+recent MFA ไม่ต้องมี read; restricted field ต้อง restricted-read ด้วย. จำกัด100รายการ หากเกินตอบ400ไม่truncate ให้ลดช่วง UTC createdFrom รวมขอบต้น / createdTo ไม่รวมขอบท้าย; from>=to หรือ offset ไม่เป็น0ตอบ400; อนาคตใช้ได้และอาจว่าง. Audit filters/row-count/destination-type ก่อนส่งผล. "
+            : probe is not null ? "\nตรวจ exact workspace/project/site และ business capability จาก assignment เท่านั้น ไม่มี global-admin bypass; read/list ส่ง restrictedNote เฉพาะ restricted-read+recent MFA; write-only คืน id/version+Location; POST/PATCH ส่ง restrictedNote รวม null ต้อง write+restricted-read+recent MFA, absent คงเดิมเมื่อ PATCH, null ล้าง, string แทนค่า; Note ไม่เกิน500ไม่มี control. อ่านและ audit ภายใน transaction ก่อนส่ง DTO; page เริ่ม1 pageSize เริ่ม25 สูงสุด100. "
             : discovery ? "\nคืนเฉพาะ exact tuples ที่มอบหมายและ active พร้อม breadcrumb และ business capabilities ของแต่ละ tuple; ไม่ให้สิทธิ์ parent/sibling และไม่ส่งข้อมูลธุรกิจ; page เริ่ม1 pageSize เริ่ม25 สูงสุด100; audit ก่อนส่งผล. "
             : assignments ? "\nAPI มอบหมายบทบาทให้ผู้อื่นตาม exact scope; ห้ามจัดการ assignment ของตนเอง; ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ. "
             : organization ? "\nAPI จัดการโครงสร้างองค์กร ไม่ให้สิทธิ์อ่านข้อมูลธุรกิจ; ตรวจ parent ตาม route และ version ใน transaction. "
@@ -80,11 +82,11 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         if (probe is not null)
         {
             var write = probe.Capability == "scope-probe:write";
-            var list = !write && !context.Description.RelativePath.EndsWith("/{id}", StringComparison.Ordinal);
+            var list = !write && !export && !context.Description.RelativePath.EndsWith("/{id}", StringComparison.Ordinal);
             var variants = new List<IOpenApiSchema>
             {
-                await context.GetOrCreateSchemaAsync(list ? typeof(Page<PublicRecordView>) : typeof(PublicRecordView), cancellationToken: cancellationToken),
-                await context.GetOrCreateSchemaAsync(list ? typeof(Page<RestrictedRecordView>) : typeof(RestrictedRecordView), cancellationToken: cancellationToken)
+                await context.GetOrCreateSchemaAsync(export ? typeof(ExportRecordPage<PublicRecordView>) : list ? typeof(Page<PublicRecordView>) : typeof(PublicRecordView), cancellationToken: cancellationToken),
+                await context.GetOrCreateSchemaAsync(export ? typeof(ExportRecordPage<RestrictedRecordView>) : list ? typeof(Page<RestrictedRecordView>) : typeof(RestrictedRecordView), cancellationToken: cancellationToken)
             };
             if (write) variants.Add(await context.GetOrCreateSchemaAsync(typeof(WrittenRecordView), cancellationToken: cancellationToken));
             var success = new OpenApiResponse
@@ -94,7 +96,7 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
             };
             if (write) success.Headers = new Dictionary<string, IOpenApiHeader>
             { ["Location"] = new OpenApiHeader { Description = "เส้นทางของ record ภายใน scope เดิม", Schema = new OpenApiSchema { Type = JsonSchemaType.String } } };
-            operation.Responses[context.Description.HttpMethod == "POST" ? "201" : "200"] = success;
+            operation.Responses[write && context.Description.HttpMethod == "POST" ? "201" : "200"] = success;
         }
         var problemSchema = await context.GetOrCreateSchemaAsync(typeof(ProblemDetails), cancellationToken: cancellationToken);
         // Authenticated cookies can fail validation/activity renewal even on an otherwise public operation.

@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec Module 3 ที่อนุมัติ](../specs/2026-09-24-module-3-organization-scope-design.md) และ [Baseline](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) ส่วน6–8/11/17/20
 
-สถานะ: Task1–5 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว; Tasks6–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md), [Task3](../../architecture/module-3-task-3.md), [Task4](../../architecture/module-3-task-4.md) และ [Task5](../../architecture/module-3-task-5.md)
+สถานะ: Task1–7 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว; Tasks8–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md), [Task3](../../architecture/module-3-task-3.md), [Task4](../../architecture/module-3-task-4.md), [Task5](../../architecture/module-3-task-5.md), [Task6](../../architecture/module-3-task-6.md) และ [Task7](../../architecture/module-3-task-7.md)
 ฐานที่สำรวจ: runtime `ab6f30e`, Design Spec commit `99523a8` บน main; เมื่อเริ่ม implementation ให้ใช้ HEAD ที่มีแผนนี้และบันทึก SHA จริง ห้าม checkout กลับจนทำเอกสารที่อนุมัติหาย
 
 ## Global Constraints — ข้อกำหนดร่วม
@@ -444,7 +444,7 @@ public sealed record ExportScopeRecords(DateTimeOffset? CreatedFrom, DateTimeOff
 // ช่วงในอนาคตที่เรียงถูกต้องใช้ได้และอาจได้รายการว่าง
 ```
 
-- [ ] เขียนRED exportจำกัด100พร้อมpositivecontrolrolegrantexport+MFA:
+- [x] เขียนRED exportจำกัด100พร้อมpositivecontrolrolegrantexport+MFA:
 
 ```csharp
 [Fact]
@@ -462,8 +462,8 @@ public async Task Export_rejects_over_limit_instead_of_silent_truncation()
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeExportTests` ให้RED แล้วPOSTexportผ่านScopeOperation capabilityexport requireMfa=true; permissionexportอย่างเดียวส่งpublicfieldsได้ ไม่ต้องreadเพิ่มเติมตามspecแต่restrictedfieldต้องrestricted-read
-- [ ] Queryexactscope+UTCfilterในTX stableorderแล้วTake101 materialize ถ้าLength101ตอบ400พร้อมauditeddenialโดยไม่ส่งrows; ไม่สร้างfile/outbox/stream ก่อนauditcommit:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeExportTests` ให้RED แล้วPOSTexportผ่านScopeOperation capabilityexport requireMfa=true; permissionexportอย่างเดียวส่งpublicfieldsได้ ไม่ต้องreadเพิ่มเติมตามspecแต่restrictedfieldต้องrestricted-read
+- [x] Queryexactscope+UTCfilterในTX stableorderแล้วTake101 materialize ถ้าLength101ตอบ400พร้อมauditeddenialโดยไม่ส่งrows; ไม่สร้างfile/outbox/stream ก่อนauditcommit:
 
 ```csharp
 var rows = await query.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id).Take(101).ToArrayAsync(ct);
@@ -473,15 +473,19 @@ if (rows.Length > 100) return Results.Problem(statusCode:400, title:"กรุ�
 return Results.Ok(new { items = projectedRows, rowCount = rows.Length });
 ```
 
-- [ ] ขยายrace/faulttestsสำหรับread/write/export+assignmentrevoke/rolegrantchange/deactivateaccount/parent โดยbarrierTask6; assertaffectedrows/sessioncookiesจริงและ nofailuredata leakage ตรวจauditcorrelation/actor/role/scope/rowcount/nosecret/immutabletrigger
-- [ ] Exporttestfilters0/100/101, wrongoffset400, missingexport403, unknownscope404, noMFA403, restrictedmissingomitfield, sameuserroleAไม่ส่งB; เปรียบresponseก่อน/หลังrolechangeโดยloginใหม่เพื่อไม่ให้401กลบข้อผิดพลาดscope
-- [ ] GREENและcommit:
+- [x] ขยายrace/faulttestsสำหรับread/write/export+assignmentrevoke/rolegrantchange/deactivateaccount/parent โดยbarrierTask6; assertaffectedrows/sessioncookiesจริงและ nofailuredata leakage ตรวจauditcorrelation/actor/role/scope/rowcount/nosecret/immutabletrigger
+- [x] Exporttestfilters0/100/101, wrongoffset400, missingexport403, unknownscope404, noMFA403, restrictedmissingomitfield, sameuserroleAไม่ส่งB; เปรียบresponseก่อน/หลังrolechangeโดยloginใหม่เพื่อไม่ให้401กลบข้อผิดพลาดscope
+- [x] GREENและcommit:
 
 ```bash
 dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~ScopeExportTests|FullyQualifiedName~ScopeAuditFailureTests|FullyQualifiedName~ScopeRaceTests'
 git add backend/src/TPR10.Api/Scopes/Probes backend/src/TPR10.Api/Organization/OrganizationRegistration.cs backend/tests/TPR10.Api.IntegrationTests/ScopeExportTests.cs backend/tests/TPR10.Api.IntegrationTests/ScopeAuditFailureTests.cs backend/tests/TPR10.Api.IntegrationTests/ScopeRaceTests.cs
 git commit -m "feat: verify scoped export and revocation atomicity"
 ```
+
+ผล Task7: focused203/203, backend783/783, frontend28/28, E2E13/13, Build/Lint/formatผ่าน; reviewไม่พบCritical/Important มีMinor1ข้อ รายงานภาษาไทย `docs/architecture/module-3-task-7.md` ระบุrulingsและข้อจำกัดทั้งหมด. ยังไม่push/mergeและไม่เริ่มTask8อัตโนมัติ
+
+ข้อค้าง Minor จาก review Task7: กรณีเกิน100ตอบ400แบบgeneric ยังไม่ส่งข้อความแนะนำให้ลดช่วงตามตัวอย่างข้างต้น เพราะ ScopeOperation สร้าง denial response ใหม่; enforcement/no-truncation และ audit ผ่าน tests แล้ว รายละเอียดในรายงาน Task7 ต้องตามเรื่อง typed denial ที่ sanitize แล้วแยกต่างหาก
 
 ## Task 8: Portal selector และหน้าจอจัดการ Organization/Assignment
 
