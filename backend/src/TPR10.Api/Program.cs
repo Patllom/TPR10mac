@@ -94,6 +94,7 @@ app.MapOrganizationEndpoints();
 app.MapAssignmentEndpoints();
 app.MapScopeEndpoints();
 app.MapAttendanceDirectory();
+app.MapAttendanceAccess();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");
