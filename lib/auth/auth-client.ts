@@ -3,15 +3,20 @@ const paths = new Set([
   '/api/v1/auth/password/change', '/api/v1/auth/password-reset/request', '/api/v1/auth/password-reset/complete',
   '/api/v1/auth/mfa/enroll', '/api/v1/auth/mfa/confirm', '/api/v1/auth/mfa/challenge', '/api/v1/auth/mfa/recover'
 ]);
-export async function authMutation(path: string, body: unknown): Promise<Response> {
-  if (!paths.has(path)) throw new Error('เส้นทางคำขอไม่ถูกต้อง');
+const id = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+const organization = `/api/v1/organization/workspaces(?:/${id}/(?:departments|projects)|/${id}/projects/${id}/sites)?`;
+const records = `/api/v1/workspaces/${id}(?:/projects/${id}(?:/sites/${id})?)?/scope-probe-records`;
+export async function authMutation(path: string, body: unknown, method: 'POST' | 'PATCH' = 'POST'): Promise<Response> {
+  const allowed = method === 'POST' && (paths.has(path) || new RegExp(`^(?:${organization}|${records}(?:/export-simulation)?|/api/v1/scope-assignments(?:/${id}/(?:replace|revoke))?)$`).test(path))
+    || method === 'PATCH' && new RegExp(`^(?:${organization}|${records})/${id}$`).test(path);
+  if (!allowed) throw new Error('เส้นทางคำขอไม่ถูกต้อง');
   const options = { credentials: 'same-origin', cache: 'no-store', redirect: 'error' } as const;
   const issued = await fetch('/api/v1/auth/csrf', { ...options, signal: AbortSignal.timeout(10000) });
   if (!issued.ok) return issued;
   const token = (await issued.json()).token;
   if (typeof token !== 'string' || !token) throw new Error('บริการเข้าสู่ระบบไม่พร้อมใช้งาน');
   return fetch(path, {
-    ...options, method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+    ...options, method, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
     body: JSON.stringify(body), signal: AbortSignal.timeout(15000)
   });
 }

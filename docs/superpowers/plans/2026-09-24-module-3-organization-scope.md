@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec Module 3 ที่อนุมัติ](../specs/2026-09-24-module-3-organization-scope-design.md) และ [Baseline](../specs/2026-09-18-tpr10-module-0-architecture-baseline-design.md) ส่วน6–8/11/17/20
 
-สถานะ: Task1–7 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว; Tasks8–9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md), [Task3](../../architecture/module-3-task-3.md), [Task4](../../architecture/module-3-task-4.md), [Task5](../../architecture/module-3-task-5.md), [Task6](../../architecture/module-3-task-6.md) และ [Task7](../../architecture/module-3-task-7.md)
+สถานะ: Task1–8 ผ่าน Test/Build/Lint/E2E และ Code Review แล้ว; Task9 ยังไม่เริ่ม รายละเอียดและ Minor ที่ค้างอยู่ใน [รายงาน Task1](../../architecture/module-3-task-1.md), [Task2](../../architecture/module-3-task-2.md), [Task3](../../architecture/module-3-task-3.md), [Task4](../../architecture/module-3-task-4.md), [Task5](../../architecture/module-3-task-5.md), [Task6](../../architecture/module-3-task-6.md) , [Task7](../../architecture/module-3-task-7.md) และ [Task8](../../architecture/module-3-task-8.md)
 ฐานที่สำรวจ: runtime `ab6f30e`, Design Spec commit `99523a8` บน main; เมื่อเริ่ม implementation ให้ใช้ HEAD ที่มีแผนนี้และบันทึก SHA จริง ห้าม checkout กลับจนทำเอกสารที่อนุมัติหาย
 
 ## Global Constraints — ข้อกำหนดร่วม
@@ -493,7 +493,7 @@ git commit -m "feat: verify scoped export and revocation atomicity"
 **แก้:** `app/portal/page.tsx`, `lib/auth/auth-client.ts`, `components/auth/useAuthMutation.ts` รองรับ POST/PATCH อย่าง explicit โดยคง default POST ไม่เพิ่ม retry; `infra/nginx/smoke-identity-https.mjs`, `backend/tests/TPR10.E2E.Fixture/Program.cs` สำหรับ test-only seed และเลือก spec file
 **ส่ง:** TypeScript `ScopeKey={workspaceId:string;projectId:string|null;siteId:string|null}`, `scopePath(key):string`, `fetchScopes(origin,cookie,transport=fetch):Promise<ScopePage>`; `ScopePage`มีitems/total/pageNumber/pageSizeตรงAPI
 
-- [ ] Node RED pathnullไม่กลายเป็นwildcard:
+- [x] Node RED pathnullไม่กลายเป็นwildcard:
 
 ```javascript
 import test from 'node:test';
@@ -510,7 +510,7 @@ test('scope URL ระบุ Site ชัดและไม่เปิด URL �
 });
 ```
 
-- [ ] รัน `node --test tests/scope-helpers.test.mjs` REDแล้วimplementUUIDvalidation+exactsegmentallowlist; APIoriginต้องconfiguredserveroriginไม่เชื่อHostheader, cache:no-store redirect:error timeout5s ตามfetchSession ไม่forwardcookieไปarbitraryURL
+- [x] รัน `node --test tests/scope-helpers.test.mjs` REDแล้วimplementUUIDvalidation+exactsegmentallowlist; APIoriginต้องconfiguredserveroriginไม่เชื่อHostheader, cache:no-store redirect:error timeout5s ตามfetchSession ไม่forwardcookieไปarbitraryURL
 
 ```typescript
 export function scopePath(k: ScopeKey): string {
@@ -522,11 +522,11 @@ export function scopePath(k: ScopeKey): string {
 }
 ```
 
-- [ ] HTTPAPI/clienttypederrorแยก401→login,403→สิทธิ์/MFA,404→พื้นที่ไม่พร้อม,409→reloadversion,503→บริการไม่พร้อม ไม่ตีความAPIล่มเป็นlogout; SSRdynamic/no-store และfullnavigationเมื่อเปลี่ยนscopeเพื่อไม่เก็บข้อมูลบัญชีก่อน
-- [ ] Selectorดึงpaginationได้ไม่เงียบตัดscopeที่เกิน100; emptyassignmentข้อความไทย; managementformsใช้optionsendpointsTask4หรือusers/rolesAPIเดิมเมื่อมีสิทธิ์เท่านั้น ไม่ยกระดับusers:manageให้ทุกassignmentmanager
-- [ ] UIรักษาcontrolledinputและปิดsubmitก่อนhydration, disabledระหว่างส่ง; explicitmethodในauthMutation; noautorertry/nooptimisticpermission; ป้องกันstale responseด้วยAbortController+requestgenerationและclearข้อมูลก่อนload
-- [ ] ขยายสัญญาโดยไม่ทำ caller เดิมเสีย: `authMutation(path:string,body:unknown,method:'POST'|'PATCH'='POST'):Promise<Response>` และ `run(path,body,success,method:'POST'|'PATCH'='POST')`; hook ส่ง method ต่อไปยัง fetch หลังรับ CSRF token ต้องตรวจคู่ method/path แบบ anchored allowlist ของ routes Task3/4/6/7 เท่านั้น ไม่อนุญาตทุก `/api/` หรือ URL ภายนอก เพิ่ม Node tests สำหรับ PATCH ที่อนุญาต, method ผิด, external URL, CSRF ล้มเหลวแล้วไม่ส่ง mutation และยืนยัน auth routes เดิมยัง POST
-- [ ] เพิ่มPlaywrightREDก่อนUI: noassignment, adminwithoutbusinessaccess, A/Broles, fieldomission, selfgrantdisabled+directAPI403, changeaccount, deeplinkinvalid, delayedresponseAหลังnavigateB, back/logout, keyboardmobile
+- [x] HTTPAPI/clienttypederrorแยก401→login,403→สิทธิ์/MFA,404→พื้นที่ไม่พร้อม,409→reloadversion,503→บริการไม่พร้อม ไม่ตีความAPIล่มเป็นlogout; SSRdynamic/no-store และfullnavigationเมื่อเปลี่ยนscopeเพื่อไม่เก็บข้อมูลบัญชีก่อน
+- [x] Selectorดึงpaginationได้ไม่เงียบตัดscopeที่เกิน100; emptyassignmentข้อความไทย; managementformsใช้optionsendpointsTask4หรือusers/rolesAPIเดิมเมื่อมีสิทธิ์เท่านั้น ไม่ยกระดับusers:manageให้ทุกassignmentmanager
+- [x] UIรักษาcontrolledinputและปิดsubmitก่อนhydration, disabledระหว่างส่ง; explicitmethodในauthMutation; noautorertry/nooptimisticpermission; ป้องกันstale responseด้วยAbortController+requestgenerationและclearข้อมูลก่อนload
+- [x] ขยายสัญญาโดยไม่ทำ caller เดิมเสีย: `authMutation(path:string,body:unknown,method:'POST'|'PATCH'='POST'):Promise<Response>` และ `run(path,body,success,method:'POST'|'PATCH'='POST')`; hook ส่ง method ต่อไปยัง fetch หลังรับ CSRF token ต้องตรวจคู่ method/path แบบ anchored allowlist ของ routes Task3/4/6/7 เท่านั้น ไม่อนุญาตทุก `/api/` หรือ URL ภายนอก เพิ่ม Node tests สำหรับ PATCH ที่อนุญาต, method ผิด, external URL, CSRF ล้มเหลวแล้วไม่ส่ง mutation และยืนยัน auth routes เดิมยัง POST
+- [x] เพิ่มPlaywrightREDก่อนUI: noassignment, adminwithoutbusinessaccess, A/Broles, fieldomission, selfgrantdisabled+directAPI403, changeaccount, deeplinkinvalid, delayedresponseAหลังnavigateB, back/logout, keyboardmobile
 
 ```typescript
 test('logout ไม่แสดงข้อมูลพื้นที่เดิมเมื่อย้อนกลับ', async ({ page }) => {
@@ -543,9 +543,9 @@ test('logout ไม่แสดงข้อมูลพื้นที่เด�
 });
 ```
 
-- [ ] Harness สร้างเฉพาะ disposable DB fixture ใช้รหัสผ่านทดสอบเดียวกับ identity suite ตามตัวอย่าง ไม่ใช่ credential จริง; seed `e2e-scope-staff` ในไซต์ชื่อ `ไซต์ทดสอบ A` พร้อม record `ข้อมูลทดสอบเฉพาะ A` และอีกบัญชีที่เข้าถึงเฉพาะไซต์ B เพื่อพิสูจน์ account isolation; ห้ามเก็บข้อมูลจริงใน trace เพิ่ม `--spec tests/e2e/scopes.spec.ts` เป็น allowlisted flag คง default identity เดิม; production Next ใน harness ใช้ server-only `TPR10_SCOPE_TEST_UI=true` พร้อม API environment Testing เท่านั้น ห้ามตั้งใน production deployment และห้ามใช้ NEXT_PUBLIC flag
-- [ ] TestsproductionboundaryยืนยันtechnicalUI404เมื่อflagไม่เปิดและAPIproduction404; selector/managementยังทำงาน และไม่พึ่งTechnicalAPIเป็นbusinessfeature
-- [ ] ตรวจแบบsequential dev→build→prod ไม่ให้devเขียน.nextระหว่างproductiontest:
+- [x] Harness สร้างเฉพาะ disposable DB fixture ใช้รหัสผ่านทดสอบเดียวกับ identity suite ตามตัวอย่าง ไม่ใช่ credential จริง; seed `e2e-scope-staff` ในไซต์ชื่อ `ไซต์ทดสอบ A` พร้อม record `ข้อมูลทดสอบเฉพาะ A` และอีกบัญชีที่เข้าถึงเฉพาะไซต์ B เพื่อพิสูจน์ account isolation; ห้ามเก็บข้อมูลจริงใน trace เพิ่ม `--spec tests/e2e/scopes.spec.ts` เป็น allowlisted flag คง default identity เดิม; production Next ใน harness ใช้ server-only `TPR10_SCOPE_TEST_UI=true` พร้อม API environment Testing เท่านั้น ห้ามตั้งใน production deployment และห้ามใช้ NEXT_PUBLIC flag
+- [x] TestsproductionboundaryยืนยันtechnicalUI404เมื่อflagไม่เปิดและAPIproduction404; selector/managementยังทำงาน และไม่พึ่งTechnicalAPIเป็นbusinessfeature
+- [x] ตรวจแบบsequential dev→build→prod ไม่ให้devเขียน.nextระหว่างproductiontest:
 
 ```bash
 npm test
@@ -556,6 +556,8 @@ node infra/nginx/smoke-identity-https.mjs 4001 --e2e --spec tests/e2e/scopes.spe
 git add lib/scopes lib/auth/auth-client.ts components/scopes components/auth/useAuthMutation.ts app/portal tests/scope-helpers.test.mjs tests/e2e/scopes.spec.ts infra/nginx/smoke-identity-https.mjs backend/tests/TPR10.E2E.Fixture/Program.cs
 git commit -m "feat: add scoped portal navigation and administration"
 ```
+
+ผล Task8: backend783/783, frontend33/33, scoped E2E dev9/9/prod9/9, production boundary2/2, identity13/13, Build/Lint/formatผ่าน; review I1/M1แก้ด้วยTDD, M3เพิ่มprivacycoverageพร้อมmutationRED→GREEN, Minor M2หนึ่งข้อเลื่อนไว้ รายงานภาษาไทย `docs/architecture/module-3-task-8.md` มีข้อวินิจฉัยและข้อจำกัดครบ. ไม่push/mergeและไม่เริ่มTask9อัตโนมัติ
 
 ## Task 9: OpenAPI, review ทั้ง branch และ Exit Gate
 
