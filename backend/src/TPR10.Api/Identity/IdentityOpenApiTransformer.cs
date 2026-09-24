@@ -6,11 +6,12 @@ using Microsoft.OpenApi;
 using TPR10.Api.Identity.Authorization;
 using TPR10.Api.Identity.Csrf;
 using TPR10.Api.Identity.Sessions;
+using TPR10.Api.Scopes;
 
 namespace TPR10.Api.Identity;
 
 // Documentation only. Runtime enforcement remains in authentication, CSRF, policies and services.
-public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider policies)
+public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider policies, ScopeOpenApiTransformer scopes)
     : IOpenApiOperationTransformer, IOpenApiDocumentTransformer
 {
     public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
@@ -35,20 +36,25 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         var policy = await AuthorizationPolicy.CombineAsync(policies, auth);
         var authenticated = policy is not null && !metadata.OfType<IAllowAnonymous>().Any();
         var permissions = authenticated ? policy!.Requirements.OfType<PermissionRequirement>().ToArray() : [];
+        var scope = metadata.OfType<ScopeEndpointMetadata>().LastOrDefault();
         operation.Security = authenticated
             ? [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("SessionCookie", context.Document)] = [] }]
             : [];
         operation.Extensions ??= new Dictionary<string, IOpenApiExtension>();
-        operation.Extensions["x-tpr10-permissions"] = Strings(permissions.Select(x => x.Capability));
-        operation.Extensions["x-tpr10-mfa-required"] = new JsonNodeExtension(JsonValue.Create(permissions.Any(x => x.RequireMfa)));
+        operation.Extensions["x-tpr10-permissions"] = Strings(scope?.Capability is { } capability ? [capability] : permissions.Select(x => x.Capability));
+        operation.Extensions["x-tpr10-mfa-required"] = new JsonNodeExtension(JsonValue.Create(scope?.RequireMfa ?? permissions.Any(x => x.RequireMfa)));
         var conditional = metadata.OfType<IdentityConditionalPermission>().Select(x => (JsonNode?)new JsonObject
         { ["field"] = x.Field, ["permission"] = x.Permission, ["condition"] = "ค่าของ field ไม่เป็น null รวม array ว่าง" }).ToArray();
         if (conditional.Length > 0) operation.Extensions["x-tpr10-conditional-permissions"] = new JsonNodeExtension(new JsonArray(conditional));
         // RestrictedSessionMiddleware always admits Active, in addition to the explicit stage metadata.
         var stages = (metadata.OfType<AllowedSessionStages>().LastOrDefault()?.Stages ?? []).Append(SessionStage.Active).Distinct();
         operation.Extensions["x-tpr10-session-stages"] = Strings(stages.Select(x => x.ToString()));
-        operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create("identity-only-no-business-scope"));
-        operation.Description = (operation.Description + "\nAPI เป็น authority; ขอบเขต Module 2 ไม่มี business workspace/project/site scope. " +
+        if (scope is null)
+        {
+            operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create("identity-only-no-business-scope"));
+            operation.Description += "\nAPI เป็น authority; ขอบเขต Module 2 ไม่มี business workspace/project/site scope. ";
+        }
+        operation.Description = (operation.Description +
             "Stage metadata อธิบาย session ที่มีอยู่ ไม่ได้บังคับ login ใน route สาธารณะ; service ยังตรวจ state เพิ่มเติม. " +
             "Response ไม่ cache; ห้าม retry mutation อัตโนมัติเมื่อไม่ทราบผลลัพธ์.").Trim();
         var unsafeMethod = CsrfMiddleware.IsUnsafe(context.Description.HttpMethod!);
@@ -80,6 +86,7 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
             AddProblem(operation, problemSchema, 400, []);
         foreach (var problem in metadata.OfType<IdentityProblemTypes>())
             AddProblem(operation, problemSchema, problem.Status, problem.Types);
+        if (scope is not null) await scopes.TransformAsync(operation, context, scope, cancellationToken);
         foreach (var entry in operation.Responses.ToArray())
         {
             if (entry.Value is not OpenApiResponse response) continue;

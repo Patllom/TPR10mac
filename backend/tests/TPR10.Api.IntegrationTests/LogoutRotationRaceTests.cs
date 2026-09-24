@@ -36,7 +36,7 @@ public sealed class LogoutRotationRaceTests(PostgresFixture postgres)
             await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await using var db = driver.Database.CreateContext();
             await using var transaction = await db.Database.BeginTransactionAsync();
-            rotated = await new SessionService(db, driver.Clock, new RequestSession()).RotateAsync(token, SessionStage.Active, null, default);
+            rotated = await new SessionService(db, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(db)).RotateAsync(token, SessionStage.Active, null, default);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -46,7 +46,7 @@ public sealed class LogoutRotationRaceTests(PostgresFixture postgres)
         Assert.True(response.Headers.CacheControl?.NoStore);
         await using var observer = driver.Database.CreateContext();
         Assert.False(await observer.AuditEvents.AnyAsync(x => x.EventType == "identity.logout"));
-        Assert.NotNull(await new SessionService(observer, driver.Clock, new RequestSession()).ValidateAsync(rotated.Token, default));
+        Assert.NotNull(await new SessionService(observer, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(observer)).ValidateAsync(rotated.Token, default));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class LogoutRotationRaceTests(PostgresFixture postgres)
         await using var db = new Tpr10DbContext(new DbContextOptionsBuilder<Tpr10DbContext>()
             .UseNpgsql(driver.Database.ConnectionString).AddInterceptors(gate).Options);
         await using var transaction = await db.Database.BeginTransactionAsync();
-        var rotation = new SessionService(db, driver.Clock, new RequestSession()).RotateAsync(token, SessionStage.Active, null, default);
+        var rotation = new SessionService(db, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(db)).RotateAsync(token, SessionStage.Active, null, default);
         try
         {
             await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(10));

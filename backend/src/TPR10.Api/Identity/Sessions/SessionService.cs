@@ -12,7 +12,7 @@ public sealed class RequestSession
     public SessionView? View { get; set; }
 }
 
-public sealed class SessionService(Tpr10DbContext db, TimeProvider clock, RequestSession current) : ISessionService
+public sealed class SessionService(Tpr10DbContext db, TimeProvider clock, RequestSession current, IEffectiveRolePolicy roles) : ISessionService
 {
     public static byte[]? HashToken(string? token)
     {
@@ -60,10 +60,7 @@ public sealed class SessionService(Tpr10DbContext db, TimeProvider clock, Reques
         if (session.Stage == SessionStage.Active && session.MfaVerifiedAtUtc is null)
         {
             var confirmed = await db.Set<MfaFactor>().AnyAsync(x => x.UserId == session.UserId && x.ConfirmedAtUtc != null && x.RevokedAtUtc == null, ct);
-            var mandatory = await (from ur in db.Set<UserRole>()
-                                   join r in db.Set<IdentityRole>() on ur.RoleId equals r.Id
-                                   where ur.UserId == session.UserId && r.RoleClass != "staff"
-                                   select r.Id).AnyAsync(ct);
+            var mandatory = await roles.RequiresMfaAsync(session.UserId, ct);
             if (confirmed || mandatory) return null;
         }
         current.Entity = session;
@@ -79,7 +76,7 @@ public sealed class SessionService(Tpr10DbContext db, TimeProvider clock, Reques
             from ur in db.Set<UserRole>()
             join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
             join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
-            where ur.UserId == session.UserId
+            where ur.UserId == session.UserId && p.Domain == "system"
             select p.Capability).Distinct().OrderBy(x => x).ToArrayAsync(ct);
         return new SessionView(session.UserId, stage, permissions, session.MfaVerifiedAtUtc);
     }

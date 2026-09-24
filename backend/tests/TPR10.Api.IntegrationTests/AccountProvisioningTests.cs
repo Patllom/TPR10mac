@@ -163,7 +163,8 @@ public sealed class AccountProvisioningTests(PostgresFixture postgres)
 
     internal static int? Status(IResult result) => ((IStatusCodeHttpResult)result).StatusCode;
     internal static AccountProvisioning Provisioning(IdentityTestDriver driver, Tpr10DbContext db) =>
-        new(db, new ArgonPasswordHasher(), new SessionService(db, driver.Clock, new RequestSession()), Audit(driver, db), driver.Clock);
+        new(db, new ArgonPasswordHasher(), new SessionService(db, driver.Clock, new RequestSession(), new Organization.EffectiveRolePolicy(db)), Audit(driver, db), driver.Clock,
+            new Scopes.Assignments.AssignmentLifecycle(db, Audit(driver, db), driver.Clock, new Identity.Authorization.PermissionContext()));
     internal static AuditEventWriter Audit(IdentityTestDriver driver, Tpr10DbContext db)
     {
         var correlation = new CorrelationContext();

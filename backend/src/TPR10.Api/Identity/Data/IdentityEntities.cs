@@ -46,6 +46,7 @@ public sealed class IdentityPermission
 {
     public Guid Id { get; set; }
     public required string Capability { get; set; }
+    public string Domain { get; set; } = "system";
 }
 
 public sealed class RolePermission

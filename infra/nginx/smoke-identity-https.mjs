@@ -16,6 +16,9 @@ let network;
 let web;
 const port = process.argv[2] ?? '4001';
 assert.ok(['4000', '4001'].includes(port), 'ใช้ port 4000 หรือ 4001 เท่านั้น');
+const specIndex = process.argv.indexOf('--spec');
+const spec = specIndex < 0 ? 'tests/e2e/identity.spec.ts' : process.argv[specIndex + 1];
+assert.ok(['tests/e2e/identity.spec.ts', 'tests/e2e/scopes.spec.ts', 'tests/e2e/scopes-boundary.spec.ts'].includes(spec), 'spec ต้องอยู่ใน allowlist');
 const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, { encoding: 'utf8', timeout: 180000, ...options });
   if (result.status !== 0) throw new Error(`${command} ${args.slice(0, 2).join(' ')} ล้มเหลว: ${result.error?.message ?? result.stderr}`);
@@ -78,6 +81,10 @@ try {
         INSERT INTO user_roles(user_id,role_id) VALUES ('${user}','${role}');
       ` });
     }
+    if (spec !== 'tests/e2e/identity.spec.ts') {
+      const sql = run('dotnet', [join(root, 'fixture', 'TPR10.E2E.Fixture.dll'), '--scope-sql']);
+      run('docker', ['exec', '-i', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], { input: sql });
+    }
   }
   const proxy = startContainer('--network', network, '-p', '127.0.0.1:4443:4443',
     '-v', `${root}:/tls:ro`, '-v', `${join(root, 'https.conf')}:/etc/nginx/conf.d/default.conf:ro`, 'nginx:1.28-alpine');
@@ -93,7 +100,7 @@ try {
   await waitFor(() => tls('/api/health/ready', ['--fail']).includes('ready'), 'API ผ่าน HTTPS');
   web = spawn(process.execPath, ['node_modules/next/dist/bin/next', port === '4000' ? 'dev' : 'start', '-p', port, '--hostname', '127.0.0.1'], {
     stdio: 'ignore',
-    env: { ...process.env, TPR10_API_ORIGIN: 'https://localhost:4443', NODE_EXTRA_CA_CERTS: join(root, 'ca.pem') }
+    env: { ...process.env, TPR10_API_ORIGIN: 'https://localhost:4443', NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), TPR10_SCOPE_TEST_UI: spec === 'tests/e2e/scopes.spec.ts' ? 'true' : '' }
   });
   await waitFor(async () => (await fetch(`http://127.0.0.1:${port}`)).ok, 'Next');
   assert.match(tls('/', ['--fail']), /<!doctype html>/i);
@@ -101,13 +108,16 @@ try {
     // Policy applies only to the disposable Playwright Firefox profile, never macOS trust.
     const policies = join(root, 'firefox-policies.json');
     writeFileSync(policies, JSON.stringify({ policies: { Certificates: { Install: [join(root, 'ca.pem')] } } }), { mode: 0o600 });
-    const browserTests = spawnSync(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', 'tests/e2e/identity.spec.ts',
+    const browserTests = spawnSync(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', spec,
       ...(process.env.TPR10_E2E_GREP ? ['--grep', process.env.TPR10_E2E_GREP] : [])], {
-      stdio: 'inherit', timeout: 300000,
-      env: { ...process.env, PLAYWRIGHT_FIREFOX_POLICIES_JSON: policies, TPR10_E2E_DATABASE: database, TPR10_E2E_API: api }
+      stdio: 'inherit', timeout: 600000,
+      env: { ...process.env, NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), PLAYWRIGHT_FIREFOX_POLICIES_JSON: policies, TPR10_E2E_DATABASE: database, TPR10_E2E_API: api }
     });
     if (browserTests.status !== 0) throw new Error('Browser E2E ไม่ผ่าน');
     console.log('Browser E2E ผ่าน HTTPS ที่เชื่อถือ CA เฉพาะ profile ทดสอบ');
+    // The outage test restarts Docker, which returns before the API is ready.
+    // Wait only on readiness; never retry an uncertain mutation.
+    await waitFor(() => tls('/api/health/ready', ['--fail']).includes('ready'), 'API หลัง browser outage test');
   }
   console.log('TLS และหน้าเว็บผ่าน; ตรวจ cookie/CSRF ผ่าน proxy จริง');
   const untrusted = spawnSync('curl', ['--silent', '--max-time', '10', 'https://localhost:4443/api/health/live']);

@@ -10,7 +10,7 @@ using TPR10.Api.Identity.Passwords;
 namespace TPR10.Api.Identity.Sessions;
 
 public sealed class LoginService(Tpr10DbContext db, IIdentityProvider provider, ISessionService sessions,
-    CsrfService csrf, IAuditEventWriter audit, TimeProvider clock)
+    CsrfService csrf, IAuditEventWriter audit, TimeProvider clock, IEffectiveRolePolicy roles)
 {
     public async Task<IResult> LoginAsync(LoginRequest request, HttpContext context, CancellationToken ct)
     {
@@ -74,10 +74,7 @@ public sealed class LoginService(Tpr10DbContext db, IIdentityProvider provider, 
         if (!credential.MustChangePassword)
         {
             var confirmed = await db.Set<MfaFactor>().AnyAsync(x => x.UserId == user.Id && x.ConfirmedAtUtc != null && x.RevokedAtUtc == null, ct);
-            var mandatory = await (from ur in db.Set<UserRole>()
-                                   join r in db.Set<IdentityRole>() on ur.RoleId equals r.Id
-                                   where ur.UserId == user.Id && r.RoleClass != "staff"
-                                   select r.Id).AnyAsync(ct);
+            var mandatory = await roles.RequiresMfaAsync(user.Id, ct);
             stage = confirmed ? SessionStage.MfaChallengeRequired : mandatory ? SessionStage.MfaEnrollmentRequired : SessionStage.Active;
         }
         var issued = await sessions.IssueAsync(user.Id, stage, ct);

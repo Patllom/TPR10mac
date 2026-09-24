@@ -36,7 +36,26 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
         { "/api/v1/roles/{id}/permissions", "put", "roles:manage", 204, "" },
         { "/api/v1/permissions", "get", "roles:read", 200, "array" },
         { "/api/v1/system/identity-probe", "get", "system:probe", 200, "status" },
-        { "/api/v1/system/technical-probes", "post", "system:probe", 201, "id,note,createdAtUtc,correlationId" }
+        { "/api/v1/system/technical-probes", "post", "system:probe", 201, "id,note,createdAtUtc,correlationId" },
+        { "/api/v1/organization/workspaces", "get", "organization:manage", 200, "items,total,page,pageSize" },
+        { "/api/v1/organization/workspaces", "post", "organization:manage", 201, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/organization/workspaces/{id}", "patch", "organization:manage", 200, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/organization/workspaces/{workspaceId}/departments", "get", "organization:manage", 200, "items,total,page,pageSize" },
+        { "/api/v1/organization/workspaces/{workspaceId}/departments", "post", "organization:manage", 201, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/organization/workspaces/{workspaceId}/departments/{id}", "patch", "organization:manage", 200, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/organization/workspaces/{workspaceId}/projects", "get", "organization:manage", 200, "items,total,page,pageSize" },
+        { "/api/v1/organization/workspaces/{workspaceId}/projects", "post", "organization:manage", 201, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/organization/workspaces/{workspaceId}/projects/{id}", "patch", "organization:manage", 200, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/organization/workspaces/{workspaceId}/projects/{projectId}/sites", "get", "organization:manage", 200, "items,total,page,pageSize" },
+        { "/api/v1/organization/workspaces/{workspaceId}/projects/{projectId}/sites", "post", "organization:manage", 201, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/organization/workspaces/{workspaceId}/projects/{projectId}/sites/{id}", "patch", "organization:manage", 200, "id,workspaceId,projectId,code,name,isActive,version" },
+        { "/api/v1/scope-assignments", "get", "scope-assignments:manage", 200, "items,total,pageNumber,pageSize" },
+        { "/api/v1/scope-assignments", "post", "scope-assignments:manage", 201, "id,userId,scope,roleId,version,revokedAtUtc" },
+        { "/api/v1/scope-assignments/{id}/replace", "post", "scope-assignments:manage", 200, "id,userId,scope,roleId,version,revokedAtUtc" },
+        { "/api/v1/scope-assignments/{id}/revoke", "post", "scope-assignments:manage", 200, "id,userId,scope,roleId,version,revokedAtUtc" },
+        { "/api/v1/scope-assignments/options/users", "get", "scope-assignments:manage", 200, "items,total,pageNumber,pageSize" },
+        { "/api/v1/scope-assignments/options/roles", "get", "scope-assignments:manage", 200, "items,total,pageNumber,pageSize" },
+        { "/api/v1/scopes", "get", "session", 200, "items,total,pageNumber,pageSize" }
     };
 
     [Theory]
@@ -61,7 +80,8 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
         Assert.Equal(permission.Contains(':') ? new[] { permission } : [],
             operation.GetProperty("x-tpr10-permissions").EnumerateArray().Select(x => x.GetString()).ToArray());
         Assert.Equal(permission.Contains(':'), operation.GetProperty("x-tpr10-mfa-required").GetBoolean());
-        Assert.Equal("identity-only-no-business-scope", operation.GetProperty("x-tpr10-scope").GetString());
+        Assert.Equal(path == "/api/v1/scopes" ? "scope-discovery" : path.StartsWith("/api/v1/scope-assignments", StringComparison.Ordinal)
+            || path.StartsWith("/api/v1/organization/", StringComparison.Ordinal) ? "system-management" : "identity-only-no-business-scope", operation.GetProperty("x-tpr10-scope").GetString());
 
         var response = operation.GetProperty("responses").GetProperty(success.ToString());
         Assert.Equal(new[] { success.ToString() }, operation.GetProperty("responses").EnumerateObject()
@@ -97,7 +117,8 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
         var actual = root.GetProperty("paths").EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/", StringComparison.Ordinal))
             .SelectMany(p => p.Value.EnumerateObject().Where(m => new[] { "get", "post", "put", "patch", "delete", "head", "options" }.Contains(m.Name))
                 .Select(m => $"{m.Name} {p.Name}")).Order().ToArray();
-        var expected = Contracts.Select(row => $"{row[1]} {row[0]}").Order().ToArray();
+        var expected = Contracts.Select(row => $"{row[1]} {row[0]}")
+            .Concat(ScopeRecordOpenApiTests.Contracts().Select(row => $"{row[1]} {row[0]}")).Order().ToArray();
         Assert.Equal(expected, actual);
         var cookie = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("SessionCookie");
         Assert.Equal("apiKey", cookie.GetProperty("type").GetString());

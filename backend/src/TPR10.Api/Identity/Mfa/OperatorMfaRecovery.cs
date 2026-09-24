@@ -26,7 +26,7 @@ public sealed class OperatorMfaRecovery(Tpr10DbContext db, ISessionService sessi
             || !await (from ur in db.Set<UserRole>()
                        join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
                        join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
-                       where ur.UserId == actorId && p.Capability == "users:recover-mfa"
+                       where ur.UserId == actorId && p.Capability == "users:recover-mfa" && p.Domain == "system"
                        select p.Id).AnyAsync(ct)) return Denied();
         if (string.IsNullOrWhiteSpace(reason) || reason.Length > 500 || reason.Any(char.IsControl)
             || string.IsNullOrWhiteSpace(evidenceReference) || evidenceReference.Length > 120 || evidenceReference.Any(char.IsControl))

@@ -26,7 +26,7 @@ public sealed class PermissionHandler(Tpr10DbContext db, RequestSession session,
             var role = await (from ur in db.Set<UserRole>()
                               join rp in db.Set<RolePermission>() on ur.RoleId equals rp.RoleId
                               join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
-                              where ur.UserId == view.UserId && p.Capability == requirement.Capability
+                              where ur.UserId == view.UserId && p.Capability == requirement.Capability && p.Domain == "system"
                               orderby ur.RoleId
                               select (Guid?)ur.RoleId).FirstOrDefaultAsync(ct);
             if (role is null) denial = "permission-denied";
