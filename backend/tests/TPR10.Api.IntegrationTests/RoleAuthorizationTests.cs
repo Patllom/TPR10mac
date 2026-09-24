@@ -49,7 +49,7 @@ public sealed class RoleAuthorizationTests(PostgresFixture postgres)
         Assert.Equal(HttpStatusCode.OK, permissions.StatusCode);
         Assert.True(permissions.Headers.CacheControl?.NoStore);
         using var catalog = JsonDocument.Parse(await permissions.Content.ReadAsStringAsync());
-        Assert.Equal(12, catalog.RootElement.GetArrayLength());
+        Assert.Equal(19, catalog.RootElement.GetArrayLength());
         using var created = await driver.PostAsync("/api/v1/roles", new { name = "Custom", roleClass = "staff" });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync());

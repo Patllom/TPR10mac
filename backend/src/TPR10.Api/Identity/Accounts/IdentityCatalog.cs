@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Data;
 using TPR10.Api.Scopes;
+using TPR10.Api.Attendance.Access;
 
 namespace TPR10.Api.Identity.Accounts;
 
@@ -28,7 +29,21 @@ public static class IdentityCatalog
     ];
 
     public static string[] Capabilities => Permissions.Select(x => x.Capability)
-        .Concat(ScopeCatalog.Permissions.Select(x => x.Capability)).ToArray();
+        .Concat(ScopeCatalog.Permissions.Select(x => x.Capability))
+        .Concat(AttendanceCatalog.Permissions.Select(x => x.Capability)).ToArray();
+
+    // Bootstrap is a fixed legacy allowlist, not a grant of every system-domain capability.
+    private static readonly HashSet<Guid> AdministratorBootstrapPermissions =
+    [
+        Guid.Parse("20000000-0000-0000-0000-000000000001"),
+        Guid.Parse("20000000-0000-0000-0000-000000000002"),
+        Guid.Parse("20000000-0000-0000-0000-000000000003"),
+        Guid.Parse("20000000-0000-0000-0000-000000000004"),
+        Guid.Parse("20000000-0000-0000-0000-000000000005"),
+        Guid.Parse("20000000-0000-0000-0000-000000000006"),
+        Guid.Parse("20000000-0000-0000-0000-000000000007"),
+        Guid.Parse("20000000-0000-0000-0000-000000000008")
+    ];
 
     public static async Task SeedAsync(Tpr10DbContext db, DateTimeOffset now, CancellationToken ct)
     {
@@ -36,11 +51,11 @@ public static class IdentityCatalog
             if (!await db.Set<IdentityRole>().AnyAsync(x => x.Id == role.Id, ct))
                 db.Add(new IdentityRole { Id = role.Id, Name = role.Name, RoleClass = role.Class, CreatedAtUtc = now });
         foreach (var permission in Permissions.Select(x => (x.Id, x.Capability, Domain: ScopeCatalog.SystemDomain))
-                     .Concat(ScopeCatalog.Permissions))
+                     .Concat(ScopeCatalog.Permissions).Concat(AttendanceCatalog.Permissions))
         {
             if (!await db.Set<IdentityPermission>().AnyAsync(x => x.Id == permission.Id, ct))
                 db.Add(new IdentityPermission { Id = permission.Id, Capability = permission.Capability, Domain = permission.Domain });
-            if (permission.Domain == ScopeCatalog.SystemDomain
+            if (AdministratorBootstrapPermissions.Contains(permission.Id)
                 && !await db.Set<RolePermission>().AnyAsync(x => x.RoleId == AdministratorRoleId && x.PermissionId == permission.Id, ct))
                 db.Add(new RolePermission { RoleId = AdministratorRoleId, PermissionId = permission.Id });
         }

@@ -54,7 +54,7 @@ internal static class IdentityModelConfiguration
         var permission = Table<IdentityPermission>(model, "permissions");
         permission.Property(x => x.Capability).HasMaxLength(120);
         permission.Property(x => x.Domain).HasMaxLength(40).HasDefaultValue("system");
-        permission.ToTable(t => t.HasCheckConstraint("ck_permissions_domain", "domain IN ('system','scoped-business')"));
+        permission.ToTable(t => t.HasCheckConstraint("ck_permissions_domain", "domain IN ('system','scoped-business','attendance')"));
         permission.HasIndex(x => x.Capability).IsUnique();
 
         var rolePermission = model.Entity<RolePermission>();

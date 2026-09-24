@@ -23,7 +23,7 @@ public sealed class AuthorizationMigrationTests(PostgresFixture postgres)
             INSERT INTO audit_events(id,event_type,occurred_at_utc,correlation_id) VALUES ('30000000-0000-0000-0000-000000000001','historical',now(),'30000000-0000-0000-0000-000000000002');
             """);
         await db.Database.MigrateAsync();
-        Assert.Equal(12, await db.Set<IdentityPermission>().CountAsync());
+        Assert.Equal(19, await db.Set<IdentityPermission>().CountAsync());
         var grants = await (from rp in db.Set<RolePermission>()
                             join p in db.Set<IdentityPermission>() on rp.PermissionId equals p.Id
                             select p.Capability).OrderBy(x => x).ToArrayAsync();
