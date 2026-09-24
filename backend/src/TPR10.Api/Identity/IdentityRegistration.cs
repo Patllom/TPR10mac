@@ -21,6 +21,8 @@ public static class IdentityRegistration
         services.AddScoped<RequestSession>();
         services.AddScoped<IEffectiveRolePolicy, Organization.EffectiveRolePolicy>();
         services.AddScoped<Scopes.Assignments.AssignmentLifecycle>();
+        services.AddScoped<Attendance.Directory.DirectoryLifecycle>();
+        services.AddScoped<Attendance.Access.AttendanceGrantGuard>();
         services.AddScoped<LoginService>();
         services.AddScoped<Reset.PasswordResetService>();
         services.AddScoped<IResetDelivery, Reset.ResetDelivery>();
@@ -38,7 +40,7 @@ public static class IdentityRegistration
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, Authorization.PermissionResultHandler>();
         services.AddAuthorization(options =>
         {
-            foreach (var capability in new[] { "system:probe", "users:manage", "roles:manage", "roles:read", "users:recover-mfa", "organization:manage", "scope-assignments:manage" })
+            foreach (var capability in new[] { "system:probe", "users:manage", "roles:manage", "roles:read", "users:recover-mfa", "organization:manage", "scope-assignments:manage", "attendance:directory-manage", "attendance:storage-manage" })
                 options.AddPolicy(capability, policy => policy.RequireAuthenticatedUser()
                     .AddRequirements(new Authorization.PermissionRequirement(capability, RequireMfa: true)));
         });

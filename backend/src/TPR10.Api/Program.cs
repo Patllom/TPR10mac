@@ -59,6 +59,12 @@ app.Use(async (context, next) =>
     if (context.Request.Path.StartsWithSegments("/api/v1"))
         context.Response.OnStarting(() => { context.Response.Headers.CacheControl = "no-store"; return Task.CompletedTask; });
     try { await next(context); }
+    catch (TPR10.Api.Attendance.Directory.DirectoryConflictException)
+    {
+        if (context.Response.HasStarted) throw;
+        context.Response.Clear();
+        await Results.Problem(statusCode: 409, title: "ข้อมูลบุคลากรเปลี่ยนแปลง กรุณาลองใหม่").ExecuteAsync(context);
+    }
     catch (Exception error) when ((error is Npgsql.NpgsqlException or DbUpdateException
         || error is InvalidOperationException { InnerException: Npgsql.NpgsqlException })
         && (context.Request.Path.StartsWithSegments("/api/v1/auth") || context.Request.Cookies.ContainsKey(CsrfService.SessionCookieName)))
