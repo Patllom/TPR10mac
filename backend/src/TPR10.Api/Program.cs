@@ -17,6 +17,8 @@ using TPR10.Api.Organization;
 using TPR10.Api.Scopes.Assignments;
 using TPR10.Api.Scopes;
 using TPR10.Api.Scopes.Probes;
+using TPR10.Api.Attendance;
+using TPR10.Api.Attendance.Directory;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -39,6 +41,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddIdentityFoundation();
 builder.Services.AddOrganizationScope();
+builder.Services.AddAttendance();
 builder.Services.AddPreAuthCsrf(builder.Configuration, builder.Environment);
 builder.Services.AddPasswordResetDelivery(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<CorrelationContext>();
@@ -83,12 +86,14 @@ app.UseMiddleware<SessionActivityMiddleware>();
 app.UseMiddleware<OrganizationBindingAuditMiddleware>();
 app.UseMiddleware<AssignmentBindingAuditMiddleware>();
 app.UseMiddleware<ScopeProbeBindingAuditMiddleware>();
+app.UseMiddleware<DirectoryBindingAuditMiddleware>();
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapRoleEndpoints();
 app.MapOrganizationEndpoints();
 app.MapAssignmentEndpoints();
 app.MapScopeEndpoints();
+app.MapAttendanceDirectory();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");

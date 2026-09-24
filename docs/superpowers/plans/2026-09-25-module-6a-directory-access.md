@@ -105,7 +105,7 @@ public sealed record DirectoryPage<T>(T[] Items, int Page, int PageSize, int Tot
 public sealed record DirectoryOption(Guid Id, string Label);
 ```
 
-ExpectedVersion=nullหมายถึงไม่มีactive rowเท่านั้น ไม่ใช่ignoreconcurrency; POSTซ้ำHRassignmentactive409; no-opที่ค่าเดิมและversionถูกคืน200ไม่revokeอีก; replaceสร้างrowใหม่version1และendrowเดิมversion+1เป็นtransactionเดียว
+ExpectedVersion=nullหมายถึงไม่มีactive rowเท่านั้น ไม่ใช่ignoreconcurrency; POSTซ้ำHRassignmentactive409; no-opที่ค่าเดิมและversionถูกคืน200ไม่revokeอีก; replaceปิดแถวเดิมversion+1แล้วสร้างแถวใหม่ด้วยversionที่สูงกว่าประวัติทั้งหมดของพนักงานในresourceนั้นในtransactionเดียว (แก้ข้อบกพร่องของแผนเดิมที่เริ่ม1ซ้ำ ทำให้ stale client เขียนทับได้; ทดสอบREDยืนยันแล้ว) HRที่endด้วยIDเฉพาะยังเริ่มversion1
 
 Route root `/api/v1/attendance/directory` ทั้งหมดต้อง `attendance:directory-manage`+recentMFA ยกเว้นGET `/api/v1/attendance/access` ที่คืนcapability boolean ของ actorเอง ไม่มีข้อมูลลูกทีม:
 
