@@ -15,6 +15,26 @@ public sealed class AttendanceDirectorySchemaTests(PostgresFixture postgres)
 {
     private const string Previous = "20260923173517_AddOrganizationScopeFoundation";
 
+    [Theory]
+    [InlineData("employee_memberships")]
+    [InlineData("reporting_lines")]
+    [InlineData("hr_assignments")]
+    public async Task Closed_history_cannot_be_rewritten_reopened_or_deleted(string table)
+    {
+        await using var d = await IdentityTestDriver.CreateAsync(postgres.ConnectionString);
+        await using var db = d.Database.CreateContext();
+        await SeedAsync(db);
+        await db.Database.ExecuteSqlRawAsync($"UPDATE {table} SET valid_to_utc='2026-09-26T00:00:00Z',ended_by=created_by,version=2");
+        var before = await JsonRowsAsync(db, table);
+        foreach (var assignment in new[] { "reason='เปลี่ยนย้อนหลัง'", "valid_to_utc=NULL", "valid_from_utc=valid_from_utc-interval '1 day'", "version=3" })
+        {
+            Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync($"UPDATE {table} SET {assignment}"))).SqlState);
+            Assert.Equal(before, await JsonRowsAsync(db, table));
+        }
+        Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync($"DELETE FROM {table}"))).SqlState);
+        Assert.Equal(before, await JsonRowsAsync(db, table));
+    }
+
     [Fact]
     public async Task Migration_creates_all_three_directory_tables_and_matches_model()
     {
@@ -72,7 +92,7 @@ public sealed class AttendanceDirectorySchemaTests(PostgresFixture postgres)
         Assert.Equal(1, await CountAsync(db, table, "valid_to_utc IS NULL"));
         Assert.Equal(1, await CountAsync(db, table, "valid_to_utc='2026-09-26T00:00:00Z' AND version=2"));
         // Extending the old interval over the new one must also be rejected.
-        Assert.Equal("23P01", (await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(
+        Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(
             $"UPDATE {table} SET valid_to_utc='2026-09-27T00:00:00Z' WHERE valid_to_utc IS NOT NULL"))).SqlState);
     }
 
@@ -188,7 +208,7 @@ public sealed class AttendanceDirectorySchemaTests(PostgresFixture postgres)
         Assert.Equal("P0001", error.SqlState);
         Assert.Contains("attendance", error.MessageText, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(before, await JsonRowsAsync(db, "role_permissions"));
-        Assert.Contains((await db.Database.GetAppliedMigrationsAsync()).Last(), db.Database.GetMigrations().Where(x => x.EndsWith("AddAttendanceDirectory")));
+        Assert.Equal(db.Database.GetMigrations(), await db.Database.GetAppliedMigrationsAsync());
     }
 
     [Fact]

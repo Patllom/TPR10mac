@@ -10,7 +10,7 @@
 
 **Spec:** [Module6 written Spec ที่อนุมัติ](../specs/2026-09-25-module-6-attendance-design.md)
 
-ฐานที่ตรวจ: `b8b9c0f` บน main; ผู้ใช้อนุมัติแผน6Aและสั่งเริ่มเฉพาะTask1 วันที่25กันยายน2026 ยังไม่เริ่มTask2–6
+ฐานที่ตรวจ: `b8b9c0f` บน main; ผู้ใช้อนุมัติให้ดำเนินการทุก Task จนจบ Module6A วันที่25กันยายน2026 ไม่รวม push/merge/deploy
 
 ## Global Constraints
 
@@ -199,7 +199,7 @@ AND existing.id <> NEW.id
 
 **Interfaces:** `DirectoryRules.Contains(DateTimeOffset from, DateTimeOffset? to, DateTimeOffset at):bool`; `DirectoryRules.CreatesCycle(Guid employee, Guid proposedSupervisor, IReadOnlyDictionary<Guid,Guid> currentManagers):bool`; `DirectoryRules.ValidReason(string?):bool` เป็นpurefunctions; serviceต้องสร้างcurrentgraphจากDBณnowในtransaction ไม่รับgraphจากclient
 
-- [ ] เขียนtestRED:
+- [x] เขียนtestRED:
 
 ```csharp
 [Fact]
@@ -221,8 +221,8 @@ public void Proposed_manager_chain_must_not_reach_employee()
 }
 ```
 
-- [ ] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceDirectoryRulesTests`; ExpectedREDmissingtype ก่อนใส่stubให้compileแล้วรันREDassertionอีกครั้ง
-- [ ] ImplementContains `from <= at && (to is null || at < to)`; cycleเดินด้วยHashSetvisitedและreturns trueเมื่อพบemployeeหรือcycleเดิม เพื่อfailclosed ไม่recursionไม่จำกัดstack:
+- [x] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceDirectoryRulesTests`; ExpectedREDmissingtype ก่อนใส่stubให้compileแล้วรันREDassertionอีกครั้ง
+- [x] ImplementContains `from <= at && (to is null || at < to)`; cycleเดินด้วยHashSetvisitedและreturns trueเมื่อพบemployeeหรือcycleเดิม เพื่อfailclosed ไม่recursionไม่จำกัดstack:
 
 ```csharp
 var visited = new HashSet<Guid>();
@@ -233,8 +233,8 @@ while (true) {
 }
 ```
 
-- [ ] เพิ่มtests nonoverlap/end exactboundary, emptyGuid rejectedก่อนgraph, malformedUTF/controlreason/whitespace/501characters, chain1000nodes no stackoverflow, oldmanagerinactiveexcluded; แยกreasontrimค่าที่เก็บจากvalidation
-- [ ] Runfilterเดิม ExpectedPASS; `dotnet format backend/TPR10.sln --verify-no-changes --no-restore` Expected0; Commit `feat: define attendance temporal and reporting rules`
+- [x] เพิ่มtests nonoverlap/end exactboundary, emptyGuid rejectedก่อนgraph, malformedUTF/controlreason/whitespace/501characters, chain1000nodes no stackoverflow, oldmanagerinactiveexcluded; แยกreasontrimค่าที่เก็บจากvalidation
+- [x] Runfilterเดิม ExpectedPASS; `dotnet format backend/TPR10.sln --verify-no-changes --no-restore` Expected0; Commit `feat: define attendance temporal and reporting rules`
 
 ## Task 3: Identity integration และป้องกันยกระดับตนเอง
 
