@@ -7,7 +7,7 @@ internal static class ScopeSeed
     {
         var sql = new StringBuilder();
         var users = new Dictionary<string, Guid>();
-        foreach (var name in new[] { "staff", "other", "approver", "privacy", "admin", "manager", "reviewer", "target", "many" })
+        foreach (var name in new[] { "staff", "other", "approver", "privacy", "window-read", "window-export", "admin", "manager", "reviewer", "target", "many" })
         {
             var user = Guid.NewGuid(); users[name] = user;
             sql.AppendLine($"INSERT INTO users(id,username,normalized_username) VALUES ('{user}','e2e-scope-{name}','E2E-SCOPE-{name.ToUpperInvariant()}');");
@@ -39,7 +39,7 @@ internal static class ScopeSeed
             var role = Role(name, "system-administration", name == "admin" ? new[] { "organization:manage", "scope-assignments:manage" } : new[] { "scope-assignments:manage" });
             sql.AppendLine($"INSERT INTO user_roles(user_id,role_id) VALUES ('{users[name]}','{role}');");
         }
-        foreach (var (name, site, role) in new[] { ("staff", a, staff), ("other", b, read), ("approver", a, approval), ("approver", b, read), ("privacy", a, approval) })
+        foreach (var (name, site, role) in new[] { ("staff", a, staff), ("other", b, read), ("approver", a, approval), ("approver", b, read), ("privacy", a, approval), ("window-read", a, approval), ("window-export", a, approval) })
             sql.AppendLine($"INSERT INTO user_scope_assignments(id,user_id,workspace_id,project_id,site_id,role_id,created_by,reason) VALUES ('{Guid.NewGuid()}','{users[name]}','{w}','{p}','{site}','{role}','{users["admin"]}','ข้อมูลทดสอบเท่านั้น');");
         for (var i = 0; i < 101; i++)
         {

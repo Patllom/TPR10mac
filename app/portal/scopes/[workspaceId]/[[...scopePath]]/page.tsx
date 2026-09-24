@@ -11,14 +11,14 @@ export default async function ScopedPage({params}:{params:Promise<{workspaceId:s
   if(!technicalScopeUiEnabled()) notFound();
   const route=await params; let key;
   try {key=parseScopePath(route.workspaceId,route.scopePath);} catch {notFound();}
-  let content;
+  let content, session;
   try {
-    await requirePortalSession(scopePath(key));
+    session=await requirePortalSession(scopePath(key));
     const choice=await readScopeChoice(key);
     content=choice?<ScopedRecordPanel key={scopePath(key)} choice={choice}/>:<p role="alert">พื้นที่หรือข้อมูลไม่พร้อมใช้งาน</p>;
   } catch(error) {
     if(error instanceof ScopeHttpError && error.status===401) redirect('/login');
     if(error instanceof ScopeHttpError || error instanceof SessionUnavailableError) content=<p role="alert">{error.message}</p>; else throw error;
   }
-  return <ScopeFrame title="ข้อมูลทดสอบตามพื้นที่">{content}</ScopeFrame>;
+  return <ScopeFrame title="ข้อมูลทดสอบตามพื้นที่" session={session}>{content}</ScopeFrame>;
 }

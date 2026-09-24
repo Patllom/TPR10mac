@@ -565,7 +565,7 @@ git commit -m "feat: add scoped portal navigation and administration"
 **แก้:** `Identity/IdentityOpenApiTransformer.cs`, `Organization/OrganizationRegistration.cs`, endpointmetadataทุกrouteModule3, tests `IdentityOpenApiTests.cs` เฉพาะenumerationที่เปลี่ยนและคงassertidentitycontractเดิม
 **รับ/ส่ง:** endpointmetadataใช้ `ScopeEndpointMetadata(string Mode,string? Capability,bool RequireMfa,string Level)` Mode=`system-management`/`scope-discovery`/`exact-business`; Level=`none`/`workspace`/`project`/`site`; transformerไม่สร้างauthority runtime
 
-- [ ] RED contractscopeไม่ถูกtransformerเดิมเขียนidentity-onlyทับ:
+- [x] RED contractscopeไม่ถูกtransformerเดิมเขียนidentity-onlyทับ:
 
 ```csharp
 [Fact]
@@ -583,10 +583,10 @@ public async Task Site_operation_documents_exact_scope_and_csrf()
 }
 ```
 
-- [ ] `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeOpenApiTests` ต้องREDหลังroutesมีแล้ว; แก้Identitytransformerอ่านnewmetadataก่อนใส่scope/description ไม่แข่งtransformerorder; oneCSRFheaderไม่duplicate; docsperm/MFAconditionalrestrictedfields request/responsepublic-vsrestricted/error400401403404409429503ตามruntime
-- [ ] Enumerationtestครบmanagement/discovery/recordทุกoperation ทุกscopelevel; productionOpenAPIไม่แสดงprobes; errorยังมีgeneric500/defaultที่เป็นไปได้ให้ระบุตามจริง ไม่claimทุกerrorเป็น503หรือJSONเมื่อbindingเดิมอาจempty
-- [ ] Runbook: migrate/initialorganizationผ่านAPI, secondadminforassignment, noautoassignment, rolegrantdomain, disable/revoke/reactivate, cache/404handling, auditfailure/recovery, no-secrets, downgradewarning; testmatrixผูกspec12กับชื่อtestsจริง; ownerยังไม่signoffต้องระบุรอ
-- [ ] Fullverificationหลังintegrationก่อนreviewและหลังreviewfix (ตั้งPATHNode/.NET/Dockerตามเครื่องจริงก่อน ไม่ติดตั้งversionอื่นเพื่อหลบfailure):
+- [x] `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeOpenApiTests` ต้องREDหลังroutesมีแล้ว; แก้Identitytransformerอ่านnewmetadataก่อนใส่scope/description ไม่แข่งtransformerorder; oneCSRFheaderไม่duplicate; docsperm/MFAconditionalrestrictedfields request/responsepublic-vsrestricted/error400401403404409429503ตามruntime
+- [x] Enumerationtestครบmanagement/discovery/recordทุกoperation ทุกscopelevel; productionOpenAPIไม่แสดงprobes; errorยังมีgeneric500/defaultที่เป็นไปได้ให้ระบุตามจริง ไม่claimทุกerrorเป็น503หรือJSONเมื่อbindingเดิมอาจempty
+- [x] Runbook: migrate/initialorganizationผ่านAPI, secondadminforassignment, noautoassignment, rolegrantdomain, disable/revoke/reactivate, cache/404handling, auditfailure/recovery, no-secrets, downgradewarning; testmatrixผูกspec12กับชื่อtestsจริง; ownerยังไม่signoffต้องระบุรอ
+- [x] Fullverificationหลังintegrationก่อนreviewและหลังreviewfix (ตั้งPATHNode/.NET/Dockerตามเครื่องจริงก่อน ไม่ติดตั้งversionอื่นเพื่อหลบfailure):
 
 ```bash
 dotnet restore backend/TPR10.sln
@@ -606,9 +606,9 @@ npm audit
 git diff --check
 ```
 
-- [ ] บันทึกUTC/commit/worktree/exitcode/testcountsจริง ไม่มีskipที่ซ่อนsecurityacceptance; harnessต้องปิดcontainer/serverของตนเอง ไม่แตะฐานใช้งานจริงและไม่bypassTLS
-- [ ] ผู้ตรวจอิสระfreshcontextหนึ่งคนตรวจdiffทั้งModule3กับspec/planรวม5ReviewFocus และจุดเชื่อมModule2; regradeตามผลต่อผู้ใช้ ถ้าCritical/Importantทำหนึ่งTDDfixpassและfullverificationใหม่ ไม่มีsecondreviewตามexecuting-plans; Minor/declined-to-judgeบันทึกพร้อมผลหากวินิจฉัยผิด ไม่อ้างindependentfullrerunหากreviewerไม่ได้รัน
-- [ ] Commitเอกสารพร้อมruntimecontractที่ตรวจแล้ว และส่งรายงานภาษาไทย แยกtechnical/policy/productiongate; ขอผู้ใช้เลือกintegration ไม่pushmergeเอง:
+- [x] บันทึกUTC/commit/worktree/exitcode/testcountsจริง ไม่มีskipที่ซ่อนsecurityacceptance; harnessต้องปิดcontainer/serverของตนเอง ไม่แตะฐานใช้งานจริงและไม่bypassTLS
+- [x] ผู้ตรวจอิสระfreshcontextหนึ่งคนตรวจdiffทั้งModule3กับspec/planรวม5ReviewFocus และจุดเชื่อมModule2; regradeตามผลต่อผู้ใช้ ถ้าCritical/Importantทำหนึ่งTDDfixpassและfullverificationใหม่ ไม่มีsecondreviewตามexecuting-plans; Minor/declined-to-judgeบันทึกพร้อมผลหากวินิจฉัยผิด ไม่อ้างindependentfullrerunหากreviewerไม่ได้รัน
+- [x] Commitเอกสารพร้อมruntimecontractที่ตรวจแล้ว และส่งรายงานภาษาไทย แยกtechnical/policy/productiongate; ขอผู้ใช้เลือกintegration ไม่pushmergeเอง:
 
 ```bash
 git add backend/src/TPR10.Api/Scopes backend/src/TPR10.Api/Organization backend/src/TPR10.Api/Identity/IdentityOpenApiTransformer.cs backend/tests/TPR10.Api.IntegrationTests/ScopeOpenApiTests.cs backend/tests/TPR10.Api.IntegrationTests/IdentityOpenApiTests.cs docs/architecture/module-3-exit-gate.md docs/runbooks/module-3-organization-scope.md
@@ -637,4 +637,4 @@ git commit -m "docs: record module 3 scope security contract and exit gate"
 - การรวบรวมbusinessscopepermissionsไม่เปลี่ยนความหมายSessionView.Permissionsเดิม; MFAตรวจeffectiveprivilegedrolesแยกจากรายการpermissions
 - การอนุมัติแผนนี้ยังไม่อนุมัติproductionpolicyหรือdeployment; Module2Minorและownerregisterคงอยู่ในรายงานเดิม
 
-ขั้นถัดไป: เริ่ม Task6 ใน worktree Module3 เดิมเมื่อผู้ใช้สั่ง ใช้ Native/inline และอ่าน ledger/รายงาน Task5 ก่อน ไม่ทำ Task1–5 ซ้ำ และไม่ถามเลือกวิธีทำงานซ้ำ
+ขั้นถัดไป: Tasks1–9 ผ่าน technical gate แล้ว รอผู้ใช้เลือก merge เข้า main ในเครื่อง, push และสร้าง PR หรือเก็บ branch ไว้ ยังไม่อนุมัติ policy/production และไม่ทำงานเดิมซ้ำ

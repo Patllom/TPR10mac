@@ -1,5 +1,19 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createHmac } from 'node:crypto';
+const pendingResources=new WeakMap<Page,Set<string>>();
+test.beforeEach(async ({page})=>{
+  const pending=new Set<string>();pendingResources.set(page,pending);
+  page.on('request',request=>pending.add(request.resourceType()+' '+new URL(request.url()).pathname));
+  const ended=(request:import('@playwright/test').Request)=>pending.delete(request.resourceType()+' '+new URL(request.url()).pathname);
+  page.on('requestfinished',ended);page.on('requestfailed',ended);
+});
+test.afterEach(async ({page},info)=>{
+  if(info.status!==info.expectedStatus) {
+    // Fixture diagnostics only: paths/types/state, never query/body/cookies or private DOM.
+    console.log('scope pending resource paths/types:',[...pendingResources.get(page)??[]]);
+    console.log('scope document readiness:',await page.evaluate(()=>({ready:document.readyState,path:location.pathname})).catch(()=>({ready:'unavailable'})));
+  }
+});
 const w = '11111111-1111-4111-8111-111111111111', p = '22222222-2222-4222-8222-222222222222';
 const a = '33333333-3333-4333-8333-333333333333', b = '44444444-4444-4444-8444-444444444444';
 const path = (site: string) => `/portal/scopes/${w}/projects/${p}/sites/${site}`;
@@ -23,6 +37,9 @@ async function login(page: Page, user: string, mfa=false) {
     await page.getByRole('button',{name:'บันทึกรหัสกู้คืนแล้ว ไปต่อ'}).click();
   }
   await expect(page).toHaveURL(/\/portal$/);
+  // Finish the real login navigation before issuing the next full navigation.
+  await expect(page.getByRole('heading',{name:'ระบบปฏิบัติการภายใน',exact:true})).toBeVisible();
+  await page.waitForLoadState('load');
 }
 test('ไม่มี assignment ไม่เปิด catalog และ deep link ผิดไม่เปิดข้อมูล', async ({page})=>{
   await login(page,'e2e-staff'); await page.goto('/portal/scopes');
@@ -77,14 +94,22 @@ test('บทบาท A ไม่ใช้ใน B และ response A ที�
   await expect(page.getByText('ข้อมูลจำกัด A',{exact:true})).not.toBeVisible();await expect(page.getByLabel('ผลส่งออก')).not.toBeVisible();
 });
 
-test('กลับเข้าแท็บหลังเปลี่ยนบัญชี ล้าง restricted DOM/export และตรวจสิทธิ์ใหม่',async ({page})=>{
+test('กลับเข้าแท็บหลังเปลี่ยนบัญชีโดยไม่มี cross-window message ยังล้าง restricted DOM/export',async ({page})=>{
   await login(page,'e2e-scope-privacy',true);await page.goto(path(a));
   await page.getByRole('button',{name:'ส่งออกข้อมูลทดสอบ'}).click();await expect(page.getByLabel('ผลส่งออก')).toContainText('ข้อมูลจำกัด A');
+  await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide')));
+  await expect(page.getByLabel('ผลส่งออก')).not.toBeVisible();
+  await page.reload();await page.getByRole('button',{name:'ส่งออกข้อมูลทดสอบ'}).click();await expect(page.getByLabel('ผลส่งออก')).toContainText('ข้อมูลจำกัด A');
   // Headless Firefox does not reliably change OS-tab visibility. Deliver the browser lifecycle
   // event deterministically; account/session changes still go through real UI and HTTPS API.
   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
   await expect(page.getByText('ข้อมูลจำกัด A',{exact:true})).not.toBeVisible();await expect(page.getByLabel('ผลส่งออก')).not.toBeVisible();
   const other=await page.context().newPage();
+  // Exercise session comparison independently of broadcasts (e.g. restricted browser storage).
+  await other.addInitScript(()=>{
+    Object.defineProperty(window,'BroadcastChannel',{value:undefined});
+    Storage.prototype.setItem=()=>{throw new Error('storage blocked in this test window');};
+  });
   try {
     await other.goto('/portal/account');await other.getByRole('button',{name:'ออกจากระบบ',exact:true}).click();await expect(other).toHaveURL(/\/login$/);
     await login(other,'e2e-scope-other');
@@ -99,6 +124,26 @@ test('selector แบ่งหน้าเกิน100 และใช้ keyboa
   const next=page.getByRole('link',{name:'หน้าถัดไป',exact:true}); await next.focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('link',{name:/พื้นที่แบ่งหน้า/})).toHaveCount(1);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+for (const operation of ['read','export']) test(`หน้าต่างยัง visible ล้างบัญชีเก่าและไม่รับ ${operation} ที่ตอบช้าหลัง logout อีกหน้าต่าง`,async ({page})=>{
+  if(operation==='export') await page.context().addInitScript(()=>{Object.defineProperty(window,'BroadcastChannel',{value:undefined});});
+  await login(page,`e2e-scope-window-${operation}`,true);await page.goto(path(a));
+  await expect(page.getByText('ข้อมูลจำกัด A',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.hidden)).toBe(false);
+  const pattern=operation==='read'?`**/sites/${a}/scope-probe-records?*`:'**/export-simulation';
+  let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});let arrived=false;
+  await page.route(pattern,async route=>{const response=await route.fetch();arrived=true;await gate;await route.fulfill({response}).catch(()=>{});});
+  const other=await page.context().newPage();
+  try {
+    await page.getByRole('button',{name:operation==='read'?'โหลดข้อมูลใหม่':'ส่งออกข้อมูลทดสอบ',exact:true}).click();await expect.poll(()=>arrived).toBe(true);
+    await other.goto('/portal/account');await other.getByRole('button',{name:'ออกจากระบบ',exact:true}).click();await expect(other).toHaveURL(/\/login$/);
+    // No visibility/pagehide event is sent to the original page: both windows remain visible.
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+    release();await login(other,'e2e-scope-other');
+    await page.goto(path(b));await expect(page.getByText('ข้อมูลทดสอบเฉพาะ B',{exact:true})).toBeVisible();
+    await expect(page.getByText('ข้อมูลจำกัด A',{exact:true})).toHaveCount(0);await expect(page.getByLabel('ผลส่งออก')).toHaveCount(0);
+  } finally {release();await page.unroute(pattern);await other.close();}
 });
 test('ผู้ดูแลไม่มี business bypass และจัดการโครงสร้างผ่าน form ที่มี version',async ({page,browser})=>{
   await login(page,'e2e-scope-admin',true); await page.goto('/portal/scopes'); await expect(page.getByText('ยังไม่ได้รับมอบหมายพื้นที่',{exact:true})).toBeVisible();
@@ -115,13 +160,25 @@ test('ผู้ดูแลไม่มี business bypass และจัดก
   const updated=page.getByRole('listitem').filter({hasText:'UI_NEW · พื้นที่แก้ไขผ่านหน้าเว็บ'});
   await expect(updated).toContainText('ปิดใช้งาน · เวอร์ชัน 2');
   const noJs=await browser.newContext({javaScriptEnabled:false,storageState:await page.context().storageState()});
-  try {const staticPage=await noJs.newPage();await staticPage.goto('/portal/admin/organization');await expect(staticPage.getByRole('button',{name:'สร้างโครงสร้าง',exact:true})).toBeDisabled();} finally {await noJs.close();}
+  try {const staticPage=await noJs.newPage();await staticPage.goto('/portal/admin/organization');await expect(staticPage.getByRole('button',{name:'สร้างโครงสร้าง',exact:true,includeHidden:true})).toBeDisabled();} finally {await noJs.close();}
 });
 test('assignment manager ใช้ options โดยไม่ต้อง users:manage และ self-grant ถูกปฏิเสธจริง',async ({page})=>{
   await login(page,'e2e-scope-manager',true); await page.goto('/portal/admin/assignments');
   await expect(page.getByRole('option',{name:'บัญชีของฉัน (ห้ามมอบหมายให้ตนเอง)'})).toBeDisabled();
   await page.getByLabel('ผู้ใช้',{exact:true}).selectOption({label:'e2e-scope-target'});
-  await page.getByLabel('Workspace UUID').fill(w); await page.getByLabel('Project UUID').fill(p); await page.getByLabel('Site UUID').fill(a);
+  await page.getByLabel('Workspace UUID').fill(w);
+  await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+  await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByLabel('Workspace UUID')).toHaveValue(w);
+  await expect(page.getByLabel('ผู้ใช้',{exact:true}).locator('option:checked')).toHaveText('e2e-scope-target');
+  await page.route('**/api/v1/auth/session',route=>route.fulfill({status:503,json:{}}));
+  await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));});
+  await expect(page.getByRole('alert').filter({hasText:'ข้อมูลถูกซ่อนไว้'})).toBeVisible();
+  await expect(page.getByLabel('Workspace UUID')).not.toBeVisible();await expect(page).toHaveURL(/\/portal\/admin\/assignments$/);
+  await page.unroute('**/api/v1/auth/session');await page.getByRole('button',{name:'ตรวจสอบอีกครั้ง'}).click();
+  await expect(page.getByLabel('Workspace UUID')).toBeVisible();await expect(page.getByLabel('Workspace UUID')).toHaveValue(w);
+  await page.getByLabel('Project UUID').fill(p); await page.getByLabel('Site UUID').fill(a);
   await page.getByLabel('บทบาท',{exact:true}).selectOption({label:'บทบาททดสอบ พนักงาน'});
   await page.getByLabel('เหตุผล',{exact:true}).fill('ทดสอบผ่านหน้าจอ');
   await page.getByRole('button',{name:'มอบหมายสิทธิ์',exact:true}).click(); await expect(page.getByRole('status')).toContainText('session');
@@ -170,7 +227,7 @@ test('record POST/PATCH ใช้ version จริง ป้องกันส�
   await login(page,'e2e-scope-staff');await page.goto(path(a));
   const api=`/api/v1/workspaces/${w}/projects/${p}/sites/${a}/scope-probe-records`;
   const noJs=await browser.newContext({javaScriptEnabled:false,storageState:await page.context().storageState()});
-  try {const staticPage=await noJs.newPage();await staticPage.goto(path(a));await expect(staticPage.getByRole('button',{name:'สร้างรายการ',exact:true})).toBeDisabled();} finally {await noJs.close();}
+  try {const staticPage=await noJs.newPage();await staticPage.goto(path(a));await expect(staticPage.getByRole('button',{name:'สร้างรายการ',exact:true,includeHidden:true})).toBeDisabled();} finally {await noJs.close();}
   let count=0;let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});
   await page.route(`**${api}`,async route=>{count++;await gate;await route.continue();});
   try {

@@ -35,7 +35,7 @@ export default function ScopedRecordPanel({ choice }: { choice: ScopeChoice }) {
         <button className="auth-button" type="submit">{editing?'บันทึกการแก้ไข':'สร้างรายการ'}</button>{editing && <button type="button" className="ml-4 underline" onClick={clear}>ยกเลิกแก้ไข</button>}
       </fieldset>
     </form>}
-    {choice.capabilities.includes('scope-probe:export') && <form onSubmit={event=>{event.preventDefault();setExported(null);setStatus('');void run(path+'/export-simulation',{createdFrom:from||null,createdTo:to||null},async response=>{const data=await response.json();setExported(data.items);setStatus(`ส่งออก ${data.rowCount} รายการ`);});}}>
+    {choice.capabilities.includes('scope-probe:export') && <form onSubmit={event=>{event.preventDefault();setExported(null);setStatus('');void run(path+'/export-simulation',{createdFrom:from||null,createdTo:to||null},async (response,isCurrent)=>{const data=await response.json();if(!isCurrent())return;setExported(data.items);setStatus(`ส่งออก ${data.rowCount} รายการ`);});}}>
       <fieldset disabled={busy} className="space-y-4"><legend className="font-semibold">ส่งออก JSON ทดสอบ สูงสุด 100 รายการ (ต้องมี MFA ล่าสุด)</legend>
         <label className="block">ตั้งแต่เวลา UTC<input className="auth-input" placeholder="2026-09-24T00:00:00Z" value={from} onChange={e=>setFrom(e.target.value)}/></label>
         <label className="block">ก่อนเวลา UTC<input className="auth-input" placeholder="2026-09-25T00:00:00Z" value={to} onChange={e=>setTo(e.target.value)}/></label>

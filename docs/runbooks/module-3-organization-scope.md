@@ -23,7 +23,7 @@ API ไม่ migrate ตอน start และไม่เปลี่ยน sc
 
 ผู้มี `scope-assignments:manage` + recent MFA มอบหมายได้เฉพาะ **ผู้อื่น**: grant/replace/revoke ของตัวเองถูกปฏิเสธทุกเส้นทาง จึงให้ B มอบหมาย business role แก่ A และกลับกันเมื่อมีเหตุผลที่อนุมัติ ไม่มีทางลัด self-grant และไม่มีระบบป้องกันผู้ดูแลสองคนสมคบกันแทน governance ขององค์กร
 
-Role grants ใช้ Permissions/Role API เดิม (`GET /api/v1/permissions`, `PUT /api/v1/roles/{id}/permissions` เป็นการแทนรายการทั้งชุด) แยก system/business domain: global session ไม่รวม business capabilities; scoped role ไม่ทำให้ผ่าน control plane ห้ามนำ role class `system-administration` มาเป็น assignment ใช้ business role class ที่องค์กรอนุมัติ เช่น Staff/Approver การมี scoped privileged role บังคับ MFA ใน login/session/forced-change/recovery แม้ไม่มี global privileged role
+Role grants ใช้ Permissions/Role API เดิม (`GET /api/v1/permissions`, `PUT /api/v1/roles/{id}/permissions` เป็นการแทนรายการทั้งชุด) แยก system/business domain: global session ไม่รวม business capabilities; scoped role ไม่ทำให้ผ่าน control plane ห้ามนำ role class `system-administration` มาเป็น assignment ใช้ business role class ที่องค์กรอนุมัติ เช่น `staff` (Staff) หรือ `approval` (Approver) การมี scoped privileged role บังคับ MFA ใน login/session/forced-change/recovery แม้ไม่มี global privileged role
 
 อย่าแจก `users:manage` หรือ `roles:read` เพิ่มเพียงเพื่อใช้หน้า assignment: options endpoints ให้ข้อมูลขั้นต่ำภายใต้ `scope-assignments:manage` อยู่แล้ว
 
@@ -54,7 +54,7 @@ PATCH collection ต่อ `/{id}` ส่ง `{ "name": "ชื่อใหม�
 | POST `/api/v1/scope-assignments/{id}/replace` | `{scope,roleId,expectedVersion,reason}` เจ้าของเดิมเปลี่ยนไม่ได้ |
 | POST `/api/v1/scope-assignments/{id}/revoke` | `{expectedVersion,reason}` |
 
-ทุก route ต้อง system `scope-assignments:manage` และ recent MFA; POST ต้อง CSRF หน้า `/portal/admin/scope-assignments` แสดงชื่อบทบาทและแยกปุ่มถอนเมื่อคนเดียวมีหลาย role ในพื้นที่เดียวกัน
+ทุก route ต้อง system `scope-assignments:manage` และ recent MFA; POST ต้อง CSRF หน้า `/portal/admin/assignments` แสดงชื่อบทบาทและแยกปุ่มถอนเมื่อคนเดียวมีหลาย role ในพื้นที่เดียวกัน
 
 เปลี่ยนจริงจะเพิ่ม security version/ถอน sessions ของผู้ได้รับผล พร้อม assignment history และ audit ใน transaction เดียว Replace revoke แถวเก่าและสร้างแถวใหม่ ไม่เขียนทับประวัติ; replaceที่ค่าเดิมเป็น no-op ไม่ถอน session ให้โหลดข้อมูลล่าสุดก่อนทำรายการ การ login ใหม่ไม่ทำให้ assignment ที่ revoked กลับมา
 
@@ -72,7 +72,11 @@ Technical records อยู่ที่ `/api/v1/workspaces/{workspaceId}[/proje
 - Export ต้อง export + recent MFA ไม่บังคับ read แต่ restricted visibility ยังแยก ส่ง JSONหลัง audit commit ไม่มีการสร้างไฟล์ จำกัด100 ถ้าเกินตอบ400ไม่ตัดเงียบ ให้ลดช่วง UTC `createdFrom` รวมขอบต้น / `createdTo` ไม่รวมขอบท้าย
 - Production API ไม่ map probesและไม่ประกาศใน OpenAPI ต้องไม่ตั้ง server fixture flag `TPR10_SCOPE_TEST_UI` เป็น true ใน deployment จริง การทดสอบ Next production build กับ API Testing ไม่ใช่ API Production; มีการทดสอบ boundary ทั้งสองฝั่งแยกกัน
 
-ทุก response ส่วน private ใช้ no-store ไม่ใส่ restricted payload ใน localStorage/log หน้าเปลี่ยน scopeใช้ full navigation ยกเลิก requestเก่าและล้างข้อมูลก่อนผลใหม่; กลับจาก history/แท็บหรือเปลี่ยนบัญชีต้องตรวจใหม่ Browser testsใช้ Firefoxจริงร่วมกับ controlled visibility events ไม่รับรองทุก OS/browser/BFCache
+ทุก response ส่วน private ใช้ no-store ไม่ใส่ restricted payload ใน localStorage/log หน้าเปลี่ยน scopeใช้ full navigation ยกเลิก requestเก่าและล้างข้อมูลก่อนผลใหม่ การเปลี่ยนบัญชีที่สำเร็จผ่านUIแจ้งหน้าต่างอื่นด้วย BroadcastChannel หรือ storage event ซึ่งส่งเพียงสัญญาณ/nonce ไม่ส่งidentity/token/ข้อมูลธุรกิจ หน้าต่างรับซ่อนและถอดprivate DOM ยกเลิกquery/mutationเก่า แล้วโหลดจากserverใหม่; abortไม่ใช่การย้อนรายการที่servercommitไปแล้ว
+
+เมื่อกลับเข้าแท็บ/หน้าต่าง จะซ่อนและปิดการโต้ตอบชั่วคราวแล้วตรวจ `/api/v1/auth/session` เทียบกับsessionที่SSRตรวจไว้ รักษาdraftเฉพาะในmemoryเมื่อactor/stage/permissions/MFAเดิมยังตรง ไม่reloadทิ้งทุกครั้ง หากเปลี่ยนหรือถูกถอนต้องโหลดใหม่/เข้าสู่ระบบใหม่ ถ้าบริการตรวจsessionล่มให้คงซ่อนข้อมูล ไม่แกล้งlogout และตรวจอีกครั้งเมื่อบริการกลับมา ไม่เก็บdraftลงpersistent storage
+
+หากbrowserปิดทั้งBroadcastChannelและstorage จะตรวจการเปลี่ยนบัญชีเมื่อกลับเข้าแท็บ/focusหรือโหลดหน้าใหม่ ไม่รับรองการแจ้งทันทีในหน้าต่างที่ไม่เคยกลับมาfocus; ไม่ใช่ระบบserver-pushตรวจทุกremote revocation การย้อนhistoryยังตรวจใหม่ Browser testsใช้Firefoxจริงร่วมกับcontrolled visibility events ไม่รับรองทุกOS/browser/BFCache
 
 ## จัดการข้อผิดพลาดและ audit outage
 

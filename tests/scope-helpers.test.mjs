@@ -52,3 +52,29 @@ test('authMutation อนุญาตคู่ POST/PATCH เฉพาะ routes
     assert.equal((await authMutation('/api/v1/scope-assignments',{})).status,503); assert.equal(calls,1);
   } finally {globalThis.fetch=original;}
 });
+
+test('ยกเลิกบัญชีระหว่างรับ CSRF แล้วต้องไม่ส่ง mutation ด้วยบัญชีใหม่', async () => {
+  const { authMutation } = loadTs('lib/auth/auth-client.ts');
+  const original=globalThis.fetch;const controller=new AbortController();
+  let release;const gate=new Promise(resolve=>{release=resolve;});let mutations=0;
+  try {
+    globalThis.fetch=async (_url,init)=>{
+      if(init.method) {mutations++;return new Response(null,{status:204});}
+      await gate;return Response.json({token:'fixture-only'});
+    };
+    const request=authMutation('/api/v1/scope-assignments',{},'POST',controller.signal);
+    controller.abort();release();
+    await assert.rejects(request);assert.equal(mutations,0);
+  } finally {release();globalThis.fetch=original;}
+});
+
+test('auth change แจ้งช่องอื่นโดยไม่ยกเลิก login ของหน้าต่างผู้ส่งเอง', async () => {
+  const original=globalThis.window;globalThis.window=new EventTarget();
+  const {subscribeAuthChanges,publishAuthChange}=loadTs('lib/auth/auth-change.ts');
+  let own=0;const unsubscribe=subscribeAuthChanges(()=>{own++;});
+  const other=new BroadcastChannel('tpr10-auth-change');
+  try {
+    const received=new Promise(resolve=>{other.onmessage=event=>resolve(event.data);});
+    publishAuthChange();assert.equal(await received,'changed');assert.equal(own,0);
+  } finally {unsubscribe();other.close();if(original===undefined)delete globalThis.window;else globalThis.window=original;}
+});

@@ -142,6 +142,10 @@ test('returnTo ภายนอกและ malformed ไม่พาออกจ
       const page = await context.newPage();
       await login(page, 'e2e-staff', password, '/login?returnTo=' + encodeURIComponent(path));
       await expect(page).toHaveURL('https://localhost:4443/portal');
+      // URL changes before the navigation finishes. Do not destroy the Firefox context
+      // while the new document is still loading the shared development application chunk.
+      await expect(page.getByRole('heading', { name: 'ระบบปฏิบัติการภายใน', exact: true })).toBeVisible();
+      await page.waitForLoadState('load');
     } finally { await context.close(); }
   }
 });
