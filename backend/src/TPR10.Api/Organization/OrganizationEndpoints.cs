@@ -9,7 +9,7 @@ public static class OrganizationEndpoints
     public static IEndpointRouteBuilder MapOrganizationEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/organization/workspaces").RequireAuthorization("organization:manage")
-            .WithMetadata(new OrganizationBindingBoundary());
+            .WithMetadata(new OrganizationBindingBoundary(), new ScopeEndpointMetadata("system-management", "organization:manage", true, "none"));
         group.AddEndpointFilter(async (context, next) =>
         {
             // Scalar binding can set 400 before invoking filters with default arguments.

@@ -31,7 +31,8 @@ public static class ScopeProbeEndpoints
 
     private static void Add(RouteHandlerBuilder route, string capability, string level, bool list = false, bool create = false)
     {
-        route.RequireAuthorization().WithMetadata(new ScopeProbeBoundary("scope-probe:" + capability, level))
+        route.RequireAuthorization().WithMetadata(new ScopeProbeBoundary("scope-probe:" + capability, level),
+                new ScopeEndpointMetadata("exact-business", "scope-probe:" + capability, capability == "export", level))
             .Produces(create ? 201 : 200, capability == "export" ? typeof(ExportRecordPage<PublicRecordView>) : list ? typeof(Page<PublicRecordView>) : typeof(PublicRecordView))
             .AddEndpointFilter(async (context, next) =>
             {

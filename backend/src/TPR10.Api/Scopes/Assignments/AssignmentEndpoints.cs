@@ -9,7 +9,8 @@ public static class AssignmentEndpoints
 {
     public static IEndpointRouteBuilder MapAssignmentEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/api/v1/scope-assignments").RequireAuthorization("scope-assignments:manage").WithMetadata(new AssignmentBindingBoundary());
+        var group = endpoints.MapGroup("/api/v1/scope-assignments").RequireAuthorization("scope-assignments:manage")
+            .WithMetadata(new AssignmentBindingBoundary(), new ScopeEndpointMetadata("system-management", "scope-assignments:manage", true, "none"));
         group.AddEndpointFilter(async (context, next) =>
         {
             if (context.HttpContext.Response.StatusCode == 400) return Results.Empty;

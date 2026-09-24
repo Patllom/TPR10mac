@@ -20,8 +20,9 @@ public static class ScopeEndpoints
                     problem.ProblemDetails.Extensions["correlationId"] = context.HttpContext.RequestServices.GetRequiredService<ICorrelationContext>().CorrelationId.ToString("D");
                 return result;
             })
-            .WithMetadata(new IdentityProblemTypes(400, "urn:tpr10:scope-invalid"),
-                new IdentityProblemTypes(401, "urn:tpr10:session-required"), new IdentityProblemTypes(403, "urn:tpr10:scope-forbidden"));
+            .WithMetadata(new ScopeEndpointMetadata("scope-discovery", null, false, "none"), new IdentityProblemTypes(400, "urn:tpr10:scope-invalid"),
+                new IdentityProblemTypes(401, "urn:tpr10:session-required"), new IdentityProblemTypes(403, "urn:tpr10:scope-forbidden"),
+                new IdentityProblemTypes(503, "urn:tpr10:scope-unavailable-service"));
         return endpoints;
     }
     private static int Parse(string? input, int fallback) => input is null ? fallback

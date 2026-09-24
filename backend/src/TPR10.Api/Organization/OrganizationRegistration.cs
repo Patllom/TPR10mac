@@ -4,6 +4,7 @@ public static class OrganizationRegistration
 {
     public static IServiceCollection AddOrganizationScope(this IServiceCollection services)
     {
+        services.AddSingleton<Scopes.ScopeOpenApiTransformer>();
         services.AddScoped<OrganizationService>();
         services.AddScoped<Scopes.Assignments.AssignmentService>();
         services.AddScoped<Scopes.ScopeAccess>();
