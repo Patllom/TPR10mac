@@ -9,6 +9,8 @@ public static class OrganizationRegistration
         services.AddScoped<Scopes.ScopeAccess>();
         services.AddScoped<Scopes.ScopeOperation>();
         services.AddScoped<Scopes.ScopeDiscovery>();
+        services.AddScoped<Scopes.Probes.ScopeProbeRepository>();
+        services.AddScoped<Scopes.Probes.ScopeProbeService>();
         return services;
     }
 }

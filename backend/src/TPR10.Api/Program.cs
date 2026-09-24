@@ -16,6 +16,7 @@ using TPR10.Api.Identity.Reset;
 using TPR10.Api.Organization;
 using TPR10.Api.Scopes.Assignments;
 using TPR10.Api.Scopes;
+using TPR10.Api.Scopes.Probes;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -75,6 +76,7 @@ app.UseMiddleware<RestrictedSessionMiddleware>();
 app.UseMiddleware<SessionActivityMiddleware>();
 app.UseMiddleware<OrganizationBindingAuditMiddleware>();
 app.UseMiddleware<AssignmentBindingAuditMiddleware>();
+app.UseMiddleware<ScopeProbeBindingAuditMiddleware>();
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapRoleEndpoints();
@@ -90,5 +92,8 @@ app.MapHealthChecks("/api/health/ready", new HealthCheckOptions
         new { status = report.Status == HealthStatus.Healthy ? "ready" : "unavailable" })
 });
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+{
     app.MapTechnicalProbeEndpoints();
+    app.MapScopeProbeEndpoints();
+}
 app.Run();

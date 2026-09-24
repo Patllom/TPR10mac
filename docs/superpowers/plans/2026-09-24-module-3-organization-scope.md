@@ -386,7 +386,7 @@ public sealed record UpdateScopeRecord(string Note, JsonElement RestrictedNote, 
 // JsonElement.ValueKind: Undefined=ไม่ส่ง, Null=ล้าง, String=แทนค่า; ชนิดอื่นตอบ400
 ```
 
-- [ ] REDIDORด้วยSiteจริงและrecordคนละWorkspace:
+- [x] REDIDORด้วยSiteจริงและrecordคนละWorkspace:
 
 ```csharp
 [Fact]
@@ -406,8 +406,8 @@ public async Task Detail_cannot_load_foreign_record_by_known_id()
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeRecordTests` คาดpositivecontrol404; Map5methodsต่อscopelevelในDevelopment/Testingเท่านั้น (exportอยู่Task7) ไม่ใช้GUIDrouteconstraintที่คืน404แทนmalformedUUID400; bind Guid parametersให้frameworkvalidate400
-- [ ] Repositoryใช้exactpredicateก่อนFirst/Count/Skip/Takeและupdate ห้ามfallbackFind(id) unscoped:
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~ScopeRecordTests` คาดpositivecontrol404; Map4methodsต่อscopelevelในDevelopment/Testingเท่านั้น (แก้จำนวนตาม ruling: exportอยู่Task7) ไม่ใช้GUIDrouteconstraintที่คืน404แทนmalformedUUID400; bind Guid parametersให้frameworkvalidate400
+- [x] Repositoryใช้exactpredicateก่อนFirst/Count/Skip/Takeและupdate ห้ามfallbackFind(id) unscoped:
 
 ```csharp
 private IQueryable<ScopeProbeRecord> Query(ScopeContext c) => db.Set<ScopeProbeRecord>()
@@ -417,18 +417,20 @@ private IQueryable<ScopeProbeRecord> Query(ScopeContext c) => db.Set<ScopeProbeR
 var row = await Query(context).SingleOrDefaultAsync(r => r.Id == id, ct);
 ```
 
-- [ ] Createใช้scopeจากcontextและactorจากsession; rejectunknownbodyfieldsด้วยper-DTO JsonUnmappedMemberHandling.Disallow เพื่อactorId/workspaceIdไม่ถูกignoreแล้วทำให้clientเข้าใจผิด; ใช้ JsonElement แบบ non-nullable ตามสัญญาข้างต้น ไม่ต้องเพิ่ม converter; ทั้ง POST/PATCH ต้องตรวจสิทธิ์เมื่อ ValueKind ไม่ใช่ Undefined รวมการส่ง null และทดสอบ absent/null/string/number แยกกัน
-- [ ] Outputใช้DTOแยกPublicRecordView(Id,Note,Version,CreatedAtUtc,UpdatedAtUtc) และRestrictedRecordViewเพิ่มRestrictedNote; ไม่มีpermissionต้องไม่มีpropertyในJSONแม้ค่าnull ทุกmethodใช้selectorเดียวกัน; write-onlyresponseไม่คืนnote/restricteddataที่ไม่มีread ให้201/200 `{id,version}` พร้อมLocation
-- [ ] Paginationตรวจpositive/max100/offsetoverflow stableCreatedAtUtc+Id, countในscope; version409/auditvalidationก่อนchange; commitauditread/list/create/updateพร้อมrowcountและcontextactorrole ไม่มีbodyในmetadata
-- [ ] Testsเจาะnulltupleทั้ง3ระดับ, ProjectnotSite, Sitenotparent/sibling, newSite, globalAdminNoAssignment, fieldread/writeabsence/null, readonlycannotwrite, extrabodyfields400, duplicate/staleversion, auditfailure503rollbackrows/versions/session
-- [ ] RaceBarrierใช้DbCommandInterceptorในApiFactoryเฉพาะtestsจับคำสั่งadvisorylock7241002กับTaskCompletionSourceเพื่อpauseก่อนlock/หลังlock ไม่สร้างproductionHTTPbarrier ใช้สองcontexts/clients; กำหนดtimeout10sเฉพาะfail-safe ไม่ใช้Sleepเป็นorder assertion; revokecommitก่อนreleaseoperationได้401หรือ404ตามsessionrecheck ห้าม200 ส่วนoperationcommitก่อนrevokeได้200และคำขอถัดไป401
-- [ ] รันGREENและcommit:
+- [x] Createใช้scopeจากcontextและactorจากsession; rejectunknownbodyfieldsด้วยper-DTO JsonUnmappedMemberHandling.Disallow เพื่อactorId/workspaceIdไม่ถูกignoreแล้วทำให้clientเข้าใจผิด; ใช้ JsonElement แบบ non-nullable ตามสัญญาข้างต้น ไม่ต้องเพิ่ม converter; ทั้ง POST/PATCH ต้องตรวจสิทธิ์เมื่อ ValueKind ไม่ใช่ Undefined รวมการส่ง null และทดสอบ absent/null/string/number แยกกัน
+- [x] Outputใช้DTOแยกPublicRecordView(Id,Note,Version,CreatedAtUtc,UpdatedAtUtc) และRestrictedRecordViewเพิ่มRestrictedNote; ไม่มีpermissionต้องไม่มีpropertyในJSONแม้ค่าnull ทุกmethodใช้selectorเดียวกัน; write-onlyresponseไม่คืนnote/restricteddataที่ไม่มีread ให้201/200 `{id,version}` พร้อมLocation
+- [x] Paginationตรวจpositive/max100/offsetoverflow stableCreatedAtUtc+Id, countในscope; version409/auditvalidationก่อนchange; commitauditread/list/create/updateพร้อมrowcountและcontextactorrole ไม่มีbodyในmetadata
+- [x] Testsเจาะnulltupleทั้ง3ระดับ, ProjectnotSite, Sitenotparent/sibling, newSite, globalAdminNoAssignment, fieldread/writeabsence/null, readonlycannotwrite, extrabodyfields400, duplicate/staleversion, auditfailure503rollbackrows/versions/userSecurityVersion; sessionrows โดยตรงเป็น Minor ค้างตามรายงาน
+- [x] RaceBarrierใช้DbCommandInterceptorในApiFactoryเฉพาะtestsจับคำสั่งadvisorylock7241002กับTaskCompletionSourceเพื่อpauseก่อนlock/หลังlock ไม่สร้างproductionHTTPbarrier ใช้สองcontexts/clients; กำหนดtimeout10sเฉพาะfail-safe ไม่ใช้Sleepเป็นorder assertion; revokecommitก่อนreleaseoperationได้401หรือ404ตามsessionrecheck ห้าม200 ส่วนoperationcommitก่อนrevokeได้200และคำขอถัดไป401; การยืนยัน revoker contention เพิ่มเติมเป็น Minor ค้าง
+- [x] รันGREENและcommit:
 
 ```bash
 dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~ScopeRecord|FullyQualifiedName~ScopeRace'
 git add backend/src/TPR10.Api/Scopes/Probes backend/src/TPR10.Api/Organization/OrganizationRegistration.cs backend/src/TPR10.Api/Program.cs backend/tests/TPR10.Api.IntegrationTests/ScopeRecordTests.cs backend/tests/TPR10.Api.IntegrationTests/ScopeRecordSafetyTests.cs backend/tests/TPR10.Api.IntegrationTests/ScopeRaceTests.cs backend/tests/TPR10.Api.IntegrationTests/ScopeRaceBarrier.cs backend/tests/TPR10.Api.IntegrationTests/ApiFactory.cs
 git commit -m "feat: add scope-bound records and field visibility enforcement"
 ```
+
+ผล Task6: focused126/126, backend706/706, frontend28/28, E2E13/13, Build/Lint/formatผ่าน; reviewไม่พบCritical/Important มีMinor2ข้อ รายงานภาษาไทย `docs/architecture/module-3-task-6.md` ระบุrulingsและข้อจำกัดทั้งหมด. Constructor CreateScopeRecord ของจริงไม่ใช้ optional `JsonElement = default` เพราะ OpenAPI schema exporter500 แต่HTTP absenceยังเป็นUndefinedและมีtestsยืนยัน. ยังไม่push/mergeและไม่เริ่มTask7อัตโนมัติ
 
 ## Task 7: Export-simulation และ acceptance ของ transaction
 

@@ -9,7 +9,7 @@ public sealed class AuditEventWriter(Tpr10DbContext db, ICorrelationContext corr
     public Task WriteAsync(SecurityAuditRequest request, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        string[] allowed = ["outcome", "scope", "target-type", "changed-fields", "acting-roles", "actor-type", "reason", "evidence-reference", "source", "capability", "scope-validation", "assignment-id"];
+        string[] allowed = ["outcome", "scope", "target-type", "changed-fields", "acting-roles", "actor-type", "reason", "evidence-reference", "source", "capability", "scope-validation", "assignment-id", "row-count"];
         if (string.IsNullOrWhiteSpace(request.Action) || request.Action.Length > 120
             || string.IsNullOrWhiteSpace(request.TargetType) || request.TargetType.Length > 120
             || request.Outcome is not ("success" or "denied" or "failure")

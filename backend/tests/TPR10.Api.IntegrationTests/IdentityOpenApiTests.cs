@@ -117,7 +117,8 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
         var actual = root.GetProperty("paths").EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/", StringComparison.Ordinal))
             .SelectMany(p => p.Value.EnumerateObject().Where(m => new[] { "get", "post", "put", "patch", "delete", "head", "options" }.Contains(m.Name))
                 .Select(m => $"{m.Name} {p.Name}")).Order().ToArray();
-        var expected = Contracts.Select(row => $"{row[1]} {row[0]}").Order().ToArray();
+        var expected = Contracts.Select(row => $"{row[1]} {row[0]}")
+            .Concat(ScopeRecordOpenApiTests.Contracts().Select(row => $"{row[1]} {row[0]}")).Order().ToArray();
         Assert.Equal(expected, actual);
         var cookie = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("SessionCookie");
         Assert.Equal("apiKey", cookie.GetProperty("type").GetString());
