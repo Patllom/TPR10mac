@@ -19,6 +19,7 @@ using TPR10.Api.Scopes;
 using TPR10.Api.Scopes.Probes;
 using TPR10.Api.Attendance;
 using TPR10.Api.Attendance.Directory;
+using TPR10.Api.Attendance.Storage;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -87,6 +88,7 @@ app.UseMiddleware<OrganizationBindingAuditMiddleware>();
 app.UseMiddleware<AssignmentBindingAuditMiddleware>();
 app.UseMiddleware<ScopeProbeBindingAuditMiddleware>();
 app.UseMiddleware<DirectoryBindingAuditMiddleware>();
+app.UseMiddleware<StorageBindingAuditMiddleware>();
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapRoleEndpoints();
@@ -95,6 +97,7 @@ app.MapAssignmentEndpoints();
 app.MapScopeEndpoints();
 app.MapAttendanceDirectory();
 app.MapAttendanceAccess();
+app.MapAttendanceStorage();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");

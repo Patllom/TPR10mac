@@ -3,6 +3,7 @@ using TPR10.Api.Attendance.Access;
 using TPR10.Api.Data;
 using TPR10.Api.Scopes;
 using TPR10.Api.Auditing;
+using TPR10.Api.Attendance.Storage;
 
 namespace TPR10.Api.Attendance;
 
@@ -11,6 +12,11 @@ public static class AttendanceRegistration
     public static IServiceCollection AddAttendance(this IServiceCollection services)
     {
         services.AddScoped<DirectoryService>();
+        services.AddOptions<StorageOptions>().BindConfiguration("AttendanceStorage");
+        services.AddSingleton<StorageRuntime>();
+        services.AddScoped<StorageRegistry>();
+        services.AddScoped<StorageHealthScanner>();
+        services.AddHostedService<StorageHealthWorker>();
         services.AddSingleton<AttendanceOpenApiTransformer>();
         services.AddScoped<Access.IAttendanceAccess, Access.AttendanceAccess>();
         services.AddScoped<Access.IAttendanceRouteResolver, Access.AttendanceRouteResolver>();

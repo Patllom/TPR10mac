@@ -236,7 +236,7 @@ public async Task Unsafe_key_cannot_escape_configured_root(string key)
 
 **Interfaces:** `PinAsync(Guid operationId,EmploymentSnapshot subject,StampRequest stamp,CancellationToken ct):Task<EvidenceReservation>` บันทึกreservationและowner/snapshot/stampก่อนI/O ตรวจsubject.EmployeeIdเป็นactorปัจจุบันและsnapshotถูกต้อง แต่ไม่บังคับstorage-manageกับพนักงานผู้ลงเวลา; 6Cเป็นผู้ตรวจchallenge/exactSiteก่อนเรียก internal service นี้ ไม่เปิดHTTPpin endpoint; registryรับHTTP DTOตามตาราง; `StorageRegistry.Capability = "attendance:storage-manage"`; probe/requestreturnเป็นIResultสไตล์DirectoryService ไม่มีระบบสิทธิ์ใหม่
 
-- [ ] RED usingIdentityTestDriver+PostgresFixture: anonymous401/staff403/adminไม่grant403/MFAexpired403, forgedroot400หลังauth, aliasunknown404, duplicate409, switchexpectedVersionเก่า409, readinessหมดอายุ409, probeล้ม503, simultaneousswitchผู้ชนะหนึ่ง
+- [x] RED usingIdentityTestDriver+PostgresFixture: anonymous401/staff403/adminไม่grant403/MFAexpired403, forgedroot400หลังauth, aliasunknown404, duplicate409, switchexpectedVersionเก่า409, readinessหมดอายุ409, probeล้ม503, simultaneousswitchผู้ชนะหนึ่ง
 
 ```csharp
 using var response = await d.PostAsync("/api/v1/attendance/storage/write-target",
@@ -245,11 +245,17 @@ Assert.Equal(HttpStatusCode.Conflict, response.StatusCode); // จัดfixture 
 // ตรวจauditและtargetversionด้วยdbใหม่ ไม่อ่านtrackedentityเก่า
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter "FullyQualifiedName~StorageRegistryTests|FullyQualifiedName~StorageApiTests"`
-- [ ] auth/auditใช้patternDirectoryService: `ScopeOperation.BeginAsync` lock7241002→ตรวจidentity/capability/recentMFA→version/alias→audit+commit; probefilesystemทำนอกlock ก่อนกลับมาrevalidate actor/version/mountfingerprint; auditfailไม่เปลี่ยนtarget
-- [ ] Pin targetในshorttransactionเพิ่มreservation(operationIdunique) ก่อนrelease; switchใหม่ไม่เปลี่ยนreservationเดิม; ไม่fallbackwritingwhenoutage; ขณะmigrationซีลsourceAcceptWrites=falseและตรวจsourceไม่ใช่active target ต้องswitchก่อนเริ่ม
-- [ ] healthworkerใช้readinessและmanifestscanboundedbatch100 รักษาlastChecked/unknown/errorcode แจ้งในAPI/Portalไม่ส่งemail; ไม่มีbytes/pathส่วนตัวในhealth ผลreadonlyไม่ให้สิทธิ์ดูรูป
-- [ ] focusedtestsผ่านรวมrevokeระหว่างprobe, rootconfigเปลี่ยนภายใต้aliasเดิมทำให้503; commit `feat: manage versioned attendance storage targets`
+- [x] รัน `dotnet test backend/TPR10.sln --filter "FullyQualifiedName~StorageRegistryTests|FullyQualifiedName~StorageApiTests"`
+- [x] auth/auditใช้patternDirectoryService: `ScopeOperation.BeginAsync` lock7241002→ตรวจidentity/capability/recentMFA→version/alias→audit+commit; probefilesystemทำนอกlock ก่อนกลับมาrevalidate actor/version/mountfingerprint; auditfailไม่เปลี่ยนtarget
+- [x] Pin targetในshorttransactionเพิ่มreservation(operationIdunique) ก่อนrelease; switchใหม่ไม่เปลี่ยนreservationเดิม; ไม่fallbackwritingwhenoutage; ปฏิเสธpinใหม่เมื่อAcceptWrites=false — การซีลsourceพร้อมตรวจไม่ใช่active target/job/auditทำในTask6transactionเดียวตามrulingด้านล่าง
+- [x] healthworkerใช้readinessและmanifestscanboundedbatch100 รักษาlastChecked/unknown/errorcode ผ่านAPIสำหรับPortalในTask7 ไม่ส่งemail; ไม่มีbytes/pathส่วนตัวในhealth ผลreadonlyไม่ให้สิทธิ์ดูรูป
+- [x] focusedtestsผ่านรวมrevokeระหว่างprobe, rootconfigเปลี่ยนภายใต้aliasเดิมทำให้503; commit `feat: manage versioned attendance storage targets`
+
+**ผล Task4:** focused128/128, backendเต็ม1,174/1,174, frontend40/40, Build/format/ESLintผ่านหลังแก้ Review2Important1Minorครบ ดู [รายงาน Task4](../../architecture/module-6b-task4-storage-registry.md)
+
+**Ruling จาก Review:** แยกreadinessrefresh30วินาทีออกจากmanifestscan60วินาที (TTLยัง60) จำกัดเวลาอ่านmanifest20วินาทีต่อtickและbatch100 มีcursor/round-robin; ผลintegrityแยกจากreceiptและคงผลรอบครบล่าสุดระหว่างรอบใหม่ ไม่ล้างwarningเมื่อกดprobe ไม่มีการลบ/reconcile รูป
+
+**ขอบเขตที่ยังไม่ขยาย:** ไม่เปิดSealAPIแยกก่อนTask6ซึ่งต้องทำatomicกับjob/audit; pinเดิมretryคืนidentityเดิมแม้sourceซีลแล้วเพื่อlatearrival แต่consumerTask5ต้องตรวจstateก่อนเขียน/prepare; PortalTask7/NASจริงTask8ยังไม่ทำ รับรองsingleAPIprocessเท่านั้น ยังไม่รับรองmulti-replica
 
 ## Task 5: เตรียมหลักฐานและอ่านรูปตามสิทธิ์จริง
 
