@@ -11,7 +11,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 export async function runHttpsSmoke({ port = '4001', spec = 'tests/e2e/identity.spec.ts', e2e = false } = {}) {
 assert.ok(['4000', '4001'].includes(port), 'ใช้ port 4000 หรือ 4001 เท่านั้น');
-assert.ok(['tests/e2e/identity.spec.ts', 'tests/e2e/scopes.spec.ts', 'tests/e2e/scopes-boundary.spec.ts', 'tests/e2e/attendance-directory.spec.ts'].includes(spec), 'spec ต้องอยู่ใน allowlist');
+assert.ok(['tests/e2e/identity.spec.ts', 'tests/e2e/scopes.spec.ts', 'tests/e2e/scopes-boundary.spec.ts', 'tests/e2e/attendance-directory.spec.ts', 'tests/e2e/attendance-storage.spec.ts'].includes(spec), 'spec ต้องอยู่ใน allowlist');
 const root = mkdtempSync(join(tmpdir(), 'tpr10-tls-smoke-'));
 const suffix = root.split('-').at(-1).toLowerCase();
 const containers = [];
@@ -79,7 +79,13 @@ try {
         INSERT INTO user_roles(user_id,role_id) VALUES ('${user}','${role}');
       ` });
     }
-    if (spec !== 'tests/e2e/identity.spec.ts') {
+    if (spec === 'tests/e2e/attendance-storage.spec.ts') {
+      run('docker', ['exec', '-i', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], { input: `
+        UPDATE roles SET role_class='system-administration' WHERE name='e2e-other';
+        INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.name='e2e-other' AND p.capability='attendance:storage-manage';
+      ` });
+    }
+    if (spec !== 'tests/e2e/identity.spec.ts' && spec !== 'tests/e2e/attendance-storage.spec.ts') {
       const sql = run('dotnet', [join(root, 'fixture', 'TPR10.E2E.Fixture.dll'), spec === 'tests/e2e/attendance-directory.spec.ts' ? '--attendance-sql' : '--scope-sql']);
       run('docker', ['exec', '-i', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], { input: sql });
     }

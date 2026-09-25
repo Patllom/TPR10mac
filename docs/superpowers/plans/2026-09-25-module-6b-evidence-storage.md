@@ -10,7 +10,7 @@
 
 **Spec:** [แบบ Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R02/R03/R13/R14/R15 และข้อ8–10,13–15; [แผนส่งมอบรวม](2026-09-25-module-6-delivery-map.md)
 
-สถานะ: **Tasks 1–6 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 7–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md), [รายงาน Task 4](../../architecture/module-6b-task4-storage-registry.md), [รายงาน Task 5](../../architecture/module-6b-task5-evidence-publication.md), [รายงาน Task 6](../../architecture/module-6b-task6-evidence-migration.md)
+สถานะ: **Tasks 1–7 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Task 8 ยังไม่เริ่ม** — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md), [รายงาน Task 4](../../architecture/module-6b-task4-storage-registry.md), [รายงาน Task 5](../../architecture/module-6b-task5-evidence-publication.md), [รายงาน Task 6](../../architecture/module-6b-task6-evidence-migration.md), [รายงาน Task 7](../../architecture/module-6b-task7-storage-portal.md)
 
 ฐาน: PR #2 รวมแล้วบน GitHub เมื่อ2026-09-25T02:39:21Z; merge commit `27a184e44a78ab656fd6a618614c4eb13fe10c53` มีต้นไม้ไฟล์ตรงกับ6A `34db688` สาขาแผน `codex/module-6b-evidence-storage` สร้างจากฐานนี้ ไม่แก้ไฟล์ค้างใน checkout main เดิม
 
@@ -311,7 +311,7 @@ Assert.True(await db.Set<EvidenceLocation>().AnyAsync(x => x.EvidenceId == after
 
 **Interfaces:** clientส่งPOSTเฉพาะroutesตามตาราง ไม่รับURLอิสระ; parserรับStorageView/Target/Migration/Healthเท่านั้น failclosedเมื่อunknownvariant; hookqueryรักษาepoch/abort/account-changeเหมือนDirectory UI ไม่คัดลอกสิทธิ์จากUIมาแทนAPI
 
-- [ ] REDbrowsertests หน้าไม่ปรากฏสำหรับadminไม่มีcapability, กรอกrootไม่ได้, healthunknownไม่แสดงพร้อม, switch409โหลดversionใหม่, migrationมีprogress/resume,503ไม่logout, lateHRresponseหลังเปลี่ยนบัญชีไม่ขึ้นDOM; storage-managerดูรูปไม่ได้แม้รู้ID
+- [x] REDbrowsertests หน้าไม่ปรากฏสำหรับadminไม่มีcapability, กรอกrootไม่ได้, healthunknownไม่แสดงพร้อม, switch409โหลดversionใหม่, migrationมีprogress/resume,503ไม่logout, lateHRresponseหลังเปลี่ยนบัญชีไม่ขึ้นDOM; storage-managerดูรูปไม่ได้แม้รู้ID (สิทธิ์อ่านรูปตรวจด้วย EvidenceRead/Revocation API จริง; หน้า storage ไม่มีภาพ)
 
 ```ts
 await page.goto('/portal/admin/attendance-storage');
@@ -321,10 +321,10 @@ await expect(page.getByRole('button', { name: 'เปลี่ยนที่เ
 // fixtureปลายทางhealthunknown; ต้องไม่เปิดปุ่มก่อนprobeสำเร็จ
 ```
 
-- [ ] รันentrypointใหม่ขณะUIยังไม่มีเพื่อRED (ใช้พอร์ต4000/4001ตามรอบและขอหน้าต่างหยุดPreviewก่อนถ้าพอร์ตใช้แล้ว)
-- [ ] implementหน้าจากaliasdropdown, สถานะปลายทาง, health, คำเตือนรูปเก่ายังอยู่ที่เก่า, manifestcounts, ปุ่มprobe/switch/start/resumeพร้อมreasonและexpectedVersion ไม่แสดงthumbnailบนหน้าstorageadmin; ไม่มีปุ่มdelete/retire/rawpath
-- [ ] authMutationเพิ่มexactPOSTallowlistและtestrejectอื่น; loader/hookซ่อนข้อมูลระหว่างauthrecheck/logout/focus/accountchange และไม่แสดงร่างก่อนqueriesจำเป็นกลับมาครบ ใช้บทเรียนDirectoryForm ไม่ลดการป้องกัน503
-- [ ] entrypointคงfixedspec:
+- [x] รันentrypointใหม่ขณะUIยังไม่มีเพื่อRED (ใช้พอร์ต4000/4001ตามรอบและขอหน้าต่างหยุดPreviewก่อนถ้าพอร์ตใช้แล้ว)
+- [x] implementหน้าจากaliasdropdown, สถานะปลายทาง, health, คำเตือนรูปเก่ายังอยู่ที่เก่า, manifestcounts, ปุ่มprobe/switch/start/resumeพร้อมreasonและexpectedVersion ไม่แสดงthumbnailบนหน้าstorageadmin; ไม่มีปุ่มdelete/retire/rawpath
+- [x] authMutationเพิ่มexactPOSTallowlistและtestrejectอื่น; loader/hookซ่อนข้อมูลระหว่างauthrecheck/logout/focus/accountchange และไม่แสดงร่างก่อนqueriesจำเป็นกลับมาครบ ใช้บทเรียนDirectoryForm ไม่ลดการป้องกัน503
+- [x] entrypointคงfixedspec:
 
 ```js
 import assert from 'node:assert/strict';
@@ -333,7 +333,9 @@ assert.ok(process.argv.length <= 3, 'รับเฉพาะพอร์ต ไ
 await runHttpsSmoke({ port: process.argv[2] ?? '4001', spec: 'tests/e2e/attendance-storage.spec.ts', e2e: true });
 ```
 
-- [ ] OpenAPIassert14routesทีละoperation ทั้งdev/prod; schemaห้ามrootPath/GPS/rawimage; securitycookie/CSRF/MFA/permission/status/nocacheครบ ไม่มีupload/publishtestfixtureในprod; `npm test`, OpenAPIfocused และHTTPSstorageทั้ง4000/4001ผ่าน; commit `feat: add Thai storage administration portal`
+- [x] OpenAPIassert14routesทีละoperation ทั้งdev/prod; schemaห้ามrootPath/GPS/rawimage; securitycookie/CSRF/MFA/permission/status/nocacheครบ ไม่มีupload/publishtestfixtureในprod; `npm test`, OpenAPIfocused และHTTPSstorageทั้ง4000/4001ผ่าน; commit `feat: add Thai storage administration portal`
+
+ผล Task 7: frontend43/43, backend1,263/1,263, focused40/40, HTTPS dev3/prod3 และ Build/Lint/Format ผ่าน แก้ review การเลือก storage ข้ามหน้าและเพิ่มกรณีคำตอบค้างหลังสลับบัญชี เหลือ Minor ป้าย readiness ตามค่าที่โหลดมาแม้หมดอายุ (ปุ่มและ API ยังปฏิเสธถูกต้อง) Preview เดิมเปิดกลับแล้ว ยังไม่ push/merge หรือทดสอบ NAS จริง
 
 ## Task 8: ตรวจรับทั้งระยะ คู่มือกู้คืน และNASจริง
 

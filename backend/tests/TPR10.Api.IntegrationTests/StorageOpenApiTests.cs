@@ -42,11 +42,18 @@ public sealed class StorageOpenApiTests
             if (parameters.Any(p => p.GetProperty("name").GetString() == "limit")) Assert.Equal(100, op.GetProperty("x-tpr10-pagination").GetProperty("limitMaximum").GetInt32());
         }
         var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+        var allEvidenceStorageOperations = doc.RootElement.GetProperty("paths").EnumerateObject()
+            .Where(p => p.Name.StartsWith("/api/v1/attendance/storage/", StringComparison.Ordinal) || p.Name.StartsWith("/api/v1/attendance/evidence/", StringComparison.Ordinal))
+            .SelectMany(p => p.Value.EnumerateObject().Select(m => $"{m.Name} {p.Name}")).ToArray();
+        Assert.Equal(14, allEvidenceStorageOperations.Length);
+        Assert.Equal(ExpectedOperations().Concat(EvidenceOpenApiTests.ExpectedOperations()).Order(), allEvidenceStorageOperations.Order());
         foreach (var name in new[] { "RegisterStorage", "ProbeStorage", "SwitchWriteTarget", "StartMigration", "ResumeMigration" })
         {
             var schema = schemas.GetProperty(name); Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
             Assert.Equal(schema.GetProperty("properties").EnumerateObject().Select(x => x.Name).Order(), schema.GetProperty("required").EnumerateArray().Select(x => x.GetString()).Order());
             Assert.DoesNotContain("root", schema.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("gps", schema.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("rawImage", schema.ToString(), StringComparison.OrdinalIgnoreCase);
         }
     }
 }
