@@ -6,6 +6,8 @@
 
 ปิดการตรวจทั้งชุด: 2026-09-25 01:31:59 UTC (08:31:59 Asia/Bangkok) ไม่มีการเปลี่ยนโค้ดระหว่างรอบ backend สุดท้าย
 
+Commit ส่งมอบโค้ด Task6: `a5108e3` — `feat: add attendance directory portal and verified exit gate` (25ไฟล์) รายงานบรรทัดนี้เป็นการบันทึก SHA หลัง commit ไม่เปลี่ยนโค้ดที่ผ่านการตรวจ
+
 สาขา `codex/module-6a-directory-access` แยกจาก main ที่ `b8b9c0f` งาน Tasks 1–5 อยู่ใน commits `fc2c7b2`, `3927a3f`, `6a37bfa`, `1fc25bf`, `65605f2` ส่วน Task 6 ส่งมอบพร้อมรายงานฉบับนี้ ไม่มี push/merge/deploy ในงานนี้
 
 ## สิ่งที่ส่งมอบในขอบเขต 6A
