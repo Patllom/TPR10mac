@@ -10,7 +10,7 @@
 
 **Spec:** [แบบ Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R02/R03/R13/R14/R15 และข้อ8–10,13–15; [แผนส่งมอบรวม](2026-09-25-module-6-delivery-map.md)
 
-สถานะ: **รอผู้ใช้ตรวจอนุมัติแผน — ยังไม่เขียนโค้ด 6B** วันที่25กันยายน2026
+สถานะ: **Task 1 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 2–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md)
 
 ฐาน: PR #2 รวมแล้วบน GitHub เมื่อ2026-09-25T02:39:21Z; merge commit `27a184e44a78ab656fd6a618614c4eb13fe10c53` มีต้นไม้ไฟล์ตรงกับ6A `34db688` สาขาแผน `codex/module-6b-evidence-storage` สร้างจากฐานนี้ ไม่แก้ไฟล์ค้างใน checkout main เดิม
 
@@ -147,7 +147,7 @@ Range/conditional GETไม่เปิด ใช้200เต็มหรือ�
 
 **Interfaces:** ผลิตrecordsข้างต้นและentities EvidenceObject, EvidenceLocation, EvidenceBinding, StorageLocation, StorageWriteTarget, MigrationJob, MigrationItem ให้Tasks3–6ใช้ `db.Set<T>()` ทั้งหมด; ไม่มีfilesystem I/OในTaskนี้
 
-- [ ] เขียนREDในPostgresFixture: insertEvidenceObjectพร้อมsnapshot membershipปลอม/crossunitต้องถูกFKปฏิเสธ; สร้างbindingซ้ำevent/evidenceต้องunique violation; ห้ามแก้checksum/owner/stampของPublishedและห้ามDELETE; downgradeฐานที่มีหลักฐานต้องหยุดโดยไม่ถอนtriggerอื่น
+- [x] เขียนREDในPostgresFixture: insertEvidenceObjectพร้อมsnapshot membershipปลอม/crossunitต้องถูกFKปฏิเสธ; สร้างbindingซ้ำevent/evidenceต้องunique violation; ห้ามแก้checksum/owner/stampของPublishedและห้ามDELETE; downgradeฐานที่มีหลักฐานต้องหยุดโดยไม่ถอนtriggerอื่น
 
 ```csharp
 // ขั้นmigrationใช้SQLให้DBป้องกัน ไม่พึ่งvalidationในUI
@@ -161,11 +161,11 @@ model.Entity<EvidenceBinding>().HasIndex(x => x.EvidenceId).IsUnique();
 model.Entity<EvidenceBinding>().HasIndex(x => x.EventId).IsUnique();
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~EvidenceSchemaTests` ให้เห็นassertion/schemaที่ขาด ไม่ใช้missing SDKเป็นRED
-- [ ] เพิ่มentity: EvidenceObjectเก็บid,operation,owner,snapshotทั้ง5field,UTC/action,sha/length/dimensions/state/version; Locationเก็บid,evidence,storage,key,variant(full/thumbnail),sha/length/state/version; Bindingเก็บeventId/evidenceId/publishedUtc immutable โดย6Cต้องเพิ่มFKไปAttendanceEventเมื่อมีตาราง ไม่สร้างeventปลอมในproduction
-- [ ] StorageLocationเก็บalias/config fingerprint/version/kind/acceptWrites; targetเป็นsingletonversionเพิ่มต่อเนื่อง; rootและkind immutableเมื่อregister เปลี่ยนconfigใต้aliasเดิมให้failclosed; migrationitemunique(job,evidence,variant) เก็บexpected checksum, source/target IDs, attempt/lease/fencing version/error code ไม่มีrawexception
-- [ ] migrationใช้ON DELETE RESTRICT, partialuniqueหนึ่งActiveต่อevidence/variant, enumcheckและlength/dimensioncheck, publicationต้องครบfull+thumbnail ก่อนdowngradeถ้ามีobject/binding/jobให้ปฏิเสธทั้งmigrationtransaction ทดสอบemptydb up/down/up และpre6B grantsยังอยู่
-- [ ] รันfocusedอีกครั้งผ่าน แล้ว `dotnet format backend/TPR10.sln --verify-no-changes`; commit `feat: add immutable evidence and storage schema` เฉพาะไฟล์Taskนี้
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~EvidenceSchemaTests` ให้เห็นassertion/schemaที่ขาด ไม่ใช้missing SDKเป็นRED
+- [x] เพิ่มentity: EvidenceObjectเก็บid,operation,owner,snapshotทั้ง5field,UTC/action,sha/length/dimensions/state/version; Locationเก็บid,evidence,storage,key,variant(full/thumbnail),sha/length/state/version; Bindingเก็บeventId/evidenceId/publishedUtc immutable โดย6Cต้องเพิ่มFKไปAttendanceEventเมื่อมีตาราง ไม่สร้างeventปลอมในproduction
+- [x] StorageLocationเก็บalias/config fingerprint/version/kind/acceptWrites; targetเป็นsingletonversionเพิ่มต่อเนื่อง; rootและkind immutableเมื่อregister เปลี่ยนconfigใต้aliasเดิมให้failclosed; migrationitemunique(job,evidence,variant) เก็บexpected checksum, source/target IDs, attempt/lease/fencing version/error code ไม่มีrawexception
+- [x] migrationใช้ON DELETE RESTRICT, partialuniqueหนึ่งActiveต่อevidence/variant, enumcheckและlength/dimensioncheck, publicationต้องครบfull+thumbnail ก่อนdowngradeถ้ามีobject/binding/jobให้ปฏิเสธทั้งmigrationtransaction ทดสอบemptydb up/down/up และpre6B grantsยังอยู่
+- [x] รันfocusedอีกครั้งผ่าน แล้ว `dotnet format backend/TPR10.sln --verify-no-changes`; commit `feat: add immutable evidence and storage schema` เฉพาะไฟล์Taskนี้
 
 ## Task 2: ตรวจภาพและประทับเวลาไทยลงpixels
 

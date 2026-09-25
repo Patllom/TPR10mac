@@ -200,6 +200,9 @@ public sealed class AttendanceDirectorySchemaTests(PostgresFixture postgres)
     {
         await using var d = await IdentityTestDriver.CreateAsync(postgres.ConnectionString);
         await using var db = d.Database.CreateContext();
+        // ตรวจ rollback ของ 6A จากรุ่น 6A ไม่สมมติว่า migration ล่าสุดยังเป็น 6A เสมอ
+        await db.GetService<IMigrator>().MigrateAsync("20260924193737_ProtectAttendanceDirectoryHistory");
+        var migrationsBefore = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
         await IdentityCatalog.SeedAsync(db, d.Clock.GetUtcNow(), default);
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO role_permissions(role_id,permission_id) SELECT '10000000-0000-0000-0000-000000000003'::uuid,id FROM permissions WHERE capability={capability}");
@@ -208,7 +211,7 @@ public sealed class AttendanceDirectorySchemaTests(PostgresFixture postgres)
         Assert.Equal("P0001", error.SqlState);
         Assert.Contains("attendance", error.MessageText, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(before, await JsonRowsAsync(db, "role_permissions"));
-        Assert.Equal(db.Database.GetMigrations(), await db.Database.GetAppliedMigrationsAsync());
+        Assert.Equal(migrationsBefore, await db.Database.GetAppliedMigrationsAsync());
     }
 
     [Fact]
