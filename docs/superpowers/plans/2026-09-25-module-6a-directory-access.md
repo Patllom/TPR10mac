@@ -242,8 +242,8 @@ while (true) {
 
 **Interfaces:** `AttendanceGrantGuard.WouldElevateSelfAsync(Guid actorId, Guid targetRoleId, Guid[] proposedPermissionIds,CancellationToken ct):Task<bool>` และ `WouldAssignSelfAsync(Guid actorId,Guid targetUserId,Guid[] proposedRoleIds,CancellationToken ct):Task<bool>`; `DirectoryLifecycle.EndForUserAsync(Guid userId,Guid actorId,string reason,CancellationToken ct):Task<Guid[]>`, `EndForUnitAsync(Guid workspaceId,Guid? departmentId,Guid actorId,string reason,CancellationToken ct):Task<Guid[]>` คืนaffectedusers ไม่save/commit/revokeเอง callerowntransactionใช้lock7241002
 
-- [ ] เพิ่มHTTPREDผ่านrole APIsจริง: actorมีroles:manageและroleของตน POST/PUTgrantattendanceprivilegedcapให้roleนั้นต้อง403และgrantไม่เปลี่ยน อีกกรณีassignroleที่มีattendancecapให้ตัวเองผ่านuser updateต้อง403; ใช้IdentityTestDriver+RoleAuthorizationTests.AdminAsyncเดิมสำหรับMFAจริง ห้ามfixturefakeผ่านmutationที่กำลังตรวจ
-- [ ] Representative assertionในtestหลังsetupactor/roleโดยDBสำหรับเตรียมเท่านั้น:
+- [x] เพิ่มHTTPREDผ่านrole APIsจริง: actorมีroles:manageและroleของตน POST/PUTgrantattendanceprivilegedcapให้roleนั้นต้อง403และgrantไม่เปลี่ยน อีกกรณีassignroleที่มีattendancecapให้ตัวเองผ่านuser updateต้อง403; ใช้IdentityTestDriver+RoleAuthorizationTests.AdminAsyncเดิมสำหรับMFAจริง ห้ามfixturefakeผ่านmutationที่กำลังตรวจ
+- [x] Representative assertionในtestหลังsetupactor/roleโดยDBสำหรับเตรียมเท่านั้น:
 
 ```csharp
 using var request = IdentityTestDriver.Mutation(await IdentityTestDriver.TokenAsync(d.Client),
@@ -257,13 +257,13 @@ Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
 `actorRoleId` คือ role class `approval` ที่สร้างและผูกกับ actor ใน fixture แยกจาก system-administration role ที่ให้ `roles:manage`; `desiredPermissionIds` คือ grants เดิมของ approval role รวม attendance:hr-read ID15 สร้างทั้งสองค่าภายใน test case ก่อน snippet ต้องตรวจผ่าน DB ว่า grants และ SecurityVersion ไม่เปลี่ยน และมี denial audit กรณีนี้ต้องถูกปฏิเสธเพราะ self-grant ไม่ใช่เพราะ role class ไม่รองรับ เพิ่ม positive control ให้อีก operator ที่ไม่ได้ถือ role นี้มอบ grant เดียวกันสำเร็จ ห้ามใช้ mock status หรือข้อมูลบัญชีจริง
 
-- [ ] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceIdentityTests`; ExpectedFAIL403!=200/204 แล้ว implement guard บน RoleAdministration.GrantsAsync/AssignAsync และ `AccountProvisioning.UpdateAsync(Guid actorId, Guid userId, UpdateAccountRequest request, CancellationToken ct)` เส้นทาง RoleIds
-- [ ] Guardเทียบeffectiveattendancegrantsetของactorก่อน/หลัง ไม่denyการถอนสิทธิ์ของตน; denyเพิ่มcapใหม่หรือเพิ่มauthorityแก่roleที่actorได้รับอยู่ผ่านglobal/ScopeAssignment; rejectclassที่ไม่รองรับattendance domain; globalrecordcapไม่ผ่านSiteScopeAccess
-- [ ] เพิ่ม2systempoliciesdirectory/storageในIdentityRegistrationใช้PermissionRequirementRequireMfatrueเดิม; ไม่แก้PermissionHandler/SessionServiceให้flattenattendance domain
-- [ ] Globalapproval/accounting/financeclassมีMFAอยู่แล้ว ยืนยัน tests loginforcedchange/recoveryยังผ่าน และAttendanceAccessในTask5ต้องเช็คconfirmedfactor+recentMFAเองเมื่อใช้team/hrcap ไม่ให้staffroleที่แทรกDBผิดผ่าน
-- [ ] Lifecycleendmembership/reporting/HRที่เกี่ยวข้องแบบeffective-nowพร้อมaudit; callerรวมaffectedids distinctsortกับScopeAssignmentLifecycleเดิมก่อน `ISessionService.RevokeUserAsync` หนึ่งครั้งต่อคน ในAccountProvisioningdisableและOrganizationServicedeactivateWorkspace/Department; Departmentเดิมไม่ใช่ScopeKeyจึงbranchโดยkind ไม่cascadeSiteassignmentsผิดระดับ
-- [ ] เพิ่มRED→GREENสำหรับdisable→enableไม่คืนmembership/HR, deactivate→reactivateไม่คืนสิทธิ์, managerถูกdisableแล้วลูกทีมrouteหาย, auditfail rollbackทั้งdirectory/securityversion/session, grantroleเปลี่ยนsessionเก่าถอน, no-opไม่revoke; ทำbarrierหลังlockก่อนrecheckแล้วraceกับdisableให้ผลตามcommitorder
-- [ ] Run `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceIdentityTests|FullyQualifiedName~AttendanceDirectoryLifecycleTests|FullyQualifiedName~ScopedIdentityLifecycleTests|FullyQualifiedName~ScopedMfaTests'`; ExpectedPASS; Commit `feat: guard attendance grants and directory revocation`
+- [x] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceIdentityTests`; ExpectedFAIL403!=200/204 แล้ว implement guard บน RoleAdministration.GrantsAsync/AssignAsync และ `AccountProvisioning.UpdateAsync(Guid actorId, Guid userId, UpdateAccountRequest request, CancellationToken ct)` เส้นทาง RoleIds
+- [x] Guardเทียบeffectiveattendancegrantsetของactorก่อน/หลัง ไม่denyการถอนสิทธิ์ของตน; denyเพิ่มcapใหม่หรือเพิ่มauthorityแก่roleที่actorได้รับอยู่ผ่านglobal/ScopeAssignment; rejectclassที่ไม่รองรับattendance domain; globalrecordcapไม่ผ่านSiteScopeAccess
+- [x] เพิ่ม2systempoliciesdirectory/storageในIdentityRegistrationใช้PermissionRequirementRequireMfatrueเดิม; ไม่แก้PermissionHandler/SessionServiceให้flattenattendance domain
+- [x] Globalapproval/accounting/financeclassมีMFAอยู่แล้ว ยืนยัน tests loginforcedchange/recoveryยังผ่าน และAttendanceAccessในTask5ต้องเช็คconfirmedfactor+recentMFAเองเมื่อใช้team/hrcap ไม่ให้staffroleที่แทรกDBผิดผ่าน
+- [x] Lifecycleendmembership/reporting/HRที่เกี่ยวข้องแบบeffective-nowพร้อมaudit; callerรวมaffectedids distinctsortกับScopeAssignmentLifecycleเดิมก่อน `ISessionService.RevokeUserAsync` หนึ่งครั้งต่อคน ในAccountProvisioningdisableและOrganizationServicedeactivateWorkspace/Department; Departmentเดิมไม่ใช่ScopeKeyจึงbranchโดยkind ไม่cascadeSiteassignmentsผิดระดับ
+- [x] เพิ่มRED→GREENสำหรับdisable→enableไม่คืนmembership/HR, deactivate→reactivateไม่คืนสิทธิ์, managerถูกdisableแล้วลูกทีมrouteหาย, auditfail rollbackทั้งdirectory/securityversion/session, grantroleเปลี่ยนsessionเก่าถอน, no-opไม่revoke; ทำbarrierหลังlockก่อนrecheckแล้วraceกับdisableให้ผลตามcommitorder
+- [x] Run `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceIdentityTests|FullyQualifiedName~AttendanceDirectoryLifecycleTests|FullyQualifiedName~ScopedIdentityLifecycleTests|FullyQualifiedName~ScopedMfaTests'`; ExpectedPASS; Commit `feat: guard attendance grants and directory revocation`
 
 ## Task 4: Directory management API พร้อม version/audit
 
@@ -271,9 +271,9 @@ Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
 **Interfaces:** `DirectoryService.SetMembershipAsync(SetMembership,CancellationToken):Task<IResult>`, `SetReportingAsync(SetReportingLine,CancellationToken):Task<IResult>`, `GrantHrAsync(GrantHrAssignment,CancellationToken):Task<IResult>`, `EndMembershipAsync(Guid,EndDirectoryRow,CancellationToken):Task<IResult>`, `EndReportingAsync(Guid,EndDirectoryRow,CancellationToken):Task<IResult>`, `EndHrAsync(Guid,EndDirectoryRow,CancellationToken):Task<IResult>`; Listsแยก `ListMembershipsAsync(Guid? userId,Guid? workspaceId,Guid? departmentId,bool includeEnded,int page,int pageSize,CancellationToken)`, `ListReportingAsync(Guid? employeeUserId,bool includeEnded,int page,int pageSize,CancellationToken)`, `ListHrAsync(Guid? userId,Guid? workspaceId,Guid? departmentId,bool includeEnded,int page,int pageSize,CancellationToken)` ทั้งหมดTask<IResult>; options คือ `UserOptionsAsync(string prefix,int page,int pageSize,CancellationToken):Task<IResult>`, `WorkspaceOptionsAsync(string prefix,int page,int pageSize,CancellationToken):Task<IResult>`, `DepartmentOptionsAsync(Guid workspaceId,string prefix,int page,int pageSize,CancellationToken):Task<IResult>`
 
-- [ ] เพิ่ม boundary test เมื่อการแก้จริงเกิดใน instant เดียวกับ validFrom: ส่ง409โดยไม่แก้ข้อมูล ไม่สร้างช่วงว่างและไม่บวกเวลาเทียม; คำขอที่ไม่เปลี่ยนค่าให้คง no-op200 ไม่ revoke session
+- [x] เพิ่ม boundary test เมื่อการแก้จริงเกิดใน instant เดียวกับ validFrom: ส่ง409โดยไม่แก้ข้อมูล ไม่สร้างช่วงว่างและไม่บวกเวลาเทียม; คำขอที่ไม่เปลี่ยนค่าให้คง no-op200 ไม่ revoke session
 
-- [ ] HTTPRED enumerate12routesตามตารางก่อนimplement โดย anonymousต้อง401, normalstaff403, operatorwithoutrecentMFA403, forgedbodyunknownfield400, wrongparent404, missingcsrf403; route404ก่อนimplementถือREDของmissingrouteต้องยืนยันภายหลังว่าไม่ใช่testwrongURL
+- [x] HTTPRED enumerate12routesตามตารางก่อนimplement โดย anonymousต้อง401, normalstaff403, operatorwithoutrecentMFA403, forgedbodyunknownfield400, wrongparent404, missingcsrf403; route404ก่อนimplementถือREDของmissingrouteต้องยืนยันภายหลังว่าไม่ใช่testwrongURL
 
 ```csharp
 [Theory]
@@ -288,8 +288,8 @@ public async Task Anonymous_cannot_list_directory(string resource)
 }
 ```
 
-- [ ] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceDirectoryApiTests`; ExpectedRED thenwire registration/endpoints auth+CSRFตามexistingmiddleware ติดbindingboundaryแบบOrganizationเพื่อauditinvalidbodyโดยไม่logpayload
-- [ ] Implementservicewrapperตามลำดับนี้ในทุกmutation ไม่ให้endpointfilterเป็นsecurityauthorityเพียงชั้นเดียว:
+- [x] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceDirectoryApiTests`; ExpectedRED thenwire registration/endpoints auth+CSRFตามexistingmiddleware ติดbindingboundaryแบบOrganizationเพื่อauditinvalidbodyโดยไม่logpayload
+- [x] Implementservicewrapperตามลำดับนี้ในทุกmutation ไม่ให้endpointfilterเป็นsecurityauthorityเพียงชั้นเดียว:
 
 ```csharp
 await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -303,10 +303,10 @@ await tx.CommitAsync(ct);
 
 โค้ดระหว่างguardกับsaveต้องทำตามoperationตาราง: SetMembershipปิดoldline+oldmembershipและเพิ่มnew; SetReportingตรวจactiveemployee/supervisor/sameworkspace/cycleและปิดoldline; GrantHrตรวจtupledupและactiveunit; EndตรวจexpectedVersionและปิดrow ห้ามDELETE; statusตามสัญญา ไม่ใส่placeholdercallbacksข้ามvalidation
 
-- [ ] ก่อนdirectorymutationคำนวณread/approveauthorityของactorจากgraphทั้งก่อนและหลัง หากactorกลายเป็นหัวหน้าของผู้อื่นใหม่ หรือได้HRunitใหม่ให้403 แม้targetemployeeไม่ใช่actor; ห้ามเปลี่ยนmembershipของactorเองผ่านadminsurfaceนี้เพื่อย้ายscope ให้ผู้ดูแลอีกคนดำเนินการ พร้อมauditเหตุผล
-- [ ] ทุกผล200/201/204มี audit ใน transaction; revoke เฉพาะ affected users เมื่อข้อมูลเปลี่ยนจริง (no-op ไม่ revoke);409ไม่มีmutation; overlap/version constraint ส่ง409 ส่วน database unavailable/audit fault ส่ง503 ห้ามreturnlazyIQueryable/streamหลังcommit Listต้องprojectไม่มีsecret/filterก่อนcount/page ใช้stableorderid
-- [ ] เพิ่มtests grant/replace/end historycounts, no-op, exactpage100/prefix%literal, emptyGuid, actorforged, duplicate/versionraces, unauthorizedไม่มีrow, old/newmanagerrevoked, auditfailurebefore/afterSaveและdowntimeไม่returnsuccess; assertauditactor/target/reason/changedfieldsไม่มีPIIดิบ
-- [ ] Run `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceDirectoryApiTests|FullyQualifiedName~AttendanceDirectoryAtomicityTests'`; ExpectedPASS noSkipped; Commit `feat: add audited attendance directory administration`
+- [x] ก่อนdirectorymutationคำนวณread/approveauthorityของactorจากgraphทั้งก่อนและหลัง หากactorกลายเป็นหัวหน้าของผู้อื่นใหม่ หรือได้HRunitใหม่ให้403 แม้targetemployeeไม่ใช่actor; ห้ามเปลี่ยนmembershipของactorเองผ่านadminsurfaceนี้เพื่อย้ายscope ให้ผู้ดูแลอีกคนดำเนินการ พร้อมauditเหตุผล
+- [x] ทุกผล200/201/204มี audit ใน transaction; revoke เฉพาะ affected users เมื่อข้อมูลเปลี่ยนจริง (no-op ไม่ revoke);409ไม่มีmutation; overlap/version constraint ส่ง409 ส่วน database unavailable/audit fault ส่ง503 ห้ามreturnlazyIQueryable/streamหลังcommit Listต้องprojectไม่มีsecret/filterก่อนcount/page ใช้stableorderid
+- [x] เพิ่มtests grant/replace/end historycounts, no-op, exactpage100/prefix%literal, emptyGuid, actorforged, duplicate/versionraces, unauthorizedไม่มีrow, old/newmanagerrevoked, auditfailurebefore/afterSaveและdowntimeไม่returnsuccess; assertauditactor/target/reason/changedfieldsไม่มีPIIดิบ
+- [x] Run `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceDirectoryApiTests|FullyQualifiedName~AttendanceDirectoryAtomicityTests'`; ExpectedPASS noSkipped; Commit `feat: add audited attendance directory administration`
 
 ## Task 5: Read policy และเส้นทางอนุมัติสำหรับผู้ใช้จริง
 
@@ -314,7 +314,7 @@ await tx.CommitAsync(ct);
 
 **Interfaces:** ตรงsignatureในสัญญาร่วมทุกตัว callerถือtransaction+lock7241002; reuse `ScopeAccess.ValidateSessionAsync(bool,CancellationToken)` เพื่อยืนยันsessionโดยไม่เรียก `ScopeOperation.RunAsync` ซ้อนtransaction; Resolveอ่านsubjectsnapshotที่serverloadแล้ว ห้ามtrustinputจากbrowser
 
-- [ ] TestREDสร้างrealDB membership/line/HRและrealLogin sessionsด้วยdriver: ownread→photo/GPStrue, supervisor→photo false/GPStrue, unrelated→CanReadfalse, HRwrongunitdeny, Adminonlydeny โดยassertfullrecordไม่ใช่แค่capabilitystrings
+- [x] TestREDสร้างrealDB membership/line/HRและrealLogin sessionsด้วยdriver: ownread→photo/GPStrue, supervisor→photo false/GPStrue, unrelated→CanReadfalse, HRwrongunitdeny, Adminonlydeny โดยassertfullrecordไม่ใช่แค่capabilitystrings
 
 ```csharp
 Assert.Equal(new AttendanceReadDecision(true,true,false,AttendanceReadBasis.Supervisor,null), decision);
@@ -323,13 +323,13 @@ Assert.DoesNotContain("attendance:team-read", sessionView.Permissions);
 
 สองตัวแปรจากactualservicecall/GETsessionหลังsetup—not mocksreturnconstant; เรียกserviceจากFactory.Services.CreateScope(), resolveTpr10DbContext/RequestSessionและโหลดentityของcookieที่loginจริงตามรูปแบบScope testsเดิม ไม่ปลอมactorในsubject
 
-- [ ] Run `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceAccessTests|FullyQualifiedName~AttendanceRouteTests'`; ExpectedRED ก่อนimplementselectors
-- [ ] ReadAsync: validatecurrent session; verify snapshotmembershipIdowner/unit/periodจริง; ownก่อน→both; จากนั้นHRglobalattendancecap+nonstaffallowedclass+recentMFA+activeHrAssignment exactsnapshotunit→both; จากนั้นsupervisorcap+recentMFA+currentdirectline+employeecurrentmembershipId==snapshotmembershipId+activeunits→GPSonly; นอกนั้น404 ไม่มีAdminfallback การกลับหน่วยเดิมด้วยmembershipใหม่ไม่เปิดrecordของmembershipเก่า
-- [ ] CurrentEmploymentAsyncค้นperiodมีผลณatด้วยUTCและactiveunit ไม่ดึงจากSite; DescribeAsyncquerycurrentrelationships+capabilitiesเป็นhintเท่านั้น ไม่มีrowของลูกทีม/HRnamesออกมา
-- [ ] ResolveAsyncตรวจsubjectemployeeยังactiveและcurrentprimarymembershipตรงsnapshotunit; หากย้ายหน่วยให้409ต้องจัดrouteใหม่ ไม่silentfollownewunit; เลือกdirectsupervisorจากcurrentlineซึ่งactiveมีcapapprove-supervisor+allowedclass (ไม่ต้องมีlive MFA ณrouting แต่ตอนactionต้องตรวจ); HRcandidateมีapprove-hr+currentHRassignmentและactiveidentity excludeemployee/supervisor;ไม่มีsupervisorหรือHRcandidateให้409; returnsortedids/versionเพื่อsnapshot ไม่ลงapprovedstateใดใน6A
-- [ ] เพิ่มRED→GREEN temporaltests: lineสิ้นสุดexactnow, HRexpired, inactiveparent, movedemployee, managerเปลี่ยน, actorroleถูกถอน, ownหัวหน้าดูรูปตนได้, หัวหน้าที่มีexplicitHRgrantดูรูปในHRbasis, transitivegrandchilddeny, headยื่นไปnextmanager, HRยื่นเองต้องคนอื่น, ผู้ใช้มีแต่scopeassignmentไม่globalattendancecapdeny; noMFAroutesnapshotไม่ได้ให้สิทธิ์action
-- [ ] ทดสอบcallerไม่มีtransactionต้องInvalidOperationException ไม่allow; rereadsessionหลังlock+raceRevocation deny; auditที่6B–6Dเป็นผู้รับผิดชอบoperation ขณะที่6A GETaccessaudits boundedได้โดยไม่เพิ่มข้อมูลภาพ/GPS
-- [ ] Runfilterเดิม ExpectedPASS; Commit `feat: resolve attendance privacy and two-step approver routes`
+- [x] Run `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceAccessTests|FullyQualifiedName~AttendanceRouteTests'`; ExpectedRED ก่อนimplementselectors
+- [x] ReadAsync: validatecurrent session; verify snapshotmembershipIdowner/unit/periodจริง; ownก่อน→both; จากนั้นHRglobalattendancecap+nonstaffallowedclass+recentMFA+activeHrAssignment exactsnapshotunit→both; จากนั้นsupervisorcap+recentMFA+currentdirectline+employeecurrentmembershipId==snapshotmembershipId+activeunits→GPSonly; นอกนั้น404 ไม่มีAdminfallback การกลับหน่วยเดิมด้วยmembershipใหม่ไม่เปิดrecordของmembershipเก่า
+- [x] CurrentEmploymentAsyncค้นperiodมีผลณatด้วยUTCและactiveunit ไม่ดึงจากSite; DescribeAsyncquerycurrentrelationships+capabilitiesเป็นhintเท่านั้น ไม่มีrowของลูกทีม/HRnamesออกมา
+- [x] ResolveAsyncตรวจsubjectemployeeยังactiveและcurrentprimarymembershipตรงsnapshotunit; หากย้ายหน่วยให้409ต้องจัดrouteใหม่ ไม่silentfollownewunit; เลือกdirectsupervisorจากcurrentlineซึ่งactiveมีcapapprove-supervisor+allowedclass (ไม่ต้องมีlive MFA ณrouting แต่ตอนactionต้องตรวจ); HRcandidateมีapprove-hr+currentHRassignmentและactiveidentity excludeemployee/supervisor;ไม่มีsupervisorหรือHRcandidateให้409; returnsortedids/versionเพื่อsnapshot ไม่ลงapprovedstateใดใน6A
+- [x] เพิ่มRED→GREEN temporaltests: lineสิ้นสุดexactnow, HRexpired, inactiveparent, movedemployee, managerเปลี่ยน, actorroleถูกถอน, ownหัวหน้าดูรูปตนได้, หัวหน้าที่มีexplicitHRgrantดูรูปในHRbasis, transitivegrandchilddeny, headยื่นไปnextmanager, HRยื่นเองต้องคนอื่น, ผู้ใช้มีแต่scopeassignmentไม่globalattendancecapdeny; noMFAroutesnapshotไม่ได้ให้สิทธิ์action
+- [x] ทดสอบcallerไม่มีtransactionต้องInvalidOperationException ไม่allow; rereadsessionหลังlock+raceRevocation deny; auditที่6B–6Dเป็นผู้รับผิดชอบoperation ขณะที่6A GETaccessaudits boundedได้โดยไม่เพิ่มข้อมูลภาพ/GPS
+- [x] Runfilterเดิม ExpectedPASS; Commit `feat: resolve attendance privacy and two-step approver routes`
 
 ## Task 6: Portal directory, API contract และ Exit Gate 6A
 
@@ -337,8 +337,8 @@ Assert.DoesNotContain("attendance:team-read", sessionView.Permissions);
 
 **Interfaces:** `isDirectoryPage(value:unknown):value is DirectoryPage` ในTypeScriptต้องเลือกunionrowตามresource; `DirectoryForm({actorId}:{actorId:string})` ใช้ScopeFrame+SSRSessionเดิม; client ใช้authMutationเฉพาะPOSTallowlistdirectorytable ไม่regexเปิดทั้งattendanceprefix; queryใช้AbortController+generationและauth-change subscriptionตามuseScopeQuery
 
-- [ ] เพิ่มNodeREDทดสอบinvalidDTO/unknownrowfield/expiredview, mutationexactallowlist ปฏิเสธ`/attendance/directory/.../delete`, pathtraversal, absoluteURL, wrongmethod; ใช้node:test/assertตามtests/scope-helpers.test.mjs ไม่testgrep sourcecode
-- [ ] เพิ่มPlaywrightREDด้วยfixture3actor: directoryoperatorมีMFA, normalstaff, operatorอีกคน; staffเห็นdenial ไม่แสดงform; create/replace/endmembership+line+HR, selfelevationerror, stale409reload,503preservedrafthidden ข้ามaccountไม่มีDOMเก่า; dropdownข้อมูลoptionsมีpaginationไม่โหลดทั้งองค์กร
+- [x] เพิ่มNodeREDทดสอบinvalidDTO/unknownrowfield/expiredview, mutationexactallowlist ปฏิเสธ`/attendance/directory/.../delete`, pathtraversal, absoluteURL, wrongmethod; ใช้node:test/assertตามtests/scope-helpers.test.mjs ไม่testgrep sourcecode
+- [x] เพิ่มPlaywrightREDด้วยfixture3actor: directoryoperatorมีMFA, normalstaff, operatorอีกคน; staffเห็นdenial ไม่แสดงform; create/replace/endmembership+line+HR, selfelevationerror, stale409reload,503preservedrafthidden ข้ามaccountไม่มีDOMเก่า; dropdownข้อมูลoptionsมีpaginationไม่โหลดทั้งองค์กร
 
 ```ts
 await expect(page.getByRole('heading', { name: 'จัดการบุคลากรและสายบังคับบัญชา' })).toBeVisible();
@@ -348,15 +348,15 @@ await expect(page.getByRole('alert').filter({ hasText: 'ข้อมูลเป
 
 snippetคือส่วนassertionของtestหลังกรอกselectด้วยfixtureIDsและสร้างversionconflictผ่านAPIจากsecondclientจริง ห้ามmockให้200แทนmutationที่ต้องพิสูจน์ ก่อนimplementedpageREDต้อง404/headingmissingตามคาด
 
-- [ ] Run `node --test tests/attendance-directory.test.mjs` ExpectedRED ก่อนimplement parsing/allowlist; implement typedformsพร้อม disabled submitระหว่างรอ, reasons, expectedVersion และ noauto-retrymutation แสดงประวัติread-onlyไม่ให้แก้ย้อนหลัง
-- [ ] หน้าใหม่ `requirePortalSession('/portal/admin/attendance-directory')`, checksystemdirectorycapสำหรับUX และScopeFrameส่งsessionSSR; addPortalnavเฉพาะผู้มีสิทธิ์ APIยังตรวจจริง ห้ามอ้างหน้า6Aเป็นระบบลงเวลาเสร็จ
-- [ ] Harnessแยก `infra/nginx/smoke-attendance-directory-https.mjs` หรือrefactorsharedfixtureจากexistingharnessโดยรักษาallowlistเดิม ห้ามเพิ่มgeneric --spec arbitrarypath; newharnessรับ4000/4001และรันtestfileชื่อคงที่ attendance-directory.spec.ts พร้อมseedsyntheticoperator/unitsผ่านfixtureprojectไม่ผ่านProductionAPIseedingendpoint; ไม่เปลี่ยนCAtrustของเครื่อง
-- [ ] OpenAPIRED enumerate12directoryoperations+GETaccess=13operationsทั้งDevelopment/Production (ไม่มีtechnicalmutationเพิ่ม) ต้องcookie,CSRFสำหรับPOST,permission+MFA,requiredfields,200/201/204/errors/500default; enumexactdomainmetadata `attendance-directory` ไม่ปลอมเป็นexact-business scope
-- [ ] ImplementAttendanceOpenApiTransformerให้IdentityOpenApiTransformerเรียกแบบexplicitเช่นScopeTransformerเดิม ไม่แข่งregistrationorderหรือเขียนทับmetadataModule2/3; accessdocumentboolhintไม่ใช่authority
-- [ ] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceDirectoryOpenApiTests` และNodefilter ExpectedPASS; runHTTPS dev/prodตามท้ายแผน Expectedทุกcaseผ่านจริง ไม่skip/เพิ่มtimeoutกลบerror
-- [ ] เขียนrunbookไทย: operatorgrantผ่านrolesAPIโดยoperatorอีกคน, migrationbackup, end/replacehistory,ไม่มีselfgrant, HRassignmentไม่ให้Sitepermission, disable/revoke, pendingroutesในอนาคตต้องrevalidate, ไม่เอาบัญชีPreviewจริงลงเอกสาร
-- [ ] Fullverificationตามท้ายแผนแล้ว freshwholebranchreviewทั้ง6tasks againstspec+5ReviewFocus หากCritical/Importantหนึ่งTDDfixpassและรันfullsuiteใหม่ ส่วนMinorระบุความเสี่ยง/owner ไม่ปิดด้วยคำว่าtestpass
-- [ ] Commit `feat: add attendance directory portal and verified exit gate`; บันทึกSHA/UTC/counts/commandsactualและscope6Aสำเร็จเท่านั้น ห้ามเขียนexpectedcountsเป็นผลจริง
+- [x] Run `node --test tests/attendance-directory.test.mjs` ExpectedRED ก่อนimplement parsing/allowlist; implement typedformsพร้อม disabled submitระหว่างรอ, reasons, expectedVersion และ noauto-retrymutation แสดงประวัติread-onlyไม่ให้แก้ย้อนหลัง
+- [x] หน้าใหม่ `requirePortalSession('/portal/admin/attendance-directory')`, checksystemdirectorycapสำหรับUX และScopeFrameส่งsessionSSR; addPortalnavเฉพาะผู้มีสิทธิ์ APIยังตรวจจริง ห้ามอ้างหน้า6Aเป็นระบบลงเวลาเสร็จ
+- [x] Harnessแยก `infra/nginx/smoke-attendance-directory-https.mjs` หรือrefactorsharedfixtureจากexistingharnessโดยรักษาallowlistเดิม ห้ามเพิ่มgeneric --spec arbitrarypath; newharnessรับ4000/4001และรันtestfileชื่อคงที่ attendance-directory.spec.ts พร้อมseedsyntheticoperator/unitsผ่านfixtureprojectไม่ผ่านProductionAPIseedingendpoint; ไม่เปลี่ยนCAtrustของเครื่อง
+- [x] OpenAPIRED enumerate12directoryoperations+GETaccess=13operationsทั้งDevelopment/Production (ไม่มีtechnicalmutationเพิ่ม) ต้องcookie,CSRFสำหรับPOST,permission+MFA,requiredfields,200/201/204/errors/500default; enumexactdomainmetadata `attendance-directory` ไม่ปลอมเป็นexact-business scope
+- [x] ImplementAttendanceOpenApiTransformerให้IdentityOpenApiTransformerเรียกแบบexplicitเช่นScopeTransformerเดิม ไม่แข่งregistrationorderหรือเขียนทับmetadataModule2/3; accessdocumentboolhintไม่ใช่authority
+- [x] Run `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceDirectoryOpenApiTests` และNodefilter ExpectedPASS; runHTTPS dev/prodตามท้ายแผน Expectedทุกcaseผ่านจริง ไม่skip/เพิ่มtimeoutกลบerror
+- [x] เขียนrunbookไทย: operatorgrantผ่านrolesAPIโดยoperatorอีกคน, migrationbackup, end/replacehistory,ไม่มีselfgrant, HRassignmentไม่ให้Sitepermission, disable/revoke, pendingroutesในอนาคตต้องrevalidate, ไม่เอาบัญชีPreviewจริงลงเอกสาร
+- [x] Fullverificationตามท้ายแผนแล้ว freshwholebranchreviewทั้ง6tasks againstspec+5ReviewFocus หากCritical/Importantหนึ่งTDDfixpassและรันfullsuiteใหม่ ส่วนMinorระบุความเสี่ยง/owner ไม่ปิดด้วยคำว่าtestpass
+- [x] Commit `feat: add attendance directory portal and verified exit gate`; บันทึกSHA/UTC/counts/commandsactualและscope6Aสำเร็จเท่านั้น ห้ามเขียนexpectedcountsเป็นผลจริง
 
 ## คำสั่งตรวจและการปิดแผน
 

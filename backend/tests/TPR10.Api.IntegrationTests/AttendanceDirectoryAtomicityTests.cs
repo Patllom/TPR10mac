@@ -158,7 +158,66 @@ public sealed class AttendanceDirectoryAtomicityTests(PostgresFixture postgres)
         Assert.Equal(1, await observer.AuditEvents.CountAsync(x => x.EventType == "attendance.directory.denied"));
     }
 
-    private sealed class LockGate : DbCommandInterceptor
+    [Theory]
+    [InlineData("workspace", 404)]
+    [InlineData("department", 404)]
+    [InlineData("employee", 404)]
+    [InlineData("actor", 403)]
+    public async Task Lifecycle_committed_before_waiting_directory_grant_is_rechecked_without_partial_effects(string target, int expectedStatus)
+    {
+        using var keys = new TestKeyMaterial();
+        await using var d = await IdentityTestDriver.CreateAsync(postgres.ConnectionString, keys.Settings);
+        var actor = await OperatorAsync(d);
+        var f = await AttendanceDirectoryLifecycleTests.SeedAsync(d, actor);
+        await using var observer = d.Database.CreateContext();
+        var snapshot = await observer.Set<IdentitySession>().AsNoTracking().SingleAsync(x => x.UserId == actor && x.RevokedAtUtc == null);
+        var gate = new LockGate(1);
+        await using var db = new Tpr10DbContext(new DbContextOptionsBuilder<Tpr10DbContext>().UseNpgsql(d.Database.ConnectionString).AddInterceptors(gate).Options);
+        var current = new RequestSession { Entity = snapshot }; var permission = new PermissionContext();
+        var service = new DirectoryService(db, current, new PermissionMutationGuard(db, current, permission, d.Clock), permission,
+            new SessionService(db, d.Clock, current, new EffectiveRolePolicy(db)), AccountProvisioningTests.Audit(d, db), d.Clock);
+        var pending = service.GrantHrAsync(new(f.Employee, f.Workspace, f.Department, "คำขอรอ lock"), default);
+        string baseline = "";
+        async Task<string> StateAsync() => JsonSerializer.Serialize(new
+        {
+            memberships = await observer.Set<EmployeeMembership>().AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
+            reporting = await observer.Set<ReportingLine>().AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
+            hr = await observer.Set<HrAssignment>().AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
+            users = await observer.Set<IdentityUser>().AsNoTracking().OrderBy(x => x.Id).Select(x => new { x.Id, x.IsActive, x.SecurityVersion }).ToArrayAsync(),
+            sessions = await observer.Set<IdentitySession>().AsNoTracking().OrderBy(x => x.Id).Select(x => new { x.Id, x.RevokedAtUtc, x.SecurityVersion }).ToArrayAsync(),
+            completed = await observer.AuditEvents.CountAsync(x => x.EventType == "attendance.directory.completed")
+        });
+        try
+        {
+            await gate.Ready.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (target == "actor")
+            {
+                using var logout = await d.PostAsync("/api/v1/auth/logout", new { });
+                Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+                Assert.NotNull((await observer.Set<IdentitySession>().AsNoTracking().SingleAsync(x => x.Id == snapshot.Id)).RevokedAtUtc);
+            }
+            else
+            {
+                var path = target switch
+                {
+                    "employee" => $"/api/v1/users/{f.Employee}",
+                    "department" => $"/api/v1/organization/workspaces/{f.Workspace}/departments/{f.Department}",
+                    _ => $"/api/v1/organization/workspaces/{f.Workspace}"
+                };
+                object body = target == "employee" ? new { isActive = false } : new { name = "ปิดหน่วยงาน", isActive = false, expectedVersion = 1, reason = "ปิดก่อน grant ได้ lock" };
+                using var closed = await AuthorizationTests.SendAsync(d, HttpMethod.Patch, path, body);
+                Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
+            }
+            baseline = await StateAsync();
+        }
+        finally { gate.Resume.TrySetResult(); }
+        Assert.Equal(expectedStatus, AccountProvisioningTests.Status(await pending));
+        Assert.Equal(baseline, await StateAsync());
+        Assert.False(await observer.Set<HrAssignment>().AnyAsync(x => x.UserId == f.Employee));
+        Assert.Equal(1, await observer.AuditEvents.CountAsync(x => x.EventType == "attendance.directory.denied"));
+    }
+
+    private sealed class LockGate(int expectedArrivals = 2) : DbCommandInterceptor
     {
         private int arrivals;
         public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -167,7 +226,7 @@ public sealed class AttendanceDirectoryAtomicityTests(PostgresFixture postgres)
         {
             if (command.CommandText.Contains("pg_advisory_xact_lock(7241002)", StringComparison.Ordinal))
             {
-                if (Interlocked.Increment(ref arrivals) == 2) Ready.TrySetResult();
+                if (Interlocked.Increment(ref arrivals) == expectedArrivals) Ready.TrySetResult();
                 await Resume.Task.WaitAsync(cancellationToken);
             }
             return result;

@@ -152,6 +152,10 @@ test('returnTo ภายนอกและ malformed ไม่พาออกจ
 
 test('session หมดอายุถูกปฏิเสธหลัง reload', async ({ page }) => {
   await login(page); await expect(page).toHaveURL(/\/portal$/);
+  // Wait for the login navigation itself before expiring its session and reloading.
+  // URL changes before the development document/assets have finished loading.
+  await expect(page.getByRole('heading', { name: 'ระบบปฏิบัติการภายใน', exact: true })).toBeVisible();
+  await page.waitForLoadState('load');
   database("UPDATE sessions SET last_seen_at_utc=now()-interval '31 minutes' WHERE user_id IN (SELECT id FROM users WHERE username='e2e-staff')");
   await page.reload(); await expect(page).toHaveURL(/\/login\?returnTo=/);
 });

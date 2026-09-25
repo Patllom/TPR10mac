@@ -16,6 +16,7 @@ export default async function PortalPage() {
       <a href="/portal/scopes">เลือกพื้นที่ทำงาน</a>
       {session.permissions.includes('organization:manage') && <a href="/portal/admin/organization">จัดการโครงสร้างองค์กร</a>}
       {session.permissions.includes('scope-assignments:manage') && <a href="/portal/admin/assignments">จัดการการมอบหมายสิทธิ์</a>}
+      {session.permissions.includes('attendance:directory-manage') && <a href="/portal/admin/attendance-directory">จัดการบุคลากรและสายบังคับบัญชา</a>}
     </nav>
     <a className="underline" href="/portal/account">บัญชีของฉัน</a>
   </section></PrivateView>;

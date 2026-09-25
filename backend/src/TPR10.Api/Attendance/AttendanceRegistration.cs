@@ -11,6 +11,7 @@ public static class AttendanceRegistration
     public static IServiceCollection AddAttendance(this IServiceCollection services)
     {
         services.AddScoped<DirectoryService>();
+        services.AddSingleton<AttendanceOpenApiTransformer>();
         services.AddScoped<Access.IAttendanceAccess, Access.AttendanceAccess>();
         services.AddScoped<Access.IAttendanceRouteResolver, Access.AttendanceRouteResolver>();
         return services;

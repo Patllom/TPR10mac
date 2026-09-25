@@ -7,11 +7,13 @@ using TPR10.Api.Identity.Authorization;
 using TPR10.Api.Identity.Csrf;
 using TPR10.Api.Identity.Sessions;
 using TPR10.Api.Scopes;
+using TPR10.Api.Attendance;
+using TPR10.Api.Attendance.Directory;
 
 namespace TPR10.Api.Identity;
 
 // Documentation only. Runtime enforcement remains in authentication, CSRF, policies and services.
-public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider policies, ScopeOpenApiTransformer scopes)
+public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider policies, ScopeOpenApiTransformer scopes, AttendanceOpenApiTransformer attendance)
     : IOpenApiOperationTransformer, IOpenApiDocumentTransformer
 {
     public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
@@ -37,6 +39,7 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         var authenticated = policy is not null && !metadata.OfType<IAllowAnonymous>().Any();
         var permissions = authenticated ? policy!.Requirements.OfType<PermissionRequirement>().ToArray() : [];
         var scope = metadata.OfType<ScopeEndpointMetadata>().LastOrDefault();
+        var directory = metadata.OfType<DirectoryEndpointMetadata>().LastOrDefault();
         operation.Security = authenticated
             ? [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("SessionCookie", context.Document)] = [] }]
             : [];
@@ -49,7 +52,7 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         // RestrictedSessionMiddleware always admits Active, in addition to the explicit stage metadata.
         var stages = (metadata.OfType<AllowedSessionStages>().LastOrDefault()?.Stages ?? []).Append(SessionStage.Active).Distinct();
         operation.Extensions["x-tpr10-session-stages"] = Strings(stages.Select(x => x.ToString()));
-        if (scope is null)
+        if (scope is null && directory is null)
         {
             operation.Extensions["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create("identity-only-no-business-scope"));
             operation.Description += "\nAPI เป็น authority; ขอบเขต Module 2 ไม่มี business workspace/project/site scope. ";
@@ -87,6 +90,7 @@ public sealed class IdentityOpenApiTransformer(IAuthorizationPolicyProvider poli
         foreach (var problem in metadata.OfType<IdentityProblemTypes>())
             AddProblem(operation, problemSchema, problem.Status, problem.Types);
         if (scope is not null) await scopes.TransformAsync(operation, context, scope, cancellationToken);
+        if (directory is not null) await attendance.TransformAsync(operation, context, directory, cancellationToken);
         foreach (var entry in operation.Responses.ToArray())
         {
             if (entry.Value is not OpenApiResponse response) continue;
