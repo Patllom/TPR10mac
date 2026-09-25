@@ -20,6 +20,7 @@ using TPR10.Api.Scopes.Probes;
 using TPR10.Api.Attendance;
 using TPR10.Api.Attendance.Directory;
 using TPR10.Api.Attendance.Storage;
+using TPR10.Api.Attendance.Evidence;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -98,6 +99,7 @@ app.MapScopeEndpoints();
 app.MapAttendanceDirectory();
 app.MapAttendanceAccess();
 app.MapAttendanceStorage();
+app.MapAttendanceEvidence();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");

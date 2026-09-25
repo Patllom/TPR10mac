@@ -10,7 +10,7 @@
 
 **Spec:** [แบบ Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R02/R03/R13/R14/R15 และข้อ8–10,13–15; [แผนส่งมอบรวม](2026-09-25-module-6-delivery-map.md)
 
-สถานะ: **Tasks 1–3 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 4–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md)
+สถานะ: **Tasks 1–5 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 6–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md), [รายงาน Task 4](../../architecture/module-6b-task4-storage-registry.md), [รายงาน Task 5](../../architecture/module-6b-task5-evidence-publication.md)
 
 ฐาน: PR #2 รวมแล้วบน GitHub เมื่อ2026-09-25T02:39:21Z; merge commit `27a184e44a78ab656fd6a618614c4eb13fe10c53` มีต้นไม้ไฟล์ตรงกับ6A `34db688` สาขาแผน `codex/module-6b-evidence-storage` สร้างจากฐานนี้ ไม่แก้ไฟล์ค้างใน checkout main เดิม
 
@@ -263,7 +263,7 @@ Assert.Equal(HttpStatusCode.Conflict, response.StatusCode); // จัดfixture 
 
 **Interfaces:** `PrepareAsync(EvidenceReservation reservation,Stream image,StampRequest stamp,CancellationToken ct):Task<PreparedEvidence>`; `StagePublicationAsync(EvidencePublication publication,CancellationToken ct):Task` เพิ่มrowsแต่ไม่commit ต้องมีcallertransaction; `ReadAsync(Guid id,string variant,bool download,CancellationToken ct):Task<IResult>`
 
-- [ ] REDtests stateReserved/Prepared/Orphan GET404, owner200, ownsupervisor200, supervisorของคนอื่น404, HRcurrent+MFA+snapshotunit200, crossunit404, admin/storage-managerไม่มีbusinessgrant404, revoked401/403/404ตามsessiondecision ห้ามส่งแม้thumbnail
+- [x] REDtests stateReserved/Prepared/Orphan GET404, owner200, ownsupervisor200, supervisorของคนอื่น404, HRcurrent+MFA+snapshotunit200, crossunit404, admin/storage-managerไม่มีbusinessgrant404, revoked401/403/404ตามsessiondecision ห้ามส่งแม้thumbnail
 
 ```csharp
 using var response = await d.Client.GetAsync($"/api/v1/attendance/evidence/{evidenceId}/download");
@@ -271,13 +271,13 @@ Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); // loginหัวห
 Assert.DoesNotContain("image/", response.Content.Headers.ContentType?.ToString() ?? "");
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter "FullyQualifiedName~EvidencePublicationTests|FullyQualifiedName~EvidenceReadTests|FullyQualifiedName~EvidenceRevocationTests"`
-- [ ] protocol: reserveDB→ตรวจstampตรงreservation→stamp/filesystemfinalizeทั้งfull+thumbnail→shortDBtransactionmarkPreparedและstorechecksum→caller6Ctransactionตรวจsession/assignment/challenge/pairซ้ำ→StagePublicationตรวจoperation/owner/stamp/snapshot/evidenceตรงกัน→binding+statePublished+event+audit→callercommit; rejectcallไม่มีtransaction ห้ามreaderเชื่อclientowner/eventId ใช้reservationlease/fencingversionกันPrepareซ้ำ; sameoperation+sameinputคืนผลเดิม ต่างinput409 ไม่เขียนไฟล์ทับ
-- [ ] 6Bสร้างPublishedผ่านtest-only fixture/service compositionเท่านั้น ไม่mapupload/publishในproduction; transactionrollbackต้องไม่มีbinding/Published; orphanreportสแกนreservationที่leaseหมดหลัง24ชั่วโมงและไม่มีbinding ไม่unlinkไฟล์ รายงานจำนวนไม่เปิดlocator
-- [ ] readerขั้นแรกshortlockตรวจReadAsync/CanReadPhotoและPublished→โหลดbytesนอกidentitylockจากactivecopychecksumverified (fallbackเฉพาะสำเนาที่metadataอนุญาตและchecksumตรง)→finalsession/ReadAsyncอีกครั้งก่อนเปิดresponse
-- [ ] finaldeliveryใช้connection-scoped shared advisory lock7241002สำหรับช่วงauditcommitและส่งbufferเท่านั้น เพื่อserializeกับrevocationที่ใช้exclusive xactlockเดียวกัน; ไม่มีfilesystem I/Oขณะถือlock จำกัดresponse10MiB/deadline5วินาที ยกเลิกแล้วabortresponseก่อนปล่อยlock ใช้dedicatedconnectionและfinallyunlock/disposeไม่คืนconnectionที่ยังถือlockเข้าpool; readerไม่เรียกScopeOperation.BeginAsyncบนconnectionอื่นขณะsharedlockอยู่
-- [ ] นิยามrace: revokecommitก่อนsharedlock→ไม่มีbytes; readerได้lockก่อน→ส่งในboundedwindowก่อนrevocationcommit ภาพที่ส่งไปแล้วเรียกคืนไม่ได้ ห้ามอ้างกำจัดภาพที่ผู้ใช้ดาวน์โหลดแล้ว; auditfailureก่อนheaders→503และไม่มีbytes หลังส่งบางส่วนnetworkfail→abortไม่ส่งJSONต่อท้าย
-- [ ] controlledbarrier tests: pauseก่อนfileload/หลังfileload/ก่อนsharedlock แล้วrevoke/disable/HRend; auditfail/connectioncancel/slowclientไม่ทำให้lockค้าง; no-store/nosniff/Range/HEAD/conditionalและfallbackcorruptไม่หลุด; commit `feat: publish and authorize attendance evidence atomically`
+- [x] รัน `dotnet test backend/TPR10.sln --filter "FullyQualifiedName~EvidencePublicationTests|FullyQualifiedName~EvidenceReadTests|FullyQualifiedName~EvidenceRevocationTests"`
+- [x] protocol: reserveDB→ตรวจstampตรงreservation→stamp/filesystemfinalizeทั้งfull+thumbnail→shortDBtransactionmarkPreparedและstorechecksum→caller6Ctransactionตรวจsession/assignment/challenge/pairซ้ำ→StagePublicationตรวจoperation/owner/stamp/snapshot/evidenceตรงกัน→binding+statePublished+event+audit→callercommit; rejectcallไม่มีtransaction ห้ามreaderเชื่อclientowner/eventId ใช้reservationlease/fencingversionกันPrepareซ้ำ; sameoperation+sameinputคืนผลเดิม ต่างinput409 ไม่เขียนไฟล์ทับ
+- [x] 6Bสร้างPublishedผ่านtest-only fixture/service compositionเท่านั้น ไม่mapupload/publishในproduction; transactionrollbackต้องไม่มีbinding/Published; orphanreportสแกนreservationที่leaseหมดหลัง24ชั่วโมงและไม่มีbinding ไม่unlinkไฟล์ รายงานจำนวนไม่เปิดlocator
+- [x] readerขั้นแรกshortlockตรวจReadAsync/CanReadPhotoและPublished→โหลดbytesนอกidentitylockจากactivecopychecksumverified (fallbackเฉพาะสำเนาที่metadataอนุญาตและchecksumตรง)→finalsession/ReadAsyncอีกครั้งก่อนเปิดresponse
+- [x] finaldeliveryใช้connection-scoped shared advisory lock7241002สำหรับช่วงauditcommitและส่งbufferเท่านั้น เพื่อserializeกับrevocationที่ใช้exclusive xactlockเดียวกัน; ไม่มีfilesystem I/Oขณะถือlock จำกัดresponse10MiB/deadline5วินาที ยกเลิกแล้วabortresponseก่อนปล่อยlock ใช้dedicatedconnectionและfinallyunlock/disposeไม่คืนconnectionที่ยังถือlockเข้าpool; readerไม่เรียกScopeOperation.BeginAsyncบนconnectionอื่นขณะsharedlockอยู่
+- [x] นิยามrace: revokecommitก่อนsharedlock→ไม่มีbytes; readerได้lockก่อน→ส่งในboundedwindowก่อนrevocationcommit ภาพที่ส่งไปแล้วเรียกคืนไม่ได้ ห้ามอ้างกำจัดภาพที่ผู้ใช้ดาวน์โหลดแล้ว; auditfailureก่อนheaders→503และไม่มีbytes หลังส่งบางส่วนnetworkfail→abortไม่ส่งJSONต่อท้าย
+- [x] controlledbarrier tests: pauseก่อนfileload/หลังfileload/ก่อนsharedlock แล้วrevoke/disable/HRend; auditfail/connectioncancel/slowclientไม่ทำให้lockค้าง; no-store/nosniff/Range/HEAD/conditionalและfallbackcorruptไม่หลุด; commit `feat: publish and authorize attendance evidence atomically`
 
 ## Task 6: ย้ายสำเนาแบบresumeและไม่เปลี่ยนหลักฐาน
 

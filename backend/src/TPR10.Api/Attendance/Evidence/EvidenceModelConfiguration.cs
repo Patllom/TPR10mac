@@ -35,6 +35,7 @@ internal static class EvidenceModelConfiguration
         evidence.Property(x => x.Action).HasConversion<string>().HasMaxLength(20);
         evidence.Property(x => x.ObjectKey).HasMaxLength(128);
         evidence.Property(x => x.Sha256).HasMaxLength(64);
+        evidence.Property(x => x.InputSha256).HasMaxLength(64);
         evidence.Property(x => x.ThumbnailSha256).HasMaxLength(64);
         evidence.Property(x => x.FencingVersion).HasDefaultValue(1L);
         evidence.HasIndex(x => x.OperationId).IsUnique();
@@ -45,6 +46,7 @@ internal static class EvidenceModelConfiguration
         evidence.ToTable("evidence_objects", t =>
         {
             t.HasCheckConstraint("ck_evidence_action", "action IN ('CheckIn','CheckOut')");
+            t.HasCheckConstraint("ck_evidence_input", "input_sha256 IS NULL OR input_sha256 ~ '^[a-f0-9]{64}$'");
             t.HasCheckConstraint("ck_evidence_state", "state IN ('Reserved','Prepared','Published','Orphan')");
             t.HasCheckConstraint("ck_evidence_pin", "storage_version>=1 AND fencing_version>=1 AND operation_id<>'00000000-0000-0000-0000-000000000000'::uuid");
             t.HasCheckConstraint("ck_evidence_key", "object_key = 'objects/' || left(replace(id::text,'-',''),2) || '/' || replace(id::text,'-','')");

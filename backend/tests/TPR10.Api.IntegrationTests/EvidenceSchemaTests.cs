@@ -252,6 +252,8 @@ public sealed class EvidenceSchemaTests(PostgresFixture postgres)
     {
         await using var database = await CreateAsync();
         await using var db = database.CreateContext();
+        // This tests Task1's frozen migration. Later empty migrations may downgrade independently.
+        await db.GetService<IMigrator>().MigrateAsync("20260925031404_AddAttendanceEvidenceStorage");
         await db.Database.ExecuteSqlRawAsync(job ? JobInsert : ObjectInsert);
         var before = await db.Database.GetAppliedMigrationsAsync();
         Assert.Equal("P0001", (await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync(Previous))).SqlState);

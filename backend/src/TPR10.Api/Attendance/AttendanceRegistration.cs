@@ -4,6 +4,7 @@ using TPR10.Api.Data;
 using TPR10.Api.Scopes;
 using TPR10.Api.Auditing;
 using TPR10.Api.Attendance.Storage;
+using TPR10.Api.Attendance.Evidence;
 
 namespace TPR10.Api.Attendance;
 
@@ -15,6 +16,10 @@ public static class AttendanceRegistration
         services.AddOptions<StorageOptions>().BindConfiguration("AttendanceStorage");
         services.AddSingleton<StorageRuntime>();
         services.AddScoped<StorageRegistry>();
+        services.AddScoped<EvidenceWriter>();
+        services.AddScoped<EvidenceReader>();
+        services.AddScoped<EvidenceReconciler>();
+        services.AddSingleton<IImageStampService, ImageStampService>();
         services.AddScoped<StorageHealthScanner>();
         services.AddHostedService<StorageHealthWorker>();
         services.AddSingleton<AttendanceOpenApiTransformer>();

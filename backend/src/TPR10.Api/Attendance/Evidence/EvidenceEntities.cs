@@ -14,6 +14,7 @@ public sealed class EvidenceObject
     public Guid StorageId { get; set; }
     public long StorageVersion { get; set; }
     public string ObjectKey { get; set; } = "";
+    public string? InputSha256 { get; set; }
     public string? Sha256 { get; set; }
     public long? Length { get; set; }
     public int? Width { get; set; }
