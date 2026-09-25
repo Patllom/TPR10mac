@@ -13,7 +13,7 @@ public sealed partial class StorageRegistry(Tpr10DbContext db, ScopeAccess sessi
 {
     public const string Capability = "attendance:storage-manage";
     private Guid Actor => current.Entity?.UserId ?? Guid.Empty;
-    private sealed record Change(IResult Result, Guid? Target = null, string? Reason = null, bool PersistFailure = false, Action? Committed = null);
+    private sealed record Change(IResult Result, Guid? Target = null, string? Reason = null, bool PersistFailure = false, Action? Committed = null, string? AuditAction = null);
 
     public Task<IResult> OptionsAsync(int offset, int limit, CancellationToken ct) => RunAsync("options", () =>
     {
@@ -144,7 +144,7 @@ public sealed partial class StorageRegistry(Tpr10DbContext db, ScopeAccess sessi
                     status = Status(change.Result);
                     if (status < 400 || change.PersistFailure)
                     {
-                        if (auditSuccess) await WriteAuditAsync("attendance.storage." + action, change.Target, status < 400 ? "success" : "failure", change.Reason, ct);
+                        if (auditSuccess) await WriteAuditAsync("attendance.storage." + (change.AuditAction ?? action), change.Target, status < 400 ? "success" : "failure", change.Reason, ct);
                         await db.SaveChangesAsync(ct);
                         await tx.CommitAsync(ct);
                         change.Committed?.Invoke();

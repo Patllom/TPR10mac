@@ -99,6 +99,7 @@ app.MapScopeEndpoints();
 app.MapAttendanceDirectory();
 app.MapAttendanceAccess();
 app.MapAttendanceStorage();
+app.MapAttendanceMigrations();
 app.MapAttendanceEvidence();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();

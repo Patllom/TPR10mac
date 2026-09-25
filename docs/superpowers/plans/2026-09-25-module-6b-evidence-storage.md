@@ -10,7 +10,7 @@
 
 **Spec:** [แบบ Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R02/R03/R13/R14/R15 และข้อ8–10,13–15; [แผนส่งมอบรวม](2026-09-25-module-6-delivery-map.md)
 
-สถานะ: **Tasks 1–5 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 6–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md), [รายงาน Task 4](../../architecture/module-6b-task4-storage-registry.md), [รายงาน Task 5](../../architecture/module-6b-task5-evidence-publication.md)
+สถานะ: **Tasks 1–6 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 7–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md), [รายงาน Task 4](../../architecture/module-6b-task4-storage-registry.md), [รายงาน Task 5](../../architecture/module-6b-task5-evidence-publication.md), [รายงาน Task 6](../../architecture/module-6b-task6-evidence-migration.md)
 
 ฐาน: PR #2 รวมแล้วบน GitHub เมื่อ2026-09-25T02:39:21Z; merge commit `27a184e44a78ab656fd6a618614c4eb13fe10c53` มีต้นไม้ไฟล์ตรงกับ6A `34db688` สาขาแผน `codex/module-6b-evidence-storage` สร้างจากฐานนี้ ไม่แก้ไฟล์ค้างใน checkout main เดิม
 
@@ -285,7 +285,7 @@ Assert.DoesNotContain("image/", response.Content.Headers.ContentType?.ToString()
 
 **Interfaces:** `StartAsync(StartMigration,CancellationToken):Task<IResult>`, `ResumeAsync(Guid,ResumeMigration,CancellationToken):Task<IResult>`, `RunBatchAsync(Guid jobId,int limit,CancellationToken):Task<int>` limit1–100; workerใช้StorageAdapterและEvidenceLocationเดิมไม่ใช้ImageStampService
 
-- [ ] REDfixtureเก็บรูปสังเคราะห์2variants: ย้ายแล้วevidenceId/eventId/checksum/stampเหมือนเดิม; sourcecopyยังอยู่; corruptdestinationไม่switch; sameRequestId+samepayloadคืนjobเดิม ต่างpayload409; duplicatejobsourceที่ยังactive409
+- [x] REDfixtureเก็บรูปสังเคราะห์2variants: ย้ายแล้วevidenceId/eventId/checksum/stampเหมือนเดิม; sourcecopyยังอยู่; corruptdestinationไม่switch; sameRequestId+samepayloadคืนjobเดิม ต่างpayload409; duplicatejobsourceที่ยังactive409
 
 ```csharp
 // ใช้fixturesจากTask5 ให้publishedEvidenceIdและoriginalShaเป็นค่าก่อนย้าย
@@ -296,12 +296,14 @@ Assert.Equal(originalSha, after.Sha256);
 Assert.True(await db.Set<EvidenceLocation>().AnyAsync(x => x.EvidenceId == after.Id && x.State == CopyState.Fallback));
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter "FullyQualifiedName~EvidenceMigrationTests|FullyQualifiedName~EvidenceMigrationRaceTests"`
-- [ ] Startตรวจstorage-manage/MFA/currentversion/source≠target/probeพร้อม/sourceไม่activewritetarget→ซีลsourceและสร้างdurablejob+manifest+auditในtransactionเดียว; includePreparedและPublished ไม่ย้ายrawupload ยังรอreservationที่pinไว้ก่อนซีล
-- [ ] workerclaimด้วยlease60วินาทีและfencingversion; copyผ่านadapterนอกidentitylock→อ่านปลายทางขนาด/SHA→transactionตรวจleaseversion/sourceversion/objectchecksum/สถานะjob/ผู้สั่งยังมีactivecapability→เพิ่มverifiedcopy→สลับActive/Fallback+auditcommit; งานเบื้องหลังไม่ต้องใช้sessionMFAที่หมดใน15นาที แต่resume/startต้องrecentMFAเสมอ และถูกถอนcapabilityให้Blockedไม่cutover
-- [ ] checksummismatchเป็นBlockedไม่retryอัตโนมัติ; I/Otransientretryตามตาราง; leaseหมดworkerเก่าห้ามcutover; crashหลังcopyก่อนmetadataใช้keyเดิมและverifyก่อนadopt ไม่overwrite; full/thumbnailแต่ละcopyมีchecksumของตน
-- [ ] ก่อนCompletedต้องreconcilelatePreparedจากreservationเดิมและไม่มีunfinishedreservation/sourceactivecopyเหลือ; ถ้าreservationไม่จบให้Blocked/รายงาน ไม่แกล้งCompleted งานที่Completedยังไม่อนุญาตถอดsourceหรือDELETE; sourcefallbackอ่านเฉพาะexplicitmetadata/configและauditbasis
-- [ ] tests crashทุกboundary,2workers,lateupload,readขณะcutover,actorgrantrevokedก่อนcutover,auditfail,restorejobแล้วresume,manifestduplicateไม่เพิ่มรายการ; commit `feat: migrate evidence copies with resumable verification`
+- [x] รัน `dotnet test backend/TPR10.sln --filter "FullyQualifiedName~EvidenceMigrationTests|FullyQualifiedName~EvidenceMigrationRaceTests"`
+- [x] Startตรวจstorage-manage/MFA/currentversion/source≠target/probeพร้อม/sourceไม่activewritetarget→ซีลsourceและสร้างdurablejob+manifest+auditในtransactionเดียว; includePreparedและPublished ไม่ย้ายrawupload ยังรอreservationที่pinไว้ก่อนซีล
+- [x] workerclaimด้วยlease60วินาทีและfencingversion; copyผ่านadapterนอกidentitylock→อ่านปลายทางขนาด/SHA→transactionตรวจleaseversion/sourceversion/objectchecksum/สถานะjob/ผู้สั่งยังมีactivecapability→เพิ่มverifiedcopy→สลับActive/Fallback+auditcommit; งานเบื้องหลังไม่ต้องใช้sessionMFAที่หมดใน15นาที แต่resume/startต้องrecentMFAเสมอ และถูกถอนcapabilityให้Blockedไม่cutover
+- [x] checksummismatchเป็นBlockedไม่retryอัตโนมัติ; I/Otransientretryตามตาราง; leaseหมดworkerเก่าห้ามcutover; crashหลังcopyก่อนmetadataใช้keyเดิมและverifyก่อนadopt ไม่overwrite; full/thumbnailแต่ละcopyมีchecksumของตน
+- [x] ก่อนCompletedต้องreconcilelatePreparedจากreservationเดิมและไม่มีunfinishedreservation/sourceactivecopyเหลือ; ถ้าreservationไม่จบให้Blocked/รายงาน ไม่แกล้งCompleted งานที่Completedยังไม่อนุญาตถอดsourceหรือDELETE; sourcefallbackอ่านเฉพาะexplicitmetadata/configและauditbasis
+- [x] tests crashทุกboundary,2workers,lateupload,readขณะcutover,actorgrantrevokedก่อนcutover,auditfail,restorejobแล้วresume,manifestduplicateไม่เพิ่มรายการ; commit `feat: migrate evidence copies with resumable verification`
+
+**ผล Task 6:** ชุดเฉพาะ 33/33, backend ทั้งชุด 1,263/1,263, frontend 40/40, Build/Lint/Format ผ่าน แก้ Important จาก review เรื่อง manifest ไม่จำกัดงานด้วย TDD: initial manifest ใช้ atomic INSERT SELECT, late reconciliation ครั้งละ100เฉพาะขอบ batch เพิ่ม scheduler30วินาที และรองรับเผยแพร่ Prepared หลังย้ายโดยใช้ Active ปัจจุบัน รุ่นที่เก็บตรวจใหม่ก่อน–หลัง I/O; retryห้าครั้งหลังครั้งแรก รายละเอียดและข้อย่อยเลื่อนไว้สองข้อ (assertion Prepared-with-Active และ restart application จริง) อยู่ในรายงาน Task 6 การกู้คืนที่ทดสอบใช้ job จากฐานข้อมูลกับ scope ใหม่ ไม่อ้างรับรอง restore/NAS จริง
 
 ## Task 7: Portal จัดการstorageและสัญญาAPI
 

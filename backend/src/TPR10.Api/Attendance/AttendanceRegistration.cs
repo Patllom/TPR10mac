@@ -16,6 +16,10 @@ public static class AttendanceRegistration
         services.AddOptions<StorageOptions>().BindConfiguration("AttendanceStorage");
         services.AddSingleton<StorageRuntime>();
         services.AddScoped<StorageRegistry>();
+        services.AddScoped<MigrationService>();
+        services.AddScoped<MigrationWorker>();
+        services.AddSingleton<MigrationScheduler>();
+        services.AddHostedService(s => s.GetRequiredService<MigrationScheduler>());
         services.AddScoped<EvidenceWriter>();
         services.AddScoped<EvidenceReader>();
         services.AddScoped<EvidenceReconciler>();

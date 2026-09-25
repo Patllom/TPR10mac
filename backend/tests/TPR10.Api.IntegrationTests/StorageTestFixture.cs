@@ -18,7 +18,7 @@ internal sealed class StorageTestFixture : IDisposable
 
     public StorageTestFixture()
     {
-        Settings = new(keys.Settings) { ["AttendanceStorage:HealthWorkerEnabled"] = "false" };
+        Settings = new(keys.Settings) { ["AttendanceStorage:HealthWorkerEnabled"] = "false", ["AttendanceStorage:MigrationWorkerEnabled"] = "false" };
         System.IO.Directory.CreateDirectory(Root);
         for (var i = 0; i < 2; i++)
         {

@@ -85,9 +85,11 @@ public sealed class EvidenceWriter(Tpr10DbContext db, ScopeAccess session, IImag
             throw new StorageOperationException(409);
         }
         if (row.State != EvidenceState.Prepared) throw new StorageOperationException(409);
-        var copies = await db.Set<EvidenceLocation>().Where(x => x.EvidenceId == row.Id && x.StorageId == row.StorageId && x.State == CopyState.Verified).ToArrayAsync(ct);
+        var candidates = await db.Set<EvidenceLocation>().Where(x => x.EvidenceId == row.Id
+            && (x.State == CopyState.Active || (x.StorageId == row.StorageId && x.State == CopyState.Verified))).ToArrayAsync(ct);
+        var copies = candidates.GroupBy(x => x.Variant).Select(x => x.OrderByDescending(c => c.State == CopyState.Active).First()).ToArray();
         if (copies.Length != 2 || copies.Select(x => x.Variant).Distinct().Count() != 2) throw new StorageOperationException(503);
-        foreach (var copy in copies) { copy.State = CopyState.Active; copy.Version++; }
+        foreach (var copy in copies.Where(x => x.State != CopyState.Active)) { copy.State = CopyState.Active; copy.Version++; }
         row.State = EvidenceState.Published; row.Version++;
         db.Add(new EvidenceBinding { EvidenceId = row.Id, EventId = publication.EventId, PublishedAtUtc = DirectoryQueries.Now(clock) });
         await AuditAsync(row, "publish", ct);

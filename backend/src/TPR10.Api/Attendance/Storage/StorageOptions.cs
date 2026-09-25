@@ -5,4 +5,5 @@ public sealed class StorageOptions
 {
     public StorageDefinition[] Locations { get; set; } = [];
     public bool HealthWorkerEnabled { get; set; } = true;
+    public bool MigrationWorkerEnabled { get; set; } = true;
 }

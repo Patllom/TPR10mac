@@ -22,12 +22,14 @@ public sealed class StorageApiTests(PostgresFixture postgres)
         if (actor == "staff") { await d.SeedUserAsync("staff", MfaTests.Password, []); await d.LoginAsync("staff", MfaTests.Password); }
         if (actor == "admin") await RoleAuthorizationTests.AdminAsync(d);
         if (actor == "expired") { await OperatorAsync(d); d.Advance(TimeSpan.FromMinutes(15)); }
-        foreach (var path in new[] { "/options", "/locations", "/write-target", "/health" })
+        d.Advance(TimeSpan.FromMinutes(1));
+        foreach (var path in new[] { "/options", "/locations", "/write-target", "/health", "/migrations", "/migrations/00000000-0000-0000-0000-000000000099" })
         {
             using var response = await d.Client.GetAsync(ApiRoot + path);
             Assert.Equal(status, (int)response.StatusCode);
         }
-        foreach (var path in new[] { "/locations", "/write-target", "/locations/00000000-0000-0000-0000-000000000099/probe" })
+        foreach (var path in new[] { "/locations", "/write-target", "/locations/00000000-0000-0000-0000-000000000099/probe",
+            "/migrations", "/migrations/00000000-0000-0000-0000-000000000099/resume" })
         {
             using var response = await d.PostAsync(ApiRoot + path, new { rootPath = "UNTRUSTED-ROOT" });
             Assert.Equal(status, (int)response.StatusCode);
