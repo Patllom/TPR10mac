@@ -61,10 +61,15 @@ public sealed class OrganizationService(Tpr10DbContext db, RequestSession curren
         entry.Property("UpdatedAtUtc").CurrentValue = clock.GetUtcNow();
         entry.Property("UpdatedBy").CurrentValue = actorId;
         var scope = ScopeFor(kind, expectedParent, id)!;
-        if (row.IsActive && !request.IsActive && kind != OrganizationKind.Department)
+        if (row.IsActive && !request.IsActive)
         {
-            var affected = await lifecycle.RevokeForScopeAsync(scope, actorId, request.Reason.Trim(), ct);
-            foreach (var userId in affected.Distinct().OrderBy(x => x)) await sessions.RevokeUserAsync(userId, "organization-deactivated", ct);
+            var affected = kind == OrganizationKind.Department ? [] : await lifecycle.RevokeForScopeAsync(scope, actorId, request.Reason.Trim(), ct);
+            var directoryAffected = kind is OrganizationKind.Workspace or OrganizationKind.Department
+                ? await new Attendance.Directory.DirectoryLifecycle(db, audit, clock, permission)
+                    .EndForUnitAsync(row.WorkspaceId, kind == OrganizationKind.Department ? id : null, actorId, request.Reason.Trim(), ct)
+                : [];
+            foreach (var userId in affected.Concat(directoryAffected).Distinct().OrderBy(x => x))
+                await sessions.RevokeUserAsync(userId, "organization-deactivated", ct);
         }
         var action = row.IsActive != request.IsActive ? request.IsActive ? "organization.reactivated" : "organization.deactivated" : "organization.updated";
         await SuccessAsync(action, actorId, kind, scope, id, "name,is-active,version", request.Reason.Trim(), ct);

@@ -60,6 +60,8 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
         if (request.RoleIds is not null && !await CanManageAsync(actorId, ct, "roles:manage"))
             return await DenyRoleAssignmentAsync(actorId, userId, transaction, ct);
         if ((request.IsActive is null && request.RoleIds is null) || (request.RoleIds is not null && !await ValidRolesAsync(request.RoleIds, ct))) return Invalid();
+        if (request.RoleIds is { } proposed && await new Attendance.Access.AttendanceGrantGuard(db).WouldAssignSelfAsync(actorId, userId, proposed, ct))
+            return await DenyRoleAssignmentAsync(actorId, userId, transaction, ct);
         var user = await db.Set<IdentityUser>().FromSqlInterpolated($"SELECT * FROM users WHERE id={userId} FOR UPDATE").SingleOrDefaultAsync(ct);
         if (user is null) return Results.Problem(statusCode: 404, title: "ไม่พบบัญชีผู้ใช้");
         var mappings = await db.Set<UserRole>().Where(x => x.UserId == userId).ToListAsync(ct);
@@ -87,8 +89,15 @@ public sealed class AccountProvisioning(Tpr10DbContext db, IPasswordHasher passw
         await db.SaveChangesAsync(ct);
         if (hadManagingAdmin && !await PermissionMutationGuard.HasManagingAdminAsync(db, ct))
             return Results.Problem(statusCode: 409, title: "ไม่สามารถถอดสิทธิ์จัดการของผู้ดูแลคนสุดท้ายได้");
-        if (!active) await assignments.RevokeForUserAsync(userId, actorId, "account-disabled", ct);
-        await sessions.RevokeUserAsync(userId, "account-or-role-change", ct);
+        Guid[] directoryAffected = [];
+        if (!active)
+        {
+            await assignments.RevokeForUserAsync(userId, actorId, "account-disabled", ct);
+            directoryAffected = await new Attendance.Directory.DirectoryLifecycle(db, audit, clock, new PermissionContext())
+                .EndForUserAsync(userId, actorId, "account-disabled", ct);
+        }
+        foreach (var affectedId in directoryAffected.Append(userId).Distinct().OrderBy(x => x))
+            await sessions.RevokeUserAsync(affectedId, "account-or-role-change", ct);
         await WriteAuditAsync("identity.user.updated", actorId, userId, rolesChanged ? "active,roles" : "active", ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

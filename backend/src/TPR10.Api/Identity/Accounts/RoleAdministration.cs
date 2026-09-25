@@ -10,6 +10,7 @@ namespace TPR10.Api.Identity.Accounts;
 public sealed class RoleAdministration(Tpr10DbContext db, RequestSession current, PermissionMutationGuard guard,
     PermissionContext permission, ISessionService sessions, IAuditEventWriter audit, TimeProvider clock, IEffectiveRolePolicy roles)
 {
+    private bool selfGrantDenied;
     public Task<IResult> CreateAsync(CreateRoleRequest request, CancellationToken ct) => MutateAsync("roles:manage", async () =>
     {
         if (!ValidName(request.Name) || request.RoleClass is not ("staff" or "system-administration" or "approval" or "accounting" or "finance-data-access")) return Invalid();
@@ -36,6 +37,9 @@ public sealed class RoleAdministration(Tpr10DbContext db, RequestSession current
         if (request.PermissionIds is not { Length: <= 100 } ids || ids.Distinct().Count() != ids.Length
             || await db.Set<IdentityPermission>().CountAsync(x => ids.Contains(x.Id) && IdentityCatalog.Capabilities.Contains(x.Capability), ct) != ids.Length) return Invalid();
         if (!await db.Set<IdentityRole>().AnyAsync(x => x.Id == id, ct)) return Missing();
+        var attendance = new Attendance.Access.AttendanceGrantGuard(db);
+        if (!await attendance.ValidRoleGrantsAsync(id, ids, ct)) return Invalid();
+        if (await attendance.WouldElevateSelfAsync(current.Entity!.UserId, id, ids, ct)) return SelfGrantDenied();
         var mappings = await db.Set<RolePermission>().Where(x => x.RoleId == id).ToListAsync(ct);
         if (mappings.Select(x => x.PermissionId).ToHashSet().SetEquals(ids)) return Results.NoContent();
         var hadAdmin = await PermissionMutationGuard.HasManagingAdminAsync(db, ct);
@@ -54,6 +58,7 @@ public sealed class RoleAdministration(Tpr10DbContext db, RequestSession current
         if (request.RoleIds is not { Length: <= 20 } ids || ids.Distinct().Count() != ids.Length
             || await db.Set<IdentityRole>().CountAsync(x => ids.Contains(x.Id), ct) != ids.Length) return Invalid();
         if (!await db.Set<IdentityUser>().AnyAsync(x => x.Id == id, ct)) return Missing();
+        if (await new Attendance.Access.AttendanceGrantGuard(db).WouldAssignSelfAsync(current.Entity!.UserId, id, ids, ct)) return SelfGrantDenied();
         var mappings = await db.Set<UserRole>().Where(x => x.UserId == id).ToListAsync(ct);
         if (mappings.Select(x => x.RoleId).ToHashSet().SetEquals(ids)) return Results.NoContent();
         var hadAdminClass = await HasAdminClassAsync(ct);
@@ -83,6 +88,18 @@ public sealed class RoleAdministration(Tpr10DbContext db, RequestSession current
         if (current.Entity is null || !await guard.AllowsAsync(current.Entity.UserId, capability, ct))
             return Results.Problem(statusCode: 403, type: "urn:tpr10:permission-denied", title: "สิทธิ์หรือ session เปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่");
         var result = await mutate();
+        if (selfGrantDenied)
+        {
+            await tx.RollbackAsync(ct);
+            db.ChangeTracker.Clear();
+            await using var denial = await db.Database.BeginTransactionAsync(ct);
+            await audit.WriteAsync(new SecurityAuditRequest(current.Entity!.UserId, permission.ActingRoleId, null, null, null,
+                "identity.authorization.denied", "attendance-grant", null, "denied",
+                new Dictionary<string, string> { ["reason"] = "attendance-self-grant" }), ct);
+            await db.SaveChangesAsync(ct);
+            await denial.CommitAsync(ct);
+            return result;
+        }
         if (result is IStatusCodeHttpResult { StatusCode: >= 400 }) return result;
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -98,6 +115,11 @@ public sealed class RoleAdministration(Tpr10DbContext db, RequestSession current
                                                                     where u.IsActive && role.RoleClass == "system-administration"
                                                                     select u.Id).AnyAsync(ct);
     private static IResult Invalid() => Results.Problem(statusCode: 400, title: "ข้อมูล role หรือ permission ไม่ถูกต้อง");
+    private IResult SelfGrantDenied()
+    {
+        selfGrantDenied = true;
+        return Results.Problem(statusCode: 403, title: "ไม่สามารถเพิ่มสิทธิ์งานลงเวลาให้ตนเองได้");
+    }
     private static IResult Missing() => Results.Problem(statusCode: 404, title: "ไม่พบผู้ใช้หรือ role");
     private static IResult Conflict() => Results.Problem(statusCode: 409, title: "ชื่อ role นี้ถูกใช้งานแล้ว");
     private static IResult LastAdmin() => Results.Problem(statusCode: 409, title: "ไม่สามารถถอดสิทธิ์จัดการของผู้ดูแลคนสุดท้ายได้");
