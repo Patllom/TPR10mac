@@ -10,7 +10,7 @@
 
 **Spec:** [แบบ Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R02/R03/R13/R14/R15 และข้อ8–10,13–15; [แผนส่งมอบรวม](2026-09-25-module-6-delivery-map.md)
 
-สถานะ: **Tasks 1–2 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 3–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md)
+สถานะ: **Tasks 1–3 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 4–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md)
 
 ฐาน: PR #2 รวมแล้วบน GitHub เมื่อ2026-09-25T02:39:21Z; merge commit `27a184e44a78ab656fd6a618614c4eb13fe10c53` มีต้นไม้ไฟล์ตรงกับ6A `34db688` สาขาแผน `codex/module-6b-evidence-storage` สร้างจากฐานนี้ ไม่แก้ไฟล์ค้างใน checkout main เดิม
 
@@ -208,7 +208,7 @@ public static string Format(StampRequest value)
 
 **Interfaces:** adapter resolveจากStorageDefinitionฝั่งserver; `WriteImmutableAsync(string key, ReadOnlyMemory<byte> bytes, CancellationToken ct):Task<StoredCopy>`; `ReadVerifiedAsync(string key,string sha256,long length,CancellationToken ct):Task<byte[]>`; `ProbeAsync(CancellationToken ct):Task<StorageHealthView>` IDของhealthมาจากbindingregistry ไม่ใช่clientpath
 
-- [ ] RED tests generatedkey+collision, traversal/absolute/UNC/encodedseparator, symlinkเปลี่ยนก่อนopen, unmountเหลือdirectory, markerไม่ตรง, permissiondeny, diskfull, readpartial/timeout, corruptedcopy ไม่มีไฟล์นอกrootถูกสร้าง:
+- [x] RED tests generatedkey+collision, traversal/absolute/UNC/encodedseparator, symlinkเปลี่ยนก่อนopen, unmountเหลือdirectory, markerไม่ตรง, permissiondeny, diskfull, readpartial/timeout, corruptedcopy ไม่มีไฟล์นอกrootถูกสร้าง:
 
 ```csharp
 [Theory]
@@ -222,11 +222,13 @@ public async Task Unsafe_key_cannot_escape_configured_root(string key)
 // adapterเป็นfieldที่testconstructorสร้างด้วยtemporaryroot; case linkสร้างsymlinkก่อนเรียก
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~StorageAdapterTests` ให้ล้มที่พฤติกรรมที่ยังขาด
-- [ ] implementkeysเฉพาะ `objects/{first2hex}/{guid:N}/{full|thumbnail}.jpg`; operationใช้root-directoryhandle+openat nofollowทีละcomponentและexclusivecreate ไม่ใช้Path.GetFullPathเพียงอย่างเดียว; ตรวจinode/volume+markerผ่านhandleทั้งก่อนและหลังI/O ถ้าruntimeไม่รองรับให้readinessfail ไม่ fallbackunsafe
-- [ ] เขียน `.partial-{operationGuid}` ภายในvolumeเดิม, flushdisk, renameแบบno-replace, syncdirectoryแล้วเปิดอ่านchecksumจริง; retryfinalkeyเดิมต้องตรวจlength/checksumก่อนคืนsuccess ต่างกันให้quarantine/error ไม่overwrite
-- [ ] NASต้องตรวจmountedfilesystemidentityกับprotectedconfigและmarkerสองอย่าง ไม่สร้างmarkerอัตโนมัติในrequest; permissionต้องserviceaccountไม่ใช่world-writable; nativehandleimplementationทดสอบLinux/macOSจริง แยกWindowsunsupported
-- [ ] รันfocusedครบและfailurematrix ตรวจว่าไม่เติมmarkerหรือเขียนเมื่อunmounted; commit `feat: add guarded local and mounted NAS adapters`
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~StorageAdapterTests` ให้ล้มที่พฤติกรรมที่ยังขาด
+- [x] implementkeysเฉพาะ `objects/{first2hex}/{guid:N}/{full|thumbnail}.jpg`; operationใช้root-directoryhandle+openat nofollowทีละcomponentและexclusivecreate ไม่ใช้Path.GetFullPathเพียงอย่างเดียว; ตรวจinode/volume+markerผ่านhandleทั้งก่อนและหลังI/O ถ้าruntimeไม่รองรับให้readinessfail ไม่ fallbackunsafe
+- [x] เขียน `.partial-{operationGuid}` ภายในvolumeเดิม, flushdisk, renameแบบno-replace, syncdirectoryแล้วเปิดอ่านchecksumจริง; retryfinalkeyเดิมต้องตรวจlength/checksumก่อนคืนsuccess ต่างกันให้quarantine/error ไม่overwrite
+- [x] NASต้องตรวจmountedfilesystemidentityกับprotectedconfigและmarkerสองอย่าง ไม่สร้างmarkerอัตโนมัติในrequest; permissionต้องserviceaccountไม่ใช่world-writable; nativehandleimplementationทดสอบLinux/macOSจริง แยกWindowsunsupported
+- [x] รันfocusedครบและfailurematrix ตรวจว่าไม่เติมmarkerหรือเขียนเมื่อunmounted; commit `feat: add guarded local and mounted NAS adapters`
+
+ผล Task 3: focused 41/41 บน macOS ARM64 และ 38 ผ่าน/1 Darwin-only theory ข้ามบน Linux ARM64; full backend 1,136/1,136; frontend 40/40, Build/Lint/Format ผ่าน แก้ review เรื่อง retry durability, Darwin ACL และ capacity warning แล้ว ENOSPC/timeout เป็น fault injection ไม่ใช่ NAS disruption จริง; NAS/deployment gate ยังรอ Task 8
 
 ## Task 4: ลงทะเบียนที่เก็บ เปลี่ยนปลายทาง และhealth
 

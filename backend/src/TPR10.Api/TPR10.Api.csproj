@@ -22,6 +22,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Attendance/Evidence/Assets/NotoSansThai.ttf" LogicalName="TPR10.Evidence.NotoSansThai.ttf" />
+    <InternalsVisibleTo Include="TPR10.Api.IntegrationTests" />
     <Content Include="Attendance/Evidence/Assets/OFL.txt;Attendance/Evidence/Assets/licenses/**/*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Attendance/Evidence/Assets/manifest.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
