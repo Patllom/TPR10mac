@@ -10,7 +10,7 @@
 
 **Spec:** [แบบ Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R02/R03/R13/R14/R15 และข้อ8–10,13–15; [แผนส่งมอบรวม](2026-09-25-module-6-delivery-map.md)
 
-สถานะ: **Task 1 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 2–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md)
+สถานะ: **Tasks 1–2 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Tasks 3–8 ยังไม่เริ่ม** วันที่25กันยายน2026 — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md)
 
 ฐาน: PR #2 รวมแล้วบน GitHub เมื่อ2026-09-25T02:39:21Z; merge commit `27a184e44a78ab656fd6a618614c4eb13fe10c53` มีต้นไม้ไฟล์ตรงกับ6A `34db688` สาขาแผน `codex/module-6b-evidence-storage` สร้างจากฐานนี้ ไม่แก้ไฟล์ค้างใน checkout main เดิม
 
@@ -173,7 +173,7 @@ model.Entity<EvidenceBinding>().HasIndex(x => x.EventId).IsUnique();
 
 **Interfaces:** `IImageStampService.StampAsync(Stream source, StampRequest stamp, CancellationToken ct) : Task<StampedImage>` และ `Thumbnail(StampedImage full) : StampedImage`; `StampFormatter.Format(StampRequest) : string` ไม่มีTimeProviderในformatter
 
-- [ ] เขียนREDสำหรับข้ามเที่ยงคืนไทย/เครื่องservertimezoneอื่น:
+- [x] เขียนREDสำหรับข้ามเที่ยงคืนไทย/เครื่องservertimezoneอื่น:
 
 ```csharp
 [Fact]
@@ -184,8 +184,8 @@ public void Stamp_uses_fixed_server_instant_and_Thai_calendar_day()
 }
 ```
 
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~EvidenceStampTests`; เพิ่มtests bytes10MiB±1, pixels20M±1/overflow, invalid/truncated JPEG, SVGชื่อjpg, GIF/APNGหลายเฟรม, alphaPNGพื้นขาว, orientation8แบบ, EXIF/GPS/commentไม่อยู่ในoutput
-- [ ] เพิ่มpackagesรุ่นที่ตารางกำหนดและfontrelease พร้อมlicenses/hashmanifest; decodeheaderก่อนallocate ตรวจwidth*heightด้วยchecked longและrejectzero/multiframe; limitจำนวนbytesแม้Streamไม่มีLength อย่าdecodeก่อนตรวจเพดาน
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~EvidenceStampTests`; เพิ่มtests bytes10MiB±1, pixels20M±1/overflow, invalid/truncated JPEG, SVGชื่อjpg, GIF/APNGหลายเฟรม, alphaPNGพื้นขาว, orientation8แบบ, EXIF/GPS/commentไม่อยู่ในoutput
+- [x] เพิ่มpackagesรุ่นที่ตารางกำหนดและfontrelease พร้อมlicenses/hashmanifest; decodeheaderก่อนallocate ตรวจwidth*heightด้วยchecked longและrejectzero/multiframe; limitจำนวนbytesแม้Streamไม่มีLength อย่าdecodeก่อนตรวจเพดาน
 
 ```csharp
 public static string Format(StampRequest value)
@@ -196,9 +196,11 @@ public static string Format(StampRequest value)
 }
 ```
 
-- [ ] decode→orientation→resize→newcleanbitmap→blackfooter→shapeThaiผ่านHarfBuzzพร้อมfontที่bundle→JPEG90→decodeoutputตรวจ→SHA256; ไม่copyEXIF/textchunk เพิ่มboundedsemaphoreและbudgetไม่ปล่อยnativejobหนีqueueเมื่อcancel
-- [ ] ตรวจpixelsในfooterเทียบblank, outputเวลาเดียวกับStampText; ตรวจภาพจริงอย่างน้อยเข้า/ออก/portrait/landscape/midnightด้วยตาไม่ใช้textmetadataแทนหลักฐาน ตัวthumbnailต้องอ่านวันเวลาได้หากไม่ได้ให้failvisualgateไม่ลดเกณฑ์เงียบ ๆ
-- [ ] focusedtestsผ่าน, Linuxcontainerทำdecode/shapeจริง, auditdependenciesรวมtransitive, บันทึกรูปสังเคราะห์เท่านั้นในรายงาน; commit `feat: stamp immutable attendance evidence images`
+- [x] decode→orientation→resize→newcleanbitmap→blackfooter→shapeThaiผ่านHarfBuzzพร้อมfontที่bundle→JPEG90→decodeoutputตรวจ→SHA256; ไม่copyEXIF/textchunk เพิ่มboundedsemaphoreและbudgetไม่ปล่อยnativejobหนีqueueเมื่อcancel
+- [x] ตรวจpixelsในfooterเทียบblank, outputเวลาเดียวกับStampText; ตรวจภาพจริงอย่างน้อยเข้า/ออก/portrait/landscape/midnightด้วยตาไม่ใช้textmetadataแทนหลักฐาน ตัวthumbnailต้องอ่านวันเวลาได้หากไม่ได้ให้failvisualgateไม่ลดเกณฑ์เงียบ ๆ
+- [x] focusedtestsผ่าน, Linuxcontainerทำdecode/shapeจริง, auditdependenciesรวมtransitive, บันทึกรูปสังเคราะห์เท่านั้นในรายงาน; commit `feat: stamp immutable attendance evidence images`
+
+ผลส่งมอบ Task 2: focused 49/49 บน macOS และ Linux, backend ทั้งชุด 1,095/1,095, frontend 40/40, Build/Lint/Format/locked restore/audit ผ่าน รายละเอียด visual gate และ review อยู่ในรายงาน Task 2 ภาพย่อคงด้านยาว 640 แต่ย่อส่วนภาพกับแถบ pixels เวลาแยกกันเพื่อให้อ่านได้ ไม่ประทับเวลาใหม่
 
 ## Task 3: Adapter โฟลเดอร์และNASที่failclosed
 

@@ -1,0 +1,17 @@
+{
+  "font": "NotoSansThai.ttf",
+  "release": "NotoSansThai-v2.002",
+  "source": "https://github.com/notofonts/thai/releases/download/NotoSansThai-v2.002/NotoSansThai-v2.002.zip",
+  "archiveEntry": "full/ttf/NotoSansThai-Regular.ttf",
+  "archiveSha256": "af889cc673fc714060ce5e4e088fbad32aa4c0571a19958efeaff128a22da485",
+  "fontSha256": "2101faa471942570d506a394df7da555d15246c7814c7522c63d4fa85b0d8d88",
+  "license": "SIL Open Font License 1.1",
+  "licenseSha256": "2e98fd23a52d253db8612cd5942c8f2ff4111b21d2367050fdca91d8ccc374a0",
+  "nativeDependencies": {
+    "SkiaSharp": "3.119.4",
+    "SkiaSharp.HarfBuzz": "3.119.4",
+    "SkiaSharp.NativeAssets.Linux.NoDependencies": "3.119.4",
+    "HarfBuzzSharp": "8.3.1.5",
+    "HarfBuzzSharp.NativeAssets.Linux": "8.3.1.5"
+  }
+}
