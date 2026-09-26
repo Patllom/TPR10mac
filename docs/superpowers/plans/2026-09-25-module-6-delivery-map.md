@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec ที่ผู้ใช้อนุมัติ](../specs/2026-09-25-module-6-attendance-design.md)
 
-สถานะวันที่25กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e` ดูผลตรวจใน `docs/architecture/module-6a-exit-gate.md`; [แผน6B](2026-09-25-module-6b-evidence-storage.md) จัดทำแล้วและรอผู้ใช้อนุมัติ ยังไม่เริ่มimplementation6B ส่วน6C–6Dยังไม่มีtask-level implementation plan
+สถานะวันที่26กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6B Tasks1–7ส่งมอบในสาขาแยกแล้ว ส่วน Task8 ผ่านการตรวจทางเทคนิค แก้ dev transport timeout และยืนยัน HTTPS dev34/prod36 พร้อม Test/Build/Lint/Review แล้ว ผู้ใช้อนุญาตcommit/push/เปิดPRงาน6B แต่ยังไม่mergeในรอบจัดส่งนี้ และไม่มีNASสำหรับตรวจจริง จึงไม่ถือว่า6Bพร้อมProduction ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6C–6Dยังไม่มีtask-level implementation plan
 
 ## Global Constraints
 
@@ -65,7 +65,7 @@
 ## การส่งมอบเอกสารในรอบนี้
 
 - [Implementation Plan 6A — บุคลากรและสิทธิ์](2026-09-25-module-6a-directory-access.md) มีไฟล์ สัญญา DTO, RED/GREEN, commands และ exit gate พร้อมให้ตรวจ
-- [Implementation Plan 6B — หลักฐานภาพและที่เก็บ](2026-09-25-module-6b-evidence-storage.md) ล็อก image stack และstorage recovery protocol แบ่ง8Tasks รอผู้ใช้ตรวจอนุมัติ; แผน6Cจะล็อกcapture payloadและevent transaction; แผน6Dจะล็อก revision/state transitions หลังมี event contractจริง
+- [Implementation Plan 6B — หลักฐานภาพและที่เก็บ](2026-09-25-module-6b-evidence-storage.md) ผู้ใช้อนุมัติแล้ว Tasks1–7ส่งมอบและTask8ผ่านtechnical gate โดยNASจริง/Productionยังค้าง; แผน6Cจะล็อกcapture payloadและevent transaction; แผน6Dจะล็อก revision/state transitions หลังมี event contractจริง
 - ยังไม่มีการอนุมัติแผนใดจากการอนุมัติ Spec เพียงครั้งเดียว ต้องอนุมัติแผนก่อน execution แต่ไม่ย้อนถามข้อกำหนดที่ยืนยันแล้ว
 - วิธีทำงาน Native ที่ใช้ในModuleก่อนหน้ายังคงใช้ได้: ผู้ทำหลักทำTDDและหนึ่ง fresh whole-branch review ต่อระยะ; ผู้ใช้เปลี่ยนเป็น subagent-driven ได้ก่อนเริ่ม
 - ไม่รวมการแก้ปัญหา Preview หรือบัญชีทดสอบในแผนนี้ ไม่แตะไฟล์ pre-merge-backup และไม่อัปเกรด dependency โดยไม่มีเหตุผล

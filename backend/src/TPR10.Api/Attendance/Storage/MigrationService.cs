@@ -67,11 +67,14 @@ public sealed partial class StorageRegistry
         if (!runtime.Matches(source) || !runtime.Matches(target)) return Reject(503);
         if (runtime.Health(source).Status is not ("ready" or "warning") || !runtime.Ready(target)) return Reject(409);
         if (!await MigrationAuthority.AllowsAsync(db, job.RequestedBy, ct)) return Reject(403);
-        foreach (var item in await db.Set<MigrationItem>().Where(x => x.JobId == id && x.Status != "Completed").ToArrayAsync(ct))
-        {
-            item.Status = "Pending"; item.Attempts = 0; item.ErrorCode = null; item.NextAttemptAtUtc = null;
-            item.LeaseOwner = null; item.LeaseUntilUtc = null; item.FencingVersion++; item.Version++;
-        }
+        // Reset the whole unfinished manifest atomically without tracking an archive in memory.
+        await db.Set<MigrationItem>().Where(x => x.JobId == id && x.Status != "Completed")
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(x => x.Status, "Pending").SetProperty(x => x.Attempts, 0)
+                .SetProperty(x => x.ErrorCode, (string?)null).SetProperty(x => x.NextAttemptAtUtc, (DateTimeOffset?)null)
+                .SetProperty(x => x.LeaseOwner, (Guid?)null).SetProperty(x => x.LeaseUntilUtc, (DateTimeOffset?)null)
+                .SetProperty(x => x.FencingVersion, x => x.FencingVersion + 1)
+                .SetProperty(x => x.Version, x => x.Version + 1), ct);
         job.Status = "Pending"; job.Version++;
         await MigrationManifest.ReconcileAsync(db, job, DirectoryQueries.Now(clock), ct);
         await db.SaveChangesAsync(ct);

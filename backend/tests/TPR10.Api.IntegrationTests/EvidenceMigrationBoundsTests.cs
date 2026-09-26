@@ -15,6 +15,53 @@ namespace TPR10.Api.IntegrationTests;
 [Collection("database"), UnsupportedOSPlatform("windows")]
 public sealed class EvidenceMigrationBoundsTests(PostgresFixture postgres)
 {
+    [Fact]
+    public async Task Resume_resets_all_unfinished_items_without_tracking_archive_or_changing_completed_items()
+    {
+        await using var f = await EvidenceFixture.CreateAsync(postgres.ConnectionString);
+        var request = await RequestAsync(f);
+        await PrepareAsync(f, await ReserveAsync(f, 60));
+        var job = await StartAsync(f, request);
+        Assert.Equal(2, await RunAsync(f, job.Id, 2));
+        await using var check = f.D.Database.CreateContext();
+        var completed = await check.Set<MigrationItem>().AsNoTracking().Where(x => x.Status == "Completed").ToArrayAsync();
+        var pending = await check.Set<MigrationItem>().Where(x => x.Status != "Completed").ToArrayAsync();
+        Assert.Equal(120, pending.Length);
+        foreach (var item in pending)
+        {
+            item.Status = "Copying"; item.Attempts = 3; item.ErrorCode = "storage-unavailable";
+            item.LeaseOwner = Guid.NewGuid(); item.LeaseUntilUtc = f.D.Clock.GetUtcNow().AddSeconds(60);
+            item.FencingVersion = 7; item.Version++; item.NextAttemptAtUtc = f.D.Clock.GetUtcNow().AddSeconds(30);
+        }
+        var blocked = await check.Set<MigrationJob>().SingleAsync();
+        blocked.Status = "Blocked"; blocked.Version++;
+        await check.SaveChangesAsync();
+        var oldVersions = pending.ToDictionary(x => x.Id, x => x.Version);
+        using var scope = f.D.Factory.Services.CreateScope();
+        await EvidenceRevocationTests.SetSession(scope.ServiceProvider, f.Admin);
+        foreach (var row in await check.Set<StorageLocation>().AsNoTracking().ToArrayAsync())
+            await scope.ServiceProvider.GetRequiredService<StorageRegistry>().ProbeAsync(row.Id, new(row.Version, "ตรวจเพื่อ resume"), default);
+        var result = await scope.ServiceProvider.GetRequiredService<MigrationService>().ResumeAsync(job.Id,
+            new(blocked.Version, "ทดสอบ resume คลังใหญ่"), default);
+        Assert.Equal(202, ((IStatusCodeHttpResult)result).StatusCode);
+        var db = scope.ServiceProvider.GetRequiredService<Tpr10DbContext>();
+        Assert.InRange(db.ChangeTracker.Entries<MigrationItem>().Count(), 0, 100);
+        var after = await check.Set<MigrationItem>().AsNoTracking().ToArrayAsync();
+        Assert.Equal(122, after.Length);
+        foreach (var item in after.Where(x => oldVersions.ContainsKey(x.Id)))
+        {
+            Assert.Equal("Pending", item.Status); Assert.Equal(0, item.Attempts); Assert.Null(item.ErrorCode);
+            Assert.Null(item.LeaseOwner); Assert.Null(item.LeaseUntilUtc); Assert.Null(item.NextAttemptAtUtc);
+            Assert.Equal(8, item.FencingVersion); Assert.Equal(oldVersions[item.Id] + 1, item.Version);
+        }
+        foreach (var old in completed)
+        {
+            var item = Assert.Single(after, x => x.Id == old.Id);
+            Assert.Equal("Completed", item.Status); Assert.Equal(old.Version, item.Version);
+            Assert.Equal(old.FencingVersion, item.FencingVersion); Assert.Equal(old.Attempts, item.Attempts);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

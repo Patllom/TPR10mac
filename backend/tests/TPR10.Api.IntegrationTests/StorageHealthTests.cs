@@ -15,6 +15,28 @@ namespace TPR10.Api.IntegrationTests;
 public sealed class StorageHealthTests(PostgresFixture postgres)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Sealed_migration_source_still_reports_corrupt_active_or_fallback_copy(bool cutover)
+    {
+        await using var f = await EvidenceFixture.CreateAsync(postgres.ConnectionString);
+        var job = await EvidenceMigrationTests.StartAsync(f, await EvidenceMigrationTests.RequestAsync(f));
+        if (cutover) Assert.Equal(2, await EvidenceMigrationTests.RunAsync(f, job.Id));
+        await using var db = f.D.Database.CreateContext();
+        var source = await db.Set<StorageLocation>().AsNoTracking().SingleAsync(x => x.Id == f.Pin.StorageId);
+        Assert.False(source.AcceptWrites);
+        var copy = await db.Set<EvidenceLocation>().SingleAsync(x => x.StorageId == source.Id && x.Variant == "full");
+        Assert.Equal(cutover ? CopyState.Fallback : CopyState.Active, copy.State);
+        await File.WriteAllBytesAsync(Path.Combine(f.Storage.Root, "volume-0", copy.ObjectKey), new byte[] { 1, 2, 3 });
+        await Scan(f.D);
+        source = await db.Set<StorageLocation>().AsNoTracking().SingleAsync(x => x.Id == source.Id);
+        var runtime = f.D.Factory.Services.GetRequiredService<StorageRuntime>();
+        Assert.False(runtime.Ready(source)); // Integrity scanning must not reopen writes.
+        Assert.Equal(1, runtime.Health(source).MissingObjects);
+        Assert.Equal("manifest-copy-unverified", runtime.Health(source).ErrorCode);
+    }
+
+    [Theory]
     [InlineData(1)]
     [InlineData(2)]
     public async Task Unknown_capacity_must_preserve_orphans_and_never_be_promoted_to_write_ready(int unknownAt)

@@ -1,4 +1,15 @@
 # ใช้ localhost:4443 เท่านั้น; certificate/key ต้องอยู่นอก Git
+# ใช้ connection เดิมซ้ำข้าม Docker → host สำหรับ HTTP ปกติ;
+# ส่ง Upgrade เฉพาะ WebSocket ของ Next dev ไม่บังคับทุกคำขอให้ upgrade
+map $http_upgrade $tpr10_web_connection {
+    default upgrade;
+    '' '';
+}
+upstream tpr10_local_web {
+    server ${TPR10_WEB_UPSTREAM};
+    keepalive 16;
+}
+
 server {
     listen 4443 ssl default_server;
     server_name _;
@@ -27,10 +38,10 @@ server {
         proxy_set_header X-Forwarded-Host $http_host;
     }
     location / {
-        proxy_pass http://${TPR10_WEB_UPSTREAM};
+        proxy_pass http://tpr10_local_web;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $tpr10_web_connection;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;

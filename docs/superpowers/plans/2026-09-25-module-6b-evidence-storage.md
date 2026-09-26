@@ -10,7 +10,7 @@
 
 **Spec:** [แบบ Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R02/R03/R13/R14/R15 และข้อ8–10,13–15; [แผนส่งมอบรวม](2026-09-25-module-6-delivery-map.md)
 
-สถานะ: **Tasks 1–7 ผ่าน TDD, Code Review และ Test/Build/Lint แล้ว; Task 8 ยังไม่เริ่ม** — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md), [รายงาน Task 4](../../architecture/module-6b-task4-storage-registry.md), [รายงาน Task 5](../../architecture/module-6b-task5-evidence-publication.md), [รายงาน Task 6](../../architecture/module-6b-task6-evidence-migration.md), [รายงาน Task 7](../../architecture/module-6b-task7-storage-portal.md)
+สถานะ: **Tasks 1–7 ส่งมอบแล้ว; Task 8 ผ่านการตรวจทางเทคนิค แต่ NAS จริงและ Production ยังค้างตามที่ผู้ใช้แจ้งว่าไม่มี test share** — [รายงาน Task 1](../../architecture/module-6b-task-1-verification.md), [รายงาน Task 2](../../architecture/module-6b-task-2-verification.md), [รายงาน Task 3](../../architecture/module-6b-task-3-verification.md), [รายงาน Task 4](../../architecture/module-6b-task4-storage-registry.md), [รายงาน Task 5](../../architecture/module-6b-task5-evidence-publication.md), [รายงาน Task 6](../../architecture/module-6b-task6-evidence-migration.md), [รายงาน Task 7](../../architecture/module-6b-task7-storage-portal.md), [รายงาน Task 8](../../architecture/module-6b-exit-gate.md)
 
 ฐาน: PR #2 รวมแล้วบน GitHub เมื่อ2026-09-25T02:39:21Z; merge commit `27a184e44a78ab656fd6a618614c4eb13fe10c53` มีต้นไม้ไฟล์ตรงกับ6A `34db688` สาขาแผน `codex/module-6b-evidence-storage` สร้างจากฐานนี้ ไม่แก้ไฟล์ค้างใน checkout main เดิม
 
@@ -343,7 +343,7 @@ await runHttpsSmoke({ port: process.argv[2] ?? '4001', spec: 'tests/e2e/attendan
 
 **Interfaces:** ใช้contractsทั้งหมดข้างต้น ไม่เพิ่มbusinessfeatureในTaskปิดงาน; 6CรับEvidenceReservation/Prepare/StagePublicationและreader โดยต้องมีtransactioncallerและFKeventจริงของ6C
 
-- [ ] เขียนREDexit contractปิดtest-onlypublisherและpublic/staticpathในProduction:
+- [x] เพิ่ม exit regression ปิดtest-onlypublisherและpublic/staticpathในProduction; ข้อยุติจากโค้ดจริง: ยอมรับ404/405สำหรับPOSTควบคู่OpenAPIallowlist ไม่สร้างช่องโหว่เพื่อทำRED ตัวอย่างเดิม:
 
 ```csharp
 using var upload = await d.PostAsync("/api/v1/attendance/evidence/publish", new { });
@@ -352,8 +352,8 @@ using var direct = await d.Client.GetAsync("/evidence-files/example.jpg");
 Assert.Equal(HttpStatusCode.NotFound, direct.StatusCode);
 ```
 
-- [ ] รันfocusedexit แล้วเติมproductionwiringปิดเส้นทางทดลองหากพบจนผ่าน ไม่เพิ่มproductionseedบัญชี/รูปจริง
-- [ ] รันตรวจทั้งหมดบนcommitเดียวกันและเก็บcommand/UTC/exitcode/count ไม่อ้างผลรุ่นเก่าแทน:
+- [x] รันfocusedexit และยืนยันProductionปิดเส้นทางทดลองอยู่แล้ว ไม่เพิ่มproductionseedบัญชี/รูปจริง
+- [x] รันตรวจครบและเก็บcommand/UTC/exitcode/countในรายงาน บนworking treeฐาน527dda5; หลังแก้transportตรวจbackend280ไฟล์SHAตรงกับfull1,270รอบเดิมและรันfocused16ใหม่ ไม่อ้างว่ารันfullซ้ำหรือcommitแล้ว:
 
 ```sh
 npm ci
@@ -377,14 +377,16 @@ node infra/nginx/smoke-attendance-storage-https.mjs 4000
 node infra/nginx/smoke-attendance-storage-https.mjs 4001
 ```
 
-- [ ] entrypointidentityเดิมเลือกspecทีละชุดและต้องมี--e2eตามคำสั่งข้างต้น ต้องตรวจoutputว่าครบ ไม่รันHTTPแทนHTTPS; แยกartifacts backendจากfixtureป้องกันbinaryเปลี่ยนระหว่างfullsuite; build/runimageบนLinuxต้องโหลดSkia/HarfBuzzและfontจริงได้
-- [ ] ตรวจCode Reviewหนึ่งfresh whole-branch reviewerตามNative ตรวจprivacy/race/migration/recoveryพร้อมแก้Critical/Importantด้วยTDD แล้วรันTest/Build/Lintครบใหม่ หากยังมีfailureห้ามระบุเสร็จ
+- [x] entrypointidentityเดิมเลือกspecทีละชุดมี--e2eตามคำสั่งข้างต้น ตรวจครบdev34/prod36 ไม่รันHTTPแทนHTTPS; artifacts backendแยกจากfixture; Linuxnative49ผ่าน
+- [x] ตรวจfresh whole-branch review แก้Importantสองข้อด้วยTDDและรันTest/Build/Lint; เพิ่มfocusedreviewหลังแก้transport ไม่มีCritical/Important และแก้Minorชุดทดสอบสองข้อแล้ว
 - [ ] NASจริง: ขอผู้ใช้/Operationsจัดเตรียมtestshareที่ไม่ใช่ข้อมูลจริงและอนุญาตdisruptionก่อน ตั้งserviceidentity+mountaliasผ่านprotectedconfig ไม่บันทึกcredentialในเอกสาร ทดสอบwrite/read/rename/flush, disconnect/reconnect, mountหายแต่directoryยังอยู่,สิทธิ์readonly,พื้นที่เต็มในquotaทดลอง,DB/auditfail,copycrashและresume ตรวจSHAfull+thumbnailก่อน/หลัง; ถ้าไม่มีNASให้รายงานtechnical-onlyและNAS gateยังค้าง ห้ามmockแล้วติ๊กผ่าน
-- [ ] Backup/restoredrill: ใช้ฐานข้อมูลชั่วคราว+สำเนาไฟล์สังเคราะห์ร่วมกัน restoremetadataและfiles ตรวจทุกbindingยังมีchecksumตรงและสิทธิ์ยังบังคับ, key/config/permissionกลับถูกต้อง ไม่restoreทับPreview/production
-- [ ] คู่มือภาษาไทยระบุregisteralias→probe→switch→migration→verify→retainold ไม่มีลบอัตโนมัติ, alertunknown/full/missing/orphan, retrylimits, incidentwho/when/referenceไม่ใส่พาธลับ และข้อจำกัดnativecodec/DBA/SMBdurability/lockthroughput ต้องมีผู้รับผิดชอบsign-offก่อนProduction
+- [x] Backup/restoredrillชั่วคราวผ่าน: คืนmetadata/files/key/configและpermission ไม่ทับPreview/production; scopeคือrootเดิม owner/anonymous ไม่อ้างcross-machineหรือfullHRmatrixหลังrestore
+- [x] คู่มือภาษาไทยระบุregisteralias→probe→switch→migration→verify→retainold ไม่มีลบอัตโนมัติ, alertunknown/full/missing/orphan, retrylimits, incidentwho/when/referenceไม่ใส่พาธลับ และข้อจำกัดnativecodec/DBA/SMBdurability/lockthroughput ต้องมีผู้รับผิดชอบsign-offก่อนProduction
 - [ ] สรุปtechnicalgate/NASgate/productiongateแยกกัน, หลักฐานรูปstampดูจริง และR02/R03/R13–15coverage; commit `docs: record module 6b verification and storage recovery` แล้วให้ผู้ใช้เลือกpush/PR/merge ไม่ทำอัตโนมัติ
 
 ## ตารางส่งต่องานและความครบถ้วน
+
+ผล Task8 ทางเทคนิค วันที่26กันยายน2026: ผ่านแล้ว backend1,270/1,270บนsourceที่ตรวจSHAตรง, focusedใหม่16/16, Node43/43, transport1/1, Build/Lint/Format/Linux49/audit และHTTPSล่าสุดdev34/prod36ผ่าน แก้devtimeoutที่ช่วงเปิดTCP Docker→hostด้วยupstreampool/conditionalUpgrade ไม่เพิ่มtimeoutหรือskip ผู้ใช้อนุญาตcommit/push/เปิดPRแล้ว แต่ยังไม่อนุญาตmergeในรอบจัดส่งนี้; NASจริง/Productionยังค้าง ไม่อ้างTask8หรือ6Bเสร็จทั้งหมด
 
 | ข้อกำหนด | Taskรับผิดชอบ | สิ่งที่ยังไม่อ้างว่าสำเร็จ |
 | --- | --- | --- |

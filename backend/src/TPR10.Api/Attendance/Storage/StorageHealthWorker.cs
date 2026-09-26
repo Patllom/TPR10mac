@@ -123,7 +123,8 @@ public sealed class StorageHealthScanner(Tpr10DbContext db, StorageRuntime runti
         var progress = runtime.Scans.GetValueOrDefault(snapshot.Id) ?? new(null, 0, 0, 0, false);
         var orphans = await db.Set<EvidenceObject>().CountAsync(x => x.StorageId == snapshot.Id && x.State == EvidenceState.Orphan, ct);
         runtime.Scans[snapshot.Id] = progress with { Orphans = orphans };
-        if (!runtime.Ready(snapshot)) return;
+        // A sealed source must still be checked: it can contain Active or retained Fallback copies.
+        if (runtime.Health(snapshot).Status is not ("ready" or "warning")) return;
         var query = db.Set<EvidenceLocation>().AsNoTracking().Where(x => x.StorageId == snapshot.Id
             && (x.State == CopyState.Active || x.State == CopyState.Verified || x.State == CopyState.Fallback));
         if (progress.After is { } after) query = query.Where(x => x.Id.CompareTo(after) > 0);
