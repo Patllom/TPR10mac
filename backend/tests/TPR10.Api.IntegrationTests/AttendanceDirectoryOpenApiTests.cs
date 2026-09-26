@@ -26,7 +26,7 @@ public sealed class AttendanceDirectoryOpenApiTests
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost:4443") });
         using var doc = JsonDocument.Parse(await client.GetStringAsync("/api/openapi/v1.json"));
         var root = doc.RootElement;
-        var operations = root.GetProperty("paths").EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/attendance/", StringComparison.Ordinal))
+        var operations = root.GetProperty("paths").EnumerateObject().Where(p => p.Name == "/api/v1/attendance/access" || p.Name.StartsWith("/api/v1/attendance/directory/", StringComparison.Ordinal))
             .SelectMany(p => p.Value.EnumerateObject().Select(m => (Path: p.Name, Method: m.Name, Op: m.Value))).ToArray();
         Assert.Equal(13, operations.Length);
         Assert.Equal(ExpectedOperations().Order(), operations.Select(x => $"{x.Method} {x.Path}").Order());

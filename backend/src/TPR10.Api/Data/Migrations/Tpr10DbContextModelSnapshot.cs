@@ -248,6 +248,588 @@ namespace TPR10.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceBinding", b =>
+                {
+                    b.Property<Guid>("EvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTimeOffset>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at_utc");
+
+                    b.HasKey("EvidenceId");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.ToTable("evidence_bindings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_evidence_event", "event_id<>'00000000-0000-0000-0000-000000000000'::uuid AND isfinite(published_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("EvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint")
+                        .HasColumnName("length");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("object_key");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Pending")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("StorageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("storage_id");
+
+                    b.Property<string>("Variant")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("variant");
+
+                    b.Property<DateTimeOffset?>("VerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvidenceId", "Variant")
+                        .IsUnique()
+                        .HasFilter("state = 'Active'");
+
+                    b.HasIndex("StorageId", "ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("EvidenceId", "StorageId", "Variant")
+                        .IsUnique();
+
+                    b.ToTable("evidence_locations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_evidence_copy_bytes", "sha256 ~ '^[a-f0-9]{64}$' AND length BETWEEN 1 AND 10485760");
+
+                            t.HasCheckConstraint("ck_evidence_copy_key", "object_key = 'objects/' || left(replace(evidence_id::text,'-',''),2) || '/' || replace(evidence_id::text,'-','') || '/' || variant || '.jpg'");
+
+                            t.HasCheckConstraint("ck_evidence_copy_state", "state IN ('Pending','Verified','Active','Fallback','Quarantined')");
+
+                            t.HasCheckConstraint("ck_evidence_copy_variant", "variant IN ('full','thumbnail')");
+
+                            t.HasCheckConstraint("ck_evidence_copy_verified", "state NOT IN ('Verified','Active','Fallback') OR verified_at_utc IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_evidence_locations_version", "version>=1");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceObject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("action");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("department_id");
+
+                    b.Property<long>("FencingVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("fencing_version");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<string>("InputSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("input_sha256");
+
+                    b.Property<DateTimeOffset?>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until_utc");
+
+                    b.Property<long?>("Length")
+                        .HasColumnType("bigint")
+                        .HasColumnName("length");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("membership_id");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("object_key");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<DateTimeOffset>("SnapshotAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("snapshot_at_utc");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Reserved")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("StorageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("storage_id");
+
+                    b.Property<long>("StorageVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("storage_version");
+
+                    b.Property<int?>("ThumbnailHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("thumbnail_height");
+
+                    b.Property<long?>("ThumbnailLength")
+                        .HasColumnType("bigint")
+                        .HasColumnName("thumbnail_length");
+
+                    b.Property<string>("ThumbnailSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("thumbnail_sha256");
+
+                    b.Property<int?>("ThumbnailWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("thumbnail_width");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique();
+
+                    b.HasIndex("StorageId");
+
+                    b.HasIndex("OwnerId", "OccurredAtUtc");
+
+                    b.HasIndex("MembershipId", "OwnerId", "WorkspaceId", "DepartmentId");
+
+                    b.ToTable("evidence_objects", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_evidence_action", "action IN ('CheckIn','CheckOut')");
+
+                            t.HasCheckConstraint("ck_evidence_image", "((sha256 IS NULL AND length IS NULL AND width IS NULL AND height IS NULL) OR (sha256 IS NOT NULL AND length IS NOT NULL AND width IS NOT NULL AND height IS NOT NULL AND sha256 ~ '^[a-f0-9]{64}$' AND length BETWEEN 1 AND 10485760 AND width>0 AND height>0 AND width::bigint*height<=20000000))");
+
+                            t.HasCheckConstraint("ck_evidence_input", "input_sha256 IS NULL OR input_sha256 ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_evidence_key", "object_key = 'objects/' || left(replace(id::text,'-',''),2) || '/' || replace(id::text,'-','')");
+
+                            t.HasCheckConstraint("ck_evidence_objects_version", "version>=1");
+
+                            t.HasCheckConstraint("ck_evidence_pin", "storage_version>=1 AND fencing_version>=1 AND operation_id<>'00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_evidence_prepared", "state NOT IN ('Prepared','Published') OR (sha256 IS NOT NULL AND thumbnail_sha256 IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_evidence_state", "state IN ('Reserved','Prepared','Published','Orphan')");
+
+                            t.HasCheckConstraint("ck_evidence_thumbnail", "((thumbnail_sha256 IS NULL AND thumbnail_length IS NULL AND thumbnail_width IS NULL AND thumbnail_height IS NULL) OR (thumbnail_sha256 IS NOT NULL AND thumbnail_length IS NOT NULL AND thumbnail_width IS NOT NULL AND thumbnail_height IS NOT NULL AND thumbnail_sha256 ~ '^[a-f0-9]{64}$' AND thumbnail_length BETWEEN 1 AND 10485760 AND thumbnail_width>0 AND thumbnail_height>0 AND thumbnail_width::bigint*thumbnail_height<=20000000))");
+
+                            t.HasCheckConstraint("ck_evidence_time", "snapshot_at_utc<=occurred_at_utc AND isfinite(snapshot_at_utc) AND isfinite(occurred_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Storage.MigrationItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("error_code");
+
+                    b.Property<Guid>("EvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<long>("ExpectedLength")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_length");
+
+                    b.Property<string>("ExpectedSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("expected_sha256");
+
+                    b.Property<long>("FencingVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("fencing_version");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<Guid?>("LeaseOwner")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_owner");
+
+                    b.Property<DateTimeOffset?>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until_utc");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Pending")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("Variant")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("variant");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvidenceId");
+
+                    b.HasIndex("JobId", "EvidenceId", "Variant")
+                        .IsUnique();
+
+                    b.HasIndex("JobId", "SourceId", "TargetId");
+
+                    b.ToTable("evidence_migration_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_evidence_item_error", "error_code IS NULL OR error_code ~ '^[a-z0-9][a-z0-9-]{0,79}$'");
+
+                            t.HasCheckConstraint("ck_evidence_item_hash", "expected_sha256 ~ '^[a-f0-9]{64}$' AND expected_length BETWEEN 1 AND 10485760");
+
+                            t.HasCheckConstraint("ck_evidence_item_lease", "attempts>=0 AND fencing_version>=1 AND ((lease_owner IS NULL)=(lease_until_utc IS NULL))");
+
+                            t.HasCheckConstraint("ck_evidence_item_status", "status IN ('Pending','Copying','Verified','Completed','Blocked')");
+
+                            t.HasCheckConstraint("ck_evidence_item_variant", "variant IN ('full','thumbnail')");
+
+                            t.HasCheckConstraint("ck_evidence_migration_items_version", "version>=1");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Storage.MigrationJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<long>("SourceVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("source_version");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Pending")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<long>("TargetVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("target_version");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("RequestedBy");
+
+                    b.HasIndex("SourceId")
+                        .IsUnique()
+                        .HasFilter("status <> 'Completed'");
+
+                    b.HasIndex("TargetId");
+
+                    b.ToTable("evidence_migration_jobs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_evidence_job_endpoints", "source_id<>target_id AND source_version>=1 AND target_version>=1");
+
+                            t.HasCheckConstraint("ck_evidence_job_reason", "length(btrim(reason)) BETWEEN 1 AND 500 AND reason !~ '[[:cntrl:]]'");
+
+                            t.HasCheckConstraint("ck_evidence_job_status", "status IN ('Pending','Running','Blocked','Completed')");
+
+                            t.HasCheckConstraint("ck_evidence_migration_jobs_version", "version>=1");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Storage.StorageLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AcceptWrites")
+                        .HasColumnType("boolean")
+                        .HasColumnName("accept_writes");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("alias");
+
+                    b.Property<DateTimeOffset?>("CheckedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checked_at_utc");
+
+                    b.Property<string>("ConfigFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("config_fingerprint");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long?>("FreeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("free_bytes");
+
+                    b.Property<string>("Health")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("unknown")
+                        .HasColumnName("health");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<long?>("TotalBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("total_bytes");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Alias")
+                        .IsUnique();
+
+                    b.ToTable("attendance_storage_locations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_attendance_storage_locations_version", "version>=1");
+
+                            t.HasCheckConstraint("ck_storage_alias", "alias ~ '^[a-z0-9][a-z0-9-]{0,99}$'");
+
+                            t.HasCheckConstraint("ck_storage_capacity", "(free_bytes IS NULL OR free_bytes>=0) AND (total_bytes IS NULL OR total_bytes>=0) AND (free_bytes IS NULL OR total_bytes IS NULL OR free_bytes<=total_bytes)");
+
+                            t.HasCheckConstraint("ck_storage_fingerprint", "config_fingerprint ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_storage_health", "health IN ('unknown','ready','warning','unavailable')");
+
+                            t.HasCheckConstraint("ck_storage_kind", "kind IN ('local-folder','nas-mounted-folder')");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Storage.StorageWriteTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("StorageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("storage_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageId");
+
+                    b.ToTable("attendance_storage_write_target", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_attendance_storage_write_target_version", "version>=1");
+
+                            t.HasCheckConstraint("ck_storage_target_singleton", "id=1");
+                        });
+                });
+
             modelBuilder.Entity("TPR10.Api.Data.Entities.AuditEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1567,6 +2149,91 @@ namespace TPR10.Api.Data.Migrations
                         .HasPrincipalKey("Id", "UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceBinding", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Evidence.EvidenceObject", null)
+                        .WithMany()
+                        .HasForeignKey("EvidenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceLocation", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Evidence.EvidenceObject", null)
+                        .WithMany()
+                        .HasForeignKey("EvidenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Storage.StorageLocation", null)
+                        .WithMany()
+                        .HasForeignKey("StorageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceObject", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Storage.StorageLocation", null)
+                        .WithMany()
+                        .HasForeignKey("StorageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Directory.EmployeeMembership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId", "OwnerId", "WorkspaceId", "DepartmentId")
+                        .HasPrincipalKey("Id", "UserId", "WorkspaceId", "DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Storage.MigrationItem", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Evidence.EvidenceObject", null)
+                        .WithMany()
+                        .HasForeignKey("EvidenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Storage.MigrationJob", null)
+                        .WithMany()
+                        .HasForeignKey("JobId", "SourceId", "TargetId")
+                        .HasPrincipalKey("Id", "SourceId", "TargetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Storage.MigrationJob", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Storage.StorageLocation", null)
+                        .WithMany()
+                        .HasForeignKey("SourceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Storage.StorageLocation", null)
+                        .WithMany()
+                        .HasForeignKey("TargetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Storage.StorageWriteTarget", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Storage.StorageLocation", null)
+                        .WithMany()
+                        .HasForeignKey("StorageId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("TPR10.Api.Data.Entities.AuditEventMetadata", b =>

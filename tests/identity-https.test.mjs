@@ -27,7 +27,8 @@ for (const port of [4000, 4001]) test(`HTTPS proxy รักษา authority แ
     assert.match(text, /X-Forwarded-For \$remote_addr/);
     assert.doesNotMatch(text, /\$proxy_add_x_forwarded_for/);
     assert.match(text, /return 444/);
-    assert.match(text, new RegExp(`proxy_pass http://127.0.0.1:${port}`));
+    assert.match(text, new RegExp(`server 127.0.0.1:${port};`));
+    assert.match(text, /proxy_pass http:\/\/tpr10_local_web;/);
   } finally { run.cleanup(); }
 });
 

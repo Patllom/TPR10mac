@@ -16,10 +16,21 @@ public sealed class AttendanceOpenApiTransformer
         operation.Extensions["x-tpr10-mfa-required"] = new JsonNodeExtension(JsonValue.Create(metadata.RequireMfa));
         operation.Description += metadata.Domain == "attendance-access"
             ? "\nBoolean hints สำหรับแสดงเมนูเท่านั้น ไม่ใช่ authority ไม่คืนข้อมูลลูกทีม รูปหรือพิกัด; API ปลายทางต้องตรวจสิทธิ์ปัจจุบันอีกครั้ง."
+            : metadata.Domain == "attendance-evidence"
+            ? "\nอ่าน JPEG ที่ Published เท่านั้น: ตรวจ IAttendanceAccess.ReadAsync/CanReadPhoto ทั้งก่อนโหลดและก่อนส่ง. เจ้าของอ่านของตนเองได้; HR ต้อง capability, recent MFA และ current grant ตรงหน่วยงานใน snapshot; หัวหน้าอ่านรูปลูกทีมไม่ได้; Admin/storage-manage ไม่มีสิทธิ์โดยอัตโนมัติ. ไม่มี upload/publish endpoint. full/thumbnail/download ใช้สิทธิ์เดียวกัน; no-store, nosniff, ไม่ตอบ304; Range416หลังตรวจสิทธิ์, HEADไม่เปิดเผยข้อมูลก่อนอนุญาต. โหลดและตรวจ checksum นอก identity lock แล้วใช้ dedicated connection/shared advisory lock7241002 ระหว่าง audit commit และส่ง buffer ไม่เกิน10MiB/5วินาที. ถอนสิทธิ์ชนะ lock จะไม่มีรูป; หาก reader ชนะจะส่งในช่วงจำกัดก่อน revocation commit; เรียกคืน bytes ที่ดาวน์โหลดแล้วไม่ได้. ล้มเหลวหลังเริ่มส่งจะ abort ไม่ต่อ JSON."
+            : metadata.Domain == "attendance-storage"
+            ? "\nControl plane ที่เก็บหลักฐาน: permission attendance:storage-manage และ recent MFA; ไม่ให้สิทธิ์อ่านรูป/GPS. เลือกได้เฉพาะ alias จาก protected configuration ไม่รับ root path หรือ credentials. readiness มีอายุ60วินาที ผูกกับรุ่นและ mount; หลัง restart ต้องตรวจใหม่. ลงทะเบียนไม่เปลี่ยน write target และเปลี่ยนปลายทางไม่ย้ายรูปเก่า. expectedVersion ใช้รุ่นล่าสุดจาก server; 409 ให้โหลดใหม่ ไม่ retry mutation อัตโนมัติ. เหตุผล1–500 Unicode scalars ไม่มี control characters. health ตรวจ manifest ครั้งละไม่เกิน100; missingObjects หมายถึง copy ที่ตรวจยืนยันไม่ได้ในรอบสแกน ไม่ยืนยันว่าถูกลบ; orphanObjects นับสถานะ Orphan ในฐานข้อมูล ไม่สำรวจไฟล์นอก manifest. errorCode ไม่มี path/ข้อมูลส่วนตัว."
             : "\nControl plane จัดการต้นสังกัด สายบังคับบัญชาและ HR เท่านั้น ไม่ให้สิทธิ์อ่านรูป/GPS หรือ Site โดยอัตโนมัติ. ต้อง permission+recent MFA; ห้ามเพิ่มอำนาจตนเอง. effective-now และประวัติ read-only; เปลี่ยนจริง revoke session ผู้ได้รับผลพร้อม audit ใน transaction. expectedVersion ใช้ค่าจาก server ห้ามสมมติว่าเริ่ม1หลัง replace; ค่าเก่าตอบ409 โหลดใหม่ก่อนส่งด้วยตนเอง. เหตุผล1–500 Unicode scalars ไม่มี control characters.";
         if (operation.Parameters?.Any(p => p.Name == "pageSize") == true)
             operation.Extensions["x-tpr10-pagination"] = new JsonNodeExtension(new JsonObject { ["pageMinimum"] = 1, ["pageSizeDefault"] = 25, ["pageSizeMaximum"] = 100, ["overMaximum"] = "clamp" });
+        if (metadata.Domain == "attendance-storage" && operation.Parameters?.Any(p => p.Name == "limit") == true)
+            operation.Extensions["x-tpr10-pagination"] = new JsonNodeExtension(new JsonObject { ["offsetMinimum"] = 0, ["limitDefault"] = 25, ["limitMaximum"] = 100, ["overMaximum"] = "reject-400" });
         var problem = await context.GetOrCreateSchemaAsync(typeof(ProblemDetails), cancellationToken: ct);
+        if (metadata.Domain == "attendance-evidence" && operation.Responses!["200"] is OpenApiResponse success)
+            success.Content = new Dictionary<string, OpenApiMediaType>
+            {
+                ["image/jpeg"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" } }
+            };
         foreach (var status in new[] { "400", "401", "403", "404", "409", "500", "503" })
             if (!operation.Responses!.ContainsKey(status)) operation.Responses[status] = new OpenApiResponse
             {

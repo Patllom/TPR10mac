@@ -14,6 +14,7 @@ public sealed class Tpr10DbContext(DbContextOptions<Tpr10DbContext> options) : D
         TPR10.Api.Organization.Data.OrganizationModelConfiguration.Configure(model);
         TPR10.Api.Scopes.Data.ScopeModelConfiguration.Configure(model);
         TPR10.Api.Attendance.Directory.DirectoryModelConfiguration.Configure(model);
+        TPR10.Api.Attendance.Evidence.EvidenceModelConfiguration.Configure(model);
         var probe = model.Entity<TechnicalProbe>();
         probe.ToTable("technical_probes");
         probe.HasKey(x => x.Id);

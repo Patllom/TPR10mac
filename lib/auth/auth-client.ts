@@ -8,8 +8,9 @@ const id = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA
 const organization = `/api/v1/organization/workspaces(?:/${id}/(?:departments|projects)|/${id}/projects/${id}/sites)?`;
 const records = `/api/v1/workspaces/${id}(?:/projects/${id}(?:/sites/${id})?)?/scope-probe-records`;
 const directory = `/api/v1/attendance/directory/(?:memberships|reporting-lines|hr-assignments)(?:/${id}/end)?`;
+const storage = `/api/v1/attendance/storage/(?:locations(?:/${id}/probe)?|write-target|migrations(?:/${id}/resume)?)`;
 export async function authMutation(path: string, body: unknown, method: 'POST' | 'PATCH' = 'POST', signal?: AbortSignal): Promise<Response> {
-  const allowed = method === 'POST' && (paths.has(path) || new RegExp(`^(?:${organization}|${records}(?:/export-simulation)?|${directory}|/api/v1/scope-assignments(?:/${id}/(?:replace|revoke))?)$`).test(path))
+  const allowed = method === 'POST' && (paths.has(path) || new RegExp(`^(?:${organization}|${records}(?:/export-simulation)?|${directory}|${storage}|/api/v1/scope-assignments(?:/${id}/(?:replace|revoke))?)$`).test(path))
     || method === 'PATCH' && new RegExp(`^(?:${organization}|${records})/${id}$`).test(path);
   if (!allowed) throw new Error('เส้นทางคำขอไม่ถูกต้อง');
   signal?.throwIfAborted();
