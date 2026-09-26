@@ -10,7 +10,7 @@
 
 **Spec:** [ข้อกำหนด Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R01–R07, R14–R15 และ §7–10, §13–16
 
-สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขาทำงาน `codex/module-6c-online-attendance` เริ่มจาก commit นี้ ใช้ worktree แยกเดิมที่ชื่อโฟลเดอร์ยังเป็น module-6b-evidence-storage ไม่แตะ checkout หลักที่มีงานค้าง แผนอนุมัติแล้ว Tasks 1–5 ผ่านเกณฑ์ของแต่ละ Task ในเครื่อง ดู [รายงาน Task 1](../../architecture/module-6c-task1-recording-schema.md), [รายงาน Task 2](../../architecture/module-6c-task2-evidence-day-authorization.md), [รายงาน Task 3](../../architecture/module-6c-task3-capture-operations.md), [รายงาน Task 4](../../architecture/module-6c-task4-atomic-recording.md) และ [รายงาน Task 5](../../architecture/module-6c-task5-scoped-history.md); รอบล่าสุด Task5 29/29 ชุดร่วมประวัติ/สิทธิ์/หลักฐาน75/75, Node43/43 และ Build/Lint/format ผ่าน ไม่ได้รัน backend ทั้งโครงการซ้ำใน Task5; Tasks 6–9 ยังไม่เริ่ม และยังไม่ push/merge งาน 6C
+สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขาทำงาน `codex/module-6c-online-attendance` เริ่มจาก commit นี้ ใช้ worktree แยกเดิมที่ชื่อโฟลเดอร์ยังเป็น module-6b-evidence-storage ไม่แตะ checkout หลักที่มีงานค้าง แผนอนุมัติแล้ว Tasks 1–6 ผ่านเกณฑ์ของแต่ละ Task ในเครื่อง ดู [รายงาน Task 1](../../architecture/module-6c-task1-recording-schema.md), [รายงาน Task 2](../../architecture/module-6c-task2-evidence-day-authorization.md), [รายงาน Task 3](../../architecture/module-6c-task3-capture-operations.md), [รายงาน Task 4](../../architecture/module-6c-task4-atomic-recording.md), [รายงาน Task 5](../../architecture/module-6c-task5-scoped-history.md) และ [รายงาน Task 6](../../architecture/module-6c-task6-secure-http.md); รอบล่าสุด backendทั้งโครงการ1,478/1,478 ชุดร่วมAPI/ประวัติ/CSRF150/150, Node49/49 และ Build/Lint/format/HTTPSproxyจริงผ่าน; Tasks 7–9 ยังไม่เริ่ม และยังไม่ push/merge งาน 6C
 
 ## Global Constraints — ข้อบังคับร่วม
 
@@ -190,11 +190,13 @@ Assert.NotNull(CaptureValidation.Validate(metadata with {
 
 **Interfaces:** exact routes/DTO ตามตาราง; TS `issueCaptureChallenge(input: CaptureChallengeRequest, signal: AbortSignal): Promise<Response>`, `submitCapture(action: 'CheckIn'|'CheckOut', metadata: CaptureMetadata, photo: Blob, signal: AbortSignal): Promise<Response>`, `getCaptureOperation(key: string, action: 'CheckIn'|'CheckOut', signal: AbortSignal): Promise<Response>`; typesสะท้อน JSONจากbackend
 
-- [ ] RED: multipart ขาด/ซ้ำpart, forgedCSRF, fakeJPEG, 10MiB+1,20ล้านpixels+1, exactrouteเท่านั้น, 429RetryAfter,503ไม่logout; OpenAPIระบุทุกresponseและsecurity
-- [ ] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceRecordingApiTests|FullyQualifiedName~AttendanceRecordingOpenApiTests'` และ `node --test tests/attendance-recording-client.test.mjs` เก็บ RED
-- [ ] Implement streaming multipart ที่ bounded ไม่รับURL/base64; limit request11MiBเฉพาะสองuploadroutesทั้งKestrel/nginx, metadata16KiB; routeอื่นคงlimitเดิม; browserให้สร้าง boundaryเอง ไม่ตั้ง Content-Type แบบJSON
-- [ ] CSRFใช้flow same-originเดิม, redirect:error, credentials:same-origin, no-store; CSRF timeout10s, upload timeout75s; timeoutแล้วคืนสถานะไม่แน่นอนให้UIตรวจoperation ไม่ส่งใหม่อัตโนมัติ; ไม่ขยาย `authMutation` allowlist เป็น arbitrarypath
-- [ ] GREEN คำสั่งเดิม รวม HTTPSproxy body-limit/same-origin และข้อความไทย แล้ว commit `feat(attendance): expose secure recording and history APIs`
+- [x] RED: multipart ขาด/ซ้ำpart, forgedCSRF, fakeJPEG, 10MiB+1,20ล้านpixels+1, exactrouteเท่านั้น, 429RetryAfter,503ไม่logout; OpenAPIระบุทุกresponseและsecurity
+- [x] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceRecordingApiTests|FullyQualifiedName~AttendanceRecordingOpenApiTests'` และ `node --test tests/attendance-recording-client.test.mjs` เก็บ RED
+- [x] Implement streaming multipart ที่ bounded ไม่รับURL/base64; limit request11MiBเฉพาะสองuploadroutesทั้งKestrel/nginx, metadata16KiB; routeอื่นคงlimitเดิม; browserให้สร้าง boundaryเอง ไม่ตั้ง Content-Type แบบJSON
+- [x] CSRFใช้flow same-originเดิม, redirect:error, credentials:same-origin, no-store; CSRF timeout10s, upload timeout75s; timeoutแล้วคืนสถานะไม่แน่นอนให้UIตรวจoperation ไม่ส่งใหม่อัตโนมัติ; ไม่ขยาย `authMutation` allowlist เป็น arbitrarypath
+- [x] GREEN คำสั่งเดิม รวม HTTPSproxy body-limit/same-origin และข้อความไทย แล้ว commit `feat(attendance): expose secure recording and history APIs`
+
+ผล Task 6: backend1,478/1,478, ชุดร่วม150/150, Node49/49, Build/Lint/format และ HTTPSproxyจริงผ่าน ดู [รายงาน Task 6](../../architecture/module-6c-task6-secure-http.md) REDแรกAPI20/client6; forgedCSRFผ่านด้วยmiddlewareเดิม เพิ่มกรณีdelivery/ขอบเขต/429ในรอบตรวจขยาย ไม่อ้างว่าแต่ละกรณีเหล่านี้ล้มเหลวก่อนimplementationทั้งหมด การตรวจอิสระทั้งสาขายังอยู่Task9
 
 ### Task 7: หน้าลงเวลากล้องสดและ GPS
 

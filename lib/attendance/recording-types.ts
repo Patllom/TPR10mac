@@ -1,0 +1,12 @@
+export type CaptureAction = 'CheckIn' | 'CheckOut';
+export type CaptureSite = { workspaceId: string; projectId: string; siteId: string };
+export type CaptureChallengeRequest = { action: CaptureAction; site: CaptureSite; idempotencyKey: string };
+export type CaptureChallengeView = { id: string; serverNowUtc: string; expiresAtUtc: string };
+export type GpsSample = { latitude: number; longitude: number; accuracyMeters: number; sampledAtUtc: string };
+export type CaptureMetadata = { challengeId: string; idempotencyKey: string; site: CaptureSite; deviceCapturedAtUtc: string; gps: GpsSample; confirmContinuousWork: boolean; expectedDayVersion: number | null };
+export type CaptureReceipt = { operationId: string; dayId: string; eventId: string; workDate: string; occurredAtUtc: string; evidenceId: string; dayVersion: number };
+export type CaptureOperationView = { state: 'Processing' | 'Committed' | 'Expired' | 'Failed'; receipt: CaptureReceipt | null };
+export type AttendanceEventView = { id: string; occurredAtUtc: string; site: CaptureSite; gps: GpsSample; photo?: { evidenceId: string } };
+export type AttendanceDayView = { id: string; workDate: string; version: number; employeeId: string; in: AttendanceEventView; out: AttendanceEventView | null; readBasis: 1 | 2 | 3; effectiveInUtc: string; effectiveOutUtc: string | null };
+export type CurrentAttendanceView = { openDay: AttendanceDayView | null; todayCompleted: boolean; serverNowUtc: string };
+export type AttendancePage = { items: AttendanceDayView[]; nextCursor: string | null };

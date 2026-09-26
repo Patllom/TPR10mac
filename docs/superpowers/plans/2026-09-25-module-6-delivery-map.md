@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec ที่ผู้ใช้อนุมัติ](../specs/2026-09-25-module-6-attendance-design.md)
 
-สถานะวันที่26กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6BครบงานทางเทคนิคและPR #3 mergeเข้าmainตามอนุมัติผู้ใช้แล้วที่ `8a965af` โดยไม่มีNASสำหรับตรวจจริง จึงไม่ถือว่า6Bพร้อมProduction ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6Cอนุมัติแผนแล้ว Task1–5ผ่านTest/Build/Lint/format ตามขอบเขตในรายงานแต่ละTask รอบTask5ตรวจbackendเฉพาะส่วนเกี่ยวข้อง75/75 ยังเหลือTasks6–9และยังไม่push/mergeงาน6C; 6Dยังไม่จัดทำtask-level plan
+สถานะวันที่26กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6BครบงานทางเทคนิคและPR #3 mergeเข้าmainตามอนุมัติผู้ใช้แล้วที่ `8a965af` โดยไม่มีNASสำหรับตรวจจริง จึงไม่ถือว่า6Bพร้อมProduction ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6Cอนุมัติแผนแล้ว Task1–6ผ่านTest/Build/Lint/format รอบTask6 backendทั้งโครงการ1,478/1,478 Node49/49 และHTTPSproxyจริงผ่าน ยังเหลือTasks7–9และยังไม่push/mergeงาน6C; 6Dยังไม่จัดทำtask-level plan
 
 ## Global Constraints
 
