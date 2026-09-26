@@ -10,7 +10,7 @@
 
 **Spec:** [ข้อกำหนด Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R01–R07, R14–R15 และ §7–10, §13–16
 
-สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขาทำงาน `codex/module-6c-online-attendance` เริ่มจาก commit นี้ ใช้ worktree แยกเดิมที่ชื่อโฟลเดอร์ยังเป็น module-6b-evidence-storage ไม่แตะ checkout หลักที่มีงานค้าง แผนอนุมัติแล้ว Task 1 ผ่านชุดเฉพาะ33/33, backend1,303/1,303, Node43/43, Build/Lint/format ดู [รายงาน Task 1](../../architecture/module-6c-task1-recording-schema.md); Tasks 2–9 ยังไม่เริ่ม
+สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขาทำงาน `codex/module-6c-online-attendance` เริ่มจาก commit นี้ ใช้ worktree แยกเดิมที่ชื่อโฟลเดอร์ยังเป็น module-6b-evidence-storage ไม่แตะ checkout หลักที่มีงานค้าง แผนอนุมัติแล้ว Tasks 1–3 ส่งมอบในเครื่องแล้ว ดู [รายงาน Task 1](../../architecture/module-6c-task1-recording-schema.md), [รายงาน Task 2](../../architecture/module-6c-task2-evidence-day-authorization.md) และ [รายงาน Task 3](../../architecture/module-6c-task3-capture-operations.md); ผลล่าสุด backend1,392/1,392 ชุดเฉพาะรวม schema102/102, Node43/43 และ Build/Lint/format ผ่าน; Tasks 4–9 ยังไม่เริ่ม และยังไม่ push/merge งาน 6C
 
 ## Global Constraints — ข้อบังคับร่วม
 
@@ -134,9 +134,9 @@ GPS ใช้เวลาที่ browser รับ sample เทียบเ�
 
 **Interfaces:** `CaptureChallengeService.IssueAsync(CaptureChallengeRequest request, CancellationToken ct): Task<RecordingResult<CaptureChallengeView>>`; `CaptureValidation.Validate(CaptureMetadata metadata, DateTimeOffset now): string?`; `CaptureOperationStore.GetAsync(Guid key, EvidenceAction action, CancellationToken ct): Task<RecordingResult<CaptureOperationView>>`; Store ใช้ entity Task1 สำหรับ claim/fence/digest/result ไม่สร้างผลลงเวลาเอง
 
-- [ ] RED: `ChallengeExpiresAt120Seconds`, `ChallengeBindsSessionActionAndExactSite`, `GpsAge60SecondsAcceptedButOlderRejected`, `FutureOrNonfiniteGpsRejected`, `SameKeyDifferentImageConflicts`, `OtherActorCannotReadOperation` ตรวจขอบก่อน/ตรง/หลัง expiry โดย injected TimeProvider
-- [ ] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CaptureChallengeTests|FullyQualifiedName~CaptureOperationTests'` ให้ fail ตรงกรณีใหม่
-- [ ] Implement ตัวตรวจและสถานะตามตาราง HTTP; key เป็น UUID, canonical digest ใช้ normalized typed JSON+raw image SHA256 ไม่ hash multipart boundary; retry keyเดิมห้ามเปลี่ยน metadata/image/เวลาเดิม
+- [x] RED: `ChallengeExpiresAt120Seconds`, `ChallengeBindsSessionActionAndExactSite`, `GpsAge60SecondsAcceptedButOlderRejected`, `FutureOrNonfiniteGpsRejected`, `SameKeyDifferentImageConflicts`, `OtherActorCannotReadOperation` ตรวจขอบก่อน/ตรง/หลัง expiry โดย injected TimeProvider
+- [x] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CaptureChallengeTests|FullyQualifiedName~CaptureOperationTests'` ให้ fail ตรงกรณีใหม่
+- [x] Implement ตัวตรวจและสถานะตามตาราง HTTP; key เป็น UUID, canonical digest ใช้ normalized typed JSON+raw image SHA256 ไม่ hash multipart boundary; retry keyเดิมห้ามเปลี่ยน metadata/image/เวลาเดิม
 
 ตัวอย่าง assertion ของขอบเวลา GPS (ให้ `metadata` เป็น CaptureMetadata ที่ส่วนอื่นถูกต้อง และ `now` เป็นเวลาทดสอบคงที่):
 
@@ -149,8 +149,8 @@ Assert.NotNull(CaptureValidation.Validate(metadata with {
 }, now));
 ```
 
-- [ ] GREEN พร้อมเพิกถอน assignment/session ขณะรอ lock และ finite/bounds GPS; ไม่มี generic challenge ที่ client เลือก actor ได้
-- [ ] ตรวจ diff แล้ว commit `feat(attendance): add capture challenges and operation tracking`
+- [x] GREEN พร้อมเพิกถอน assignment/session ขณะรอ lock และ finite/bounds GPS; ไม่มี generic challenge ที่ client เลือก actor ได้
+- [x] ตรวจ diff แล้ว commit `feat(attendance): add capture challenges and operation tracking`
 
 ### Task 4: บันทึกเข้า–ออกแบบ atomic และ idempotent
 
