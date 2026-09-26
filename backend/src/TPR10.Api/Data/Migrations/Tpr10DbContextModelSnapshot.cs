@@ -2514,6 +2514,13 @@ namespace TPR10.Api.Data.Migrations
 
             modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceBinding", b =>
                 {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_evidence_binding_attendance_event");
+
                     b.HasOne("TPR10.Api.Attendance.Evidence.EvidenceObject", null)
                         .WithMany()
                         .HasForeignKey("EvidenceId")

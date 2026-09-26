@@ -120,11 +120,13 @@ GPS ใช้เวลาที่ browser รับ sample เทียบเ�
 
 **Interfaces:** `AttendanceEvidenceSubject.ResolveAsync(Tpr10DbContext db, Guid evidenceId, CancellationToken ct): Task<EmploymentSnapshot?>` อ่าน day snapshot ผ่าน binding; ส่งต่อ policy 6A ใน shared authorizer เดิม ไม่เปลี่ยน stamp/publication DTO ของ6B
 
-- [ ] RED: `CheckoutAfterTransferUsesCheckinDepartmentForRead`, `SupervisorCannotReadEitherPhoto`, `MissingEventFailsClosed`, `BindingOwnerActionTimeMismatchRejected`, `RevokedGrantBeforeDeliveryDenied`; assert HR หน่วยเดิมเห็นทั้งคู่ HR หน่วยใหม่ไม่เห็นแม้ checkout เกิดหลังย้าย
-- [ ] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceEvidenceBindingTests|FullyQualifiedName~EvidenceReadTests|FullyQualifiedName~EvidenceSchemaTests|FullyQualifiedName~EvidencePublicationTests'` เก็บผล RED
-- [ ] เพิ่ม FK/deferred guards/preflight และ resolver; ปรับ fixture 6B ให้เพิ่ม live event/day ใน transaction เดียวกับ publication ไม่ผ่อน constraints เพื่อให้ tests ผ่าน
-- [ ] GREEN คำสั่งเดิม พร้อม full/thumbnail/download และ revocation ที่ `AuthorizedImageResult` ใช้ authorizer เดียวกัน
-- [ ] ตรวจ diff แล้ว commit `feat(attendance): authorize evidence through attendance day`
+- [x] RED: `CheckoutAfterTransferUsesCheckinDepartmentForRead`, `SupervisorCannotReadEitherPhoto`, `MissingEventFailsClosed`, `BindingOwnerActionTimeMismatchRejected`, `RevokedGrantBeforeDeliveryDenied`; assert HR หน่วยเดิมเห็นทั้งคู่ HR หน่วยใหม่ไม่เห็นแม้ checkout เกิดหลังย้าย
+- [x] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~AttendanceEvidenceBindingTests|FullyQualifiedName~EvidenceReadTests|FullyQualifiedName~EvidenceSchemaTests|FullyQualifiedName~EvidencePublicationTests'` เก็บผล RED
+- [x] เพิ่ม FK/deferred guards/preflight และ resolver; ปรับ fixture 6B ให้เพิ่ม live event/day ใน transaction เดียวกับ publication ไม่ผ่อน constraints เพื่อให้ tests ผ่าน
+- [x] GREEN คำสั่งเดิม พร้อม full/thumbnail/download และ revocation ที่ `AuthorizedImageResult` ใช้ authorizer เดียวกัน
+- [x] ตรวจ diff แล้ว commit `feat(attendance): authorize evidence through attendance day`
+
+ผล Task 2: backend ทั้งชุด 1,323/1,323, ชุดเฉพาะ 161/161, Node 43/43 และ Build/Lint/format ผ่าน ดู [รายงาน Task 2](../../architecture/module-6c-task2-evidence-day-authorization.md) ปรับ helper ข้อมูลทดสอบและ `EvidenceMigrationTests` เพิ่มเพื่อให้กรณีเผยแพร่หลังย้ายรูปผ่าน FK จริง ไม่เพิ่มฟีเจอร์นอก Task
 
 ### Task 3: Challenge, validation และ operation status
 

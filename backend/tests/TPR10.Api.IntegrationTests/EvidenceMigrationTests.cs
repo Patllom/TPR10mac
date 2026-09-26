@@ -66,7 +66,9 @@ public sealed class EvidenceMigrationTests(PostgresFixture postgres)
             await EvidenceRevocationTests.SetSession(scope.ServiceProvider, f.Subject.EmployeeId);
             var scopedDb = scope.ServiceProvider.GetRequiredService<Tpr10DbContext>();
             await using var tx = await ScopeOperation.BeginAsync(scopedDb, default);
-            await scope.ServiceProvider.GetRequiredService<EvidenceWriter>().StagePublicationAsync(new(f.Pin.EvidenceId, f.Pin.OperationId, Guid.NewGuid(), f.Subject,
+            var eventId = Guid.NewGuid();
+            await AttendanceEvidenceTestData.AddEventAsync(scopedDb, eventId, f.Pin.EvidenceId, f.Subject);
+            await scope.ServiceProvider.GetRequiredService<EvidenceWriter>().StagePublicationAsync(new(f.Pin.EvidenceId, f.Pin.OperationId, eventId, f.Subject,
                 new(f.Subject.OccurredAtUtc, EvidenceAction.CheckIn)), default);
             await scopedDb.SaveChangesAsync(); await tx.CommitAsync();
         }

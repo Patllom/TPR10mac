@@ -156,7 +156,9 @@ public sealed class EvidenceReadTests(PostgresFixture postgres)
             await writer.PrepareAsync(pin, new MemoryStream(EvidencePublicationTests.Photo()), stamp, default);
             var scopedDb = scope.ServiceProvider.GetRequiredService<Tpr10DbContext>();
             await using var tx = await ScopeOperation.BeginAsync(scopedDb, default);
-            await writer.StagePublicationAsync(new(pin.EvidenceId, pin.OperationId, Guid.NewGuid(), subject, stamp), default);
+            var eventId = Guid.NewGuid();
+            await AttendanceEvidenceTestData.AddEventAsync(scopedDb, eventId, pin.EvidenceId, subject);
+            await writer.StagePublicationAsync(new(pin.EvidenceId, pin.OperationId, eventId, subject, stamp), default);
             await scopedDb.SaveChangesAsync(); await tx.CommitAsync(); url = "/api/v1/attendance/evidence/" + pin.EvidenceId;
         }
         if (role is "supervisor" or "hr" or "cross-unit" or "expired-mfa")
@@ -300,7 +302,9 @@ internal sealed class EvidenceFixture(StorageTestFixture storage, IdentityTestDr
                 if (state == "Published")
                 {
                     await using var tx = await ScopeOperation.BeginAsync(db, default);
-                    await writer.StagePublicationAsync(new(pin.EvidenceId, pin.OperationId, Guid.NewGuid(), subject, stamp), default);
+                    var eventId = Guid.NewGuid();
+                    await AttendanceEvidenceTestData.AddEventAsync(db, eventId, pin.EvidenceId, subject);
+                    await writer.StagePublicationAsync(new(pin.EvidenceId, pin.OperationId, eventId, subject, stamp), default);
                     await db.SaveChangesAsync(); await tx.CommitAsync();
                 }
                 if (state == "Orphan")
