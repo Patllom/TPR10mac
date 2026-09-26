@@ -10,7 +10,7 @@
 
 **Spec:** [Design Spec ที่ผู้ใช้อนุมัติ](../specs/2026-09-25-module-6-attendance-design.md)
 
-สถานะวันที่26กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6BครบงานทางเทคนิคและPR #3 mergeเข้าmainตามอนุมัติผู้ใช้แล้วที่ `8a965af` โดยไม่มีNASสำหรับตรวจจริง จึงไม่ถือว่า6Bพร้อมProduction ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6Cอนุมัติแผนแล้ว Task1–6ผ่านTest/Build/Lint/format รอบTask6 backendทั้งโครงการ1,478/1,478 Node49/49 และHTTPSproxyจริงผ่าน ยังเหลือTasks7–9และยังไม่push/mergeงาน6C; 6Dยังไม่จัดทำtask-level plan
+สถานะวันที่26กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6BครบงานทางเทคนิคและPR #3 mergeเข้าmainแล้วที่ `8a965af` แต่ NASจริง/Production ยังรอตรวจ ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6C Tasks1–7ผ่านเกณฑ์ในเครื่อง รอบTask7 Node53/53, browser HTTPS19/19, backend regression ที่เกี่ยวข้อง173/173 และBuild/Lint/formatผ่าน ไม่ได้รันbackendทั้งโครงการซ้ำจากผล1,478/1,478ของTask6 ยังเหลือTasks8–9และยังไม่push/mergeงาน6C; 6Dยังไม่จัดทำtask-level plan
 
 ## Global Constraints
 
@@ -66,7 +66,7 @@
 
 - [Implementation Plan 6A — บุคลากรและสิทธิ์](2026-09-25-module-6a-directory-access.md) มีไฟล์ สัญญา DTO, RED/GREEN, commands และ exit gate พร้อมให้ตรวจ
 - [Implementation Plan 6B — หลักฐานภาพและที่เก็บ](2026-09-25-module-6b-evidence-storage.md) ผ่านtechnical gateและmerge PR #3แล้ว โดยNASจริง/Productionยังค้าง
-- [Implementation Plan 6C — ลงเวลาออนไลน์](2026-09-26-module-6c-online-attendance.md) อนุมัติแล้ว Task1ส่งมอบschema/lock, Task2เชื่อมรูปกับevent/dayและread gate, Task3เพิ่มchallenge/validation/operation status และTask4บันทึกเข้า–ออกแบบatomic/idempotent พร้อมbackend1,417/1,417และNode43/43; ถัดไปTask5อ่านรายการปัจจุบันและประวัติตามสิทธิ์ ยังไม่มีหน้าลงเวลา; แผน6Dจะล็อกrevision/state transitionsหลังมีevent contractจริง
+- [Implementation Plan 6C — ลงเวลาออนไลน์](2026-09-26-module-6c-online-attendance.md) Tasks1–7 ส่งมอบschema/lock, read gate, challenge/operation, atomic recording, current/history services, HTTP API และหน้ากล้อง/GPSแล้วในสาขาทำงาน ถัดไป Task8 หน้าประวัติส่วนตัว/หัวหน้า/HR และ Task9 ตรวจทั้งสาขา/อุปกรณ์จริง ดู [รายงาน Task7](../../architecture/module-6c-task7-live-capture.md); แผน6Dจะล็อกrevision/state transitionsหลังมีevent contractจริง
 - ยังไม่มีการอนุมัติแผนใดจากการอนุมัติ Spec เพียงครั้งเดียว ต้องอนุมัติแผนก่อน execution แต่ไม่ย้อนถามข้อกำหนดที่ยืนยันแล้ว
 - วิธีทำงาน Native ที่ใช้ในModuleก่อนหน้ายังคงใช้ได้: ผู้ทำหลักทำTDDและหนึ่ง fresh whole-branch review ต่อระยะ; ผู้ใช้เปลี่ยนเป็น subagent-driven ได้ก่อนเริ่ม
 - ไม่รวมการแก้ปัญหา Preview หรือบัญชีทดสอบในแผนนี้ ไม่แตะไฟล์ pre-merge-backup และไม่อัปเกรด dependency โดยไม่มีเหตุผล

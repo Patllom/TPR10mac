@@ -10,7 +10,7 @@
 
 **Spec:** [ข้อกำหนด Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R01–R07, R14–R15 และ §7–10, §13–16
 
-สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขาทำงาน `codex/module-6c-online-attendance` เริ่มจาก commit นี้ ใช้ worktree แยกเดิมที่ชื่อโฟลเดอร์ยังเป็น module-6b-evidence-storage ไม่แตะ checkout หลักที่มีงานค้าง แผนอนุมัติแล้ว Tasks 1–6 ผ่านเกณฑ์ของแต่ละ Task ในเครื่อง ดู [รายงาน Task 1](../../architecture/module-6c-task1-recording-schema.md), [รายงาน Task 2](../../architecture/module-6c-task2-evidence-day-authorization.md), [รายงาน Task 3](../../architecture/module-6c-task3-capture-operations.md), [รายงาน Task 4](../../architecture/module-6c-task4-atomic-recording.md), [รายงาน Task 5](../../architecture/module-6c-task5-scoped-history.md) และ [รายงาน Task 6](../../architecture/module-6c-task6-secure-http.md); รอบล่าสุด backendทั้งโครงการ1,478/1,478 ชุดร่วมAPI/ประวัติ/CSRF150/150, Node49/49 และ Build/Lint/format/HTTPSproxyจริงผ่าน; Tasks 7–9 ยังไม่เริ่ม และยังไม่ push/merge งาน 6C
+สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขา `codex/module-6c-online-attendance` ใช้ worktree แยกเดิม ไม่แก้ checkout หลักที่มีงานค้าง Tasks 1–7 ผ่านเกณฑ์ของแต่ละ Task ในเครื่อง ดูรายงานแต่ละ Task ด้านล่าง รอบ Task7 Node53/53, browser HTTPS19/19, backend regression ที่เกี่ยวข้อง173/173 และ Build/Lint/formatผ่าน ส่วน backend ทั้งโครงการ1,478/1,478 เป็นผลรอบ Task6 ไม่ได้รันทั้งชุดใหม่ใน Task7; เหลือ Tasks 8–9 และยังไม่ push/merge งาน 6C
 
 ## Global Constraints — ข้อบังคับร่วม
 
@@ -206,11 +206,13 @@ Assert.NotNull(CaptureValidation.Validate(metadata with {
 
 **Interfaces:** `useLiveCapture(): { phase, error, previewUrl, gps, start, capture, reset, stop }`; startรับaction/siteและขอchallengeก่อนcapture, captureสร้างBlobจากvideo stream; UIเรียก clientTask6 และ currentTask5 ไม่เก็บsecret/payloadถาวร
 
-- [ ] RED browser: permission denied, GPStimeout/stale, challengeexpiry,ไม่มีfileinput/drop, offlineไม่queue,กดซ้ำ/timeoutต้องตรวจoperation,ออกข้ามวันยืนยันต่อเนื่อง,ลืมออกแจ้งรอ6D
-- [ ] รันผ่าน `runHttpsSmoke` ตามคำสั่งด้านล่างเฉพาะcapture บน port4000 ให้ fail ที่พฤติกรรมใหม่
-- [ ] Implementสถานะ idle→permissions→ready→captured→submitting→success/uncertain/error; ปิดปุ่มขณะส่ง; sampleGPSใหม่ก่อนยืนยัน; warning accuracy>100m ไม่block; แสดงเวลาserverไม่เรียกภาพpreviewว่าประทับแล้ว
-- [ ] เมื่อ visibility hidden/navigation/logout/authchange: abortrequest, stopทุกMediaStreamTrack, revokeObjectURL, ล้างรูป/GPS; กลับแท็บโหลดsession/currentใหม่และถ่ายใหม่ ไม่แสดงlate responseข้ามauth epoch
-- [ ] GREEN keyboard/label/live error/portrait-landscape และ no browserstorage; commit `feat(attendance): add live camera and GPS capture portal`
+- [x] RED browser: permission denied, GPStimeout/stale, challengeexpiry,ไม่มีfileinput/drop, offlineไม่queue,กดซ้ำ/timeoutต้องตรวจoperation,ออกข้ามวันยืนยันต่อเนื่อง,ลืมออกแจ้งรอ6D
+- [x] รันผ่าน `runHttpsSmoke` ตามคำสั่งด้านล่างเฉพาะcapture บน port4000 ให้ fail ที่พฤติกรรมใหม่
+- [x] Implementสถานะ idle→permissions→ready→captured→submitting→success/uncertain/error; ปิดปุ่มขณะส่ง; sampleGPSใหม่ก่อนยืนยัน; warning accuracy>100m ไม่block; แสดงเวลาserverไม่เรียกภาพpreviewว่าประทับแล้ว
+- [x] เมื่อ visibility hidden/navigation/logout/authchange: abortrequest, stopทุกMediaStreamTrack, revokeObjectURL, ล้างรูป/GPS; กลับแท็บโหลดsession/currentใหม่และถ่ายใหม่ ไม่แสดงlate responseข้ามauth epoch
+- [x] GREEN keyboard/label/live error/portrait-landscape และ no browserstorage; commit `feat(attendance): add live camera and GPS capture portal`
+
+ผล Task 7: Node53/53, browser HTTPS dev19/19, backend regression ที่เกี่ยวข้อง173/173, Build/Lint/formatผ่าน ไม่มีการเปลี่ยน backend และไม่ได้รัน backend ทั้งโครงการใหม่ เพิ่ม capture-view parser/unit tests และใช้ exact Site discovery สำหรับเมนู ดู [รายงาน Task 7](../../architecture/module-6c-task7-live-capture.md) ตรวจโดยผู้เขียนและแก้ uncertain404/กล้องไม่ส่งเฟรมด้วย RED→GREEN; อุปกรณ์และ recording HTTP ใน browser เป็นข้อมูลทดสอบ ไม่แทนมือถือจริง ผู้ใช้อนุญาตหยุด Preview ชั่วคราวเพื่อทดสอบและต้องคืน Preview เดิม ไม่ push/merge
 
 ### Task 8: หน้าประวัติส่วนตัว ลูกทีม และ HR
 
