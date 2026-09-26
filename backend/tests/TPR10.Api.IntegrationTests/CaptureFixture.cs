@@ -27,7 +27,7 @@ internal sealed class CaptureFixture(AttendanceRecordingFixture data, ServicePro
     internal EmploymentSnapshot Subject => new(Guid.Parse("00000000-0000-0000-0000-000000000041"), Employee,
         Site.WorkspaceId, Guid.Parse("00000000-0000-0000-0000-000000000011"), Clock.GetUtcNow());
 
-    internal static async Task<CaptureFixture> CreateAsync(string connection)
+    internal static async Task<CaptureFixture> CreateAsync(string connection, Action<IServiceCollection>? configure = null)
     {
         var data = await AttendanceRecordingFixture.CreateAsync(connection);
         try
@@ -52,6 +52,7 @@ internal sealed class CaptureFixture(AttendanceRecordingFixture data, ServicePro
             services.AddSingleton<ICorrelationContext>(new CorrelationContext());
             services.AddScoped<IAuditEventWriter, AuditEventWriter>();
             services.AddAttendance();
+            configure?.Invoke(services);
             return new(data, services.BuildServiceProvider(), clock);
         }
         catch { await data.DisposeAsync(); throw; }

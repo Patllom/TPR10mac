@@ -16,6 +16,7 @@ public static class AttendanceRegistration
         services.AddScoped<DirectoryService>();
         services.AddScoped<CaptureChallengeService>();
         services.AddScoped<CaptureOperationStore>();
+        services.AddScoped<AttendanceRecorder>();
         services.AddOptions<StorageOptions>().BindConfiguration("AttendanceStorage");
         services.AddSingleton<StorageRuntime>();
         services.AddScoped<StorageRegistry>();
