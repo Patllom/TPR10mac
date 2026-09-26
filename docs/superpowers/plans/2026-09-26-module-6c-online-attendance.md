@@ -10,7 +10,7 @@
 
 **Spec:** [ข้อกำหนด Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R01–R07, R14–R15 และ §7–10, §13–16
 
-สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขาทำงาน `codex/module-6c-online-attendance` เริ่มจาก commit นี้ ใช้ worktree แยกเดิมที่ชื่อโฟลเดอร์ยังเป็น module-6b-evidence-storage ไม่แตะ checkout หลักที่มีงานค้าง แผนอนุมัติแล้ว Tasks 1–4 ผ่านเกณฑ์เทคนิคในเครื่องแล้ว ดู [รายงาน Task 1](../../architecture/module-6c-task1-recording-schema.md), [รายงาน Task 2](../../architecture/module-6c-task2-evidence-day-authorization.md), [รายงาน Task 3](../../architecture/module-6c-task3-capture-operations.md) และ [รายงาน Task 4](../../architecture/module-6c-task4-atomic-recording.md); ผลล่าสุด backend1,417/1,417 ชุดเฉพาะ Tasks1–4 รวม schema127/127, Node43/43 และ Build/Lint/format ผ่าน; Tasks 5–9 ยังไม่เริ่ม และยังไม่ push/merge งาน 6C
+สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขาทำงาน `codex/module-6c-online-attendance` เริ่มจาก commit นี้ ใช้ worktree แยกเดิมที่ชื่อโฟลเดอร์ยังเป็น module-6b-evidence-storage ไม่แตะ checkout หลักที่มีงานค้าง แผนอนุมัติแล้ว Tasks 1–5 ผ่านเกณฑ์ของแต่ละ Task ในเครื่อง ดู [รายงาน Task 1](../../architecture/module-6c-task1-recording-schema.md), [รายงาน Task 2](../../architecture/module-6c-task2-evidence-day-authorization.md), [รายงาน Task 3](../../architecture/module-6c-task3-capture-operations.md), [รายงาน Task 4](../../architecture/module-6c-task4-atomic-recording.md) และ [รายงาน Task 5](../../architecture/module-6c-task5-scoped-history.md); รอบล่าสุด Task5 29/29 ชุดร่วมประวัติ/สิทธิ์/หลักฐาน75/75, Node43/43 และ Build/Lint/format ผ่าน ไม่ได้รัน backend ทั้งโครงการซ้ำใน Task5; Tasks 6–9 ยังไม่เริ่ม และยังไม่ push/merge งาน 6C
 
 ## Global Constraints — ข้อบังคับร่วม
 
@@ -174,11 +174,13 @@ Assert.NotNull(CaptureValidation.Validate(metadata with {
 
 **Interfaces:** `AttendanceReadScope.VisibleDaysAsync(AttendanceAudience audience, CancellationToken ct): Task<IQueryable<AttendanceDay>>` สร้าง query ภายใน caller identity transaction; `AttendanceHistory.CurrentAsync(ct): Task<RecordingResult<CurrentAttendanceView>>`, `ListAsync(AttendanceAudience audience, AttendanceListQuery query, ct): Task<RecordingResult<AttendancePage>>`, `GetAsync(Guid dayId, ct): Task<RecordingResult<AttendanceDayView>>` โดย ct เป็น CancellationToken ทุกเมธอด
 
-- [ ] RED: `ScopeAppliedBeforePagination`, `NewSupervisorCannotReadPreviousMembershipHistory`, `TeamJsonOmitsPhotoField`, `HrGrantRemovalHidesOldDays`, `AdminWithoutGrantGetsNoBusinessData`, `ForgedCursorCannotChangeScope`
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceHistoryTests` ให้ fail; ใส่ unauthorized rows ก่อน authorized rows เพื่อจับการ filter หลัง pagination
-- [ ] Implement keysetเรียง WorkDate/Id ลดหลั่น cursor bind audience/filter/session, ไม่ส่ง total ข้ามscope; reuse6A own→HR→supervisor precedence; recentMFAตามฐานสิทธิ์; revalidateก่อนserializeใน transactionสั้นมี timeout ไม่มีfilesystem I/O
-- [ ] GREEN เปรียบเทียบ querypolicyกับ `IAttendanceAccess.ReadAsync` ทุกฐานสิทธิ์, date-range31วัน, pageSize100, ไม่เผยแถว/ชื่อ/รูปผ่าน countsหรือerrors
-- [ ] ตรวจ diff แล้ว commit `feat(attendance): add scoped current and history queries`
+- [x] RED: `ScopeAppliedBeforePagination`, `NewSupervisorCannotReadPreviousMembershipHistory`, `TeamJsonOmitsPhotoField`, `HrGrantRemovalHidesOldDays`, `AdminWithoutGrantGetsNoBusinessData`, `ForgedCursorCannotChangeScope`
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~AttendanceHistoryTests` ให้ fail; ใส่ unauthorized rows ก่อน authorized rows เพื่อจับการ filter หลัง pagination
+- [x] Implement keysetเรียง WorkDate/Id ลดหลั่น cursor bind audience/filter/session, ไม่ส่ง total ข้ามscope; reuse6A own→HR→supervisor precedence; recentMFAตามฐานสิทธิ์; revalidateก่อนserializeใน transactionสั้นมี timeout ไม่มีfilesystem I/O
+- [x] GREEN เปรียบเทียบ querypolicyกับ `IAttendanceAccess.ReadAsync` ทุกฐานสิทธิ์, date-range31วัน, pageSize100, ไม่เผยแถว/ชื่อ/รูปผ่าน countsหรือerrors
+- [x] ตรวจ diff แล้ว commit `feat(attendance): add scoped current and history queries`
+
+ผล Task 5: RED18 → GREEN18 และเพิ่ม review/edge cases เป็น29/29; ชุดร่วมสิทธิ์/หลักฐาน75/75, Node43/43, Build/Lint/format ผ่าน ตรวจโดยผู้เขียน รายละเอียดและขอบเขตการตรวจใน [รายงาน Task 5](../../architecture/module-6c-task5-scoped-history.md) ด่านตรวจสิทธิ์ตอนส่ง HTTP จริงเป็นงาน Task 6
 
 ### Task 6: HTTP multipart, CSRF, OpenAPI และ client transport
 

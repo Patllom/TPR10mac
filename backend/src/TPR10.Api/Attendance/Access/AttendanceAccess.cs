@@ -30,11 +30,9 @@ public sealed class AttendanceAccess(Tpr10DbContext db, ScopeAccess session, Tim
         if (!await ValidSnapshotAsync(db, subject, now, ct)) return Denied(404);
         if (subject.EmployeeId == identity.ActorId) return new(true, true, true, AttendanceReadBasis.Own, null);
         if (!identity.RecentMfa) return Denied(403);
-        if (await EligibleUsers(db, "attendance:hr-read").ContainsAsync(identity.ActorId, ct)
-            && await DirectoryQueries.Hr(db, now).AnyAsync(x => x.UserId == identity.ActorId && x.WorkspaceId == subject.WorkspaceId && x.DepartmentId == subject.DepartmentId, ct))
+        if (await HrMemberships(db, identity.ActorId, now).AnyAsync(x => x.Id == subject.MembershipId, ct))
             return new(true, true, true, AttendanceReadBasis.Hr, null);
-        if (await EligibleUsers(db, "attendance:team-read").ContainsAsync(identity.ActorId, ct)
-            && await DirectoryQueries.Reporting(db, now).AnyAsync(x => x.SupervisorUserId == identity.ActorId && x.EmployeeUserId == subject.EmployeeId && x.EmployeeMembershipId == subject.MembershipId, ct))
+        if (await TeamMemberships(db, identity.ActorId, now).AnyAsync(x => x.Id == subject.MembershipId, ct))
             return new(true, true, false, AttendanceReadBasis.Supervisor, null);
         return Denied(404);
     }
@@ -76,6 +74,15 @@ public sealed class AttendanceAccess(Tpr10DbContext db, ScopeAccess session, Tim
          where user.IsActive && (role.RoleClass == "approval" || role.RoleClass == "accounting" || role.RoleClass == "finance-data-access")
             && p.Domain == AttendanceCatalog.Domain && p.Capability == capability
          select user.Id).Distinct();
+
+    // Shared SQL policies for individual evidence reads and scoped history queries.
+    internal static IQueryable<EmployeeMembership> HrMemberships(Tpr10DbContext db, Guid actor, DateTimeOffset now) =>
+        db.Set<EmployeeMembership>().Where(m => EligibleUsers(db, "attendance:hr-read").Contains(actor)
+            && DirectoryQueries.Hr(db, now).Any(h => h.UserId == actor && h.WorkspaceId == m.WorkspaceId && h.DepartmentId == m.DepartmentId));
+
+    internal static IQueryable<EmployeeMembership> TeamMemberships(Tpr10DbContext db, Guid actor, DateTimeOffset now) =>
+        db.Set<EmployeeMembership>().Where(m => EligibleUsers(db, "attendance:team-read").Contains(actor)
+            && DirectoryQueries.Reporting(db, now).Any(r => r.SupervisorUserId == actor && r.EmployeeUserId == m.UserId && r.EmployeeMembershipId == m.Id));
 
     private static AttendanceReadDecision Denied(int status) => new(false, false, false, AttendanceReadBasis.None, status);
 }
