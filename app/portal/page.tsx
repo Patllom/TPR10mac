@@ -24,6 +24,7 @@ export default async function PortalPage() {
     <nav className="my-5 flex flex-col gap-4 underline" aria-label="เมนูระบบ">
       <a href="/portal/scopes">เลือกพื้นที่ทำงาน</a>
       {canRecord && <a href="/portal/attendance">ลงเวลาเข้า–ออก</a>}
+      <a href="/portal/attendance#history">ประวัติการลงเวลาของฉัน</a>
       {session.permissions.includes('organization:manage') && <a href="/portal/admin/organization">จัดการโครงสร้างองค์กร</a>}
       {session.permissions.includes('scope-assignments:manage') && <a href="/portal/admin/assignments">จัดการการมอบหมายสิทธิ์</a>}
       {session.permissions.includes('attendance:directory-manage') && <a href="/portal/admin/attendance-directory">จัดการบุคลากรและสายบังคับบัญชา</a>}

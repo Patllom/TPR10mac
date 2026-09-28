@@ -69,7 +69,7 @@ for (const [mode, message] of [['camera-denied', 'กล้อง'], ['gps-timeo
 test('ภาพสดเท่านั้น GPS ใหม่ ความแม่นยำต่ำไม่บล็อก และส่งครั้งเดียว', async ({ page, context }) => {
   await setup(page, context);
   await expect(page.locator('input[type=file]')).toHaveCount(0);
-  await page.locator('section').evaluate(el => el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() })));
+  await page.getByLabel('ภาพจากกล้องสด').evaluate(el => el.parentElement!.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() })));
   await expect(page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true })).toBeDisabled();
   await capture(page);
   await expect(page.getByRole('status')).toContainText('100 เมตร');

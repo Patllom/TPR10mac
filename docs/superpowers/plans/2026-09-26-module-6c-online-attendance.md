@@ -10,7 +10,7 @@
 
 **Spec:** [ข้อกำหนด Module 6 ที่อนุมัติแล้ว](../specs/2026-09-25-module-6-attendance-design.md) โดยเฉพาะ R01–R07, R14–R15 และ §7–10, §13–16
 
-สถานะ 26 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขา `codex/module-6c-online-attendance` ใช้ worktree แยกเดิม ไม่แก้ checkout หลักที่มีงานค้าง Tasks 1–7 ผ่านเกณฑ์ของแต่ละ Task ในเครื่อง ดูรายงานแต่ละ Task ด้านล่าง รอบ Task7 Node53/53, browser HTTPS19/19, backend regression ที่เกี่ยวข้อง173/173 และ Build/Lint/formatผ่าน ส่วน backend ทั้งโครงการ1,478/1,478 เป็นผลรอบ Task6 ไม่ได้รันทั้งชุดใหม่ใน Task7; เหลือ Tasks 8–9 และยังไม่ push/merge งาน 6C
+สถานะ 28 กันยายน 2026: PR #3 ของ 6B merge เข้า GitHub main แล้วที่ `8a965af2b47463c58b40005e99ef6e5a51f18adb` สาขา `codex/module-6c-online-attendance` ใช้ worktree แยกเดิม ไม่แก้ checkout หลักที่มีงานค้าง Tasks 1–8 ผ่านเกณฑ์ของแต่ละ Task ในเครื่อง รอบ Task8 Node59/59, ประวัติ HTTPS dev11/11 และ production-build11/11, กล้อง regression production-build19/19, backend ที่เกี่ยวข้อง111/111 และ Build/Lint/formatผ่าน ส่วน backend ทั้งโครงการ1,478/1,478 เป็นผลรอบ Task6 ไม่ได้รันทั้งชุดใหม่ใน Task8; เหลือ Task9 และยังไม่ push/merge งาน 6C
 
 ## Global Constraints — ข้อบังคับร่วม
 
@@ -222,10 +222,12 @@ Assert.NotNull(CaptureValidation.Validate(metadata with {
 
 **Interfaces:** `AttendanceHistory({ audience }: { audience: 'Mine'|'Team'|'Hr' })`; hook `useAttendanceHistory(audience, query)` คืน `{data,error,loading,reload}` ใช้ DTOTask5/6; ภาพเรียกevidenceendpoint6BเดิมหลังAPIให้EvidenceIdเท่านั้น
 
-- [ ] RED: ownเห็นรูป/GPS, supervisorไม่โหลด/ไม่มีphotofieldหรือDOM, HRเห็นเฉพาะหน่วย, adminไม่มีสิทธิ์, ถอนHRแล้วกลับแท็บไม่ค้างภาพ,เปลี่ยนบัญชีระหว่างfetchไม่แสดงข้อมูลเก่า
-- [ ] รัน HTTPSfixture history บนport4000 ให้ fail ก่อนimplementation
-- [ ] Implementวันที่ไทย/คู่ข้ามวัน/แยกSiteเข้าออก/ฐานสิทธิ์/pagination/error; ไม่มีexportหรือแก้เวลา; ใช้ `subscribeAuthChanges` และfocusrevalidation, abort+epoch+clearDOM ตามpattern6A/6B
-- [ ] GREEN mobile/keyboard และ directURL evidence ยังผ่านbackendgate; commit `feat(attendance): add private attendance history views`
+- [x] RED: ownเห็นรูป/GPS, supervisorไม่โหลด/ไม่มีphotofieldหรือDOM, HRเห็นเฉพาะหน่วย, adminไม่มีสิทธิ์, ถอนHRแล้วกลับแท็บไม่ค้างภาพ,เปลี่ยนบัญชีระหว่างfetchไม่แสดงข้อมูลเก่า
+- [x] รัน HTTPSfixture history บนport4000 ให้ fail ก่อนimplementation
+- [x] Implementวันที่ไทย/คู่ข้ามวัน/แยกSiteเข้าออก/ฐานสิทธิ์/pagination/error; ไม่มีexportหรือแก้เวลา; ใช้ `subscribeAuthChanges` และfocusrevalidation, abort+epoch+clearDOM ตามpattern6A/6B
+- [x] GREEN mobile/keyboard และ directURL evidence ยังผ่านbackendgate; commit `feat(attendance): add private attendance history views`
+
+ผล Task8: Node59/59, history browser dev11/11 และ production-build11/11, capture regression production-build19/19, backendเฉพาะส่วน111/111, Build/Lint/formatผ่าน เพิ่ม parser/client helpers และใช้ attendance/access สำหรับเมนู Browserใช้ข้อมูลประวัติ/ภาพสังเคราะห์; ขอบเขต HR และสิทธิ์ URL รูปจริงตรวจแยกด้วย backend tests ดู [รายงาน Task8](../../architecture/module-6c-task8-private-history.md) ตรวจโดยผู้พัฒนา; independent review และอุปกรณ์จริงยังอยู่ Task9 ไม่อ้างผล viewport แทนมือถือจริง
 
 ### Task 9: ตรวจทั้งสาขาและเอกสารรับงาน
 
