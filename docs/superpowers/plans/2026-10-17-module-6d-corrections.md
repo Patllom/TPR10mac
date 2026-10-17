@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-module-6-attendance-design.md` โดยเฉพาะ R08–R12, §11–16; สัญญาส่งต่อ `docs/architecture/module-6c-exit-gate.md`
 
-สถานะ: **Tasks 1–2 ผ่านการตรวจรับแล้ว** วันที่17ตุลาคม2026 รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks3–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
+สถานะ: **Tasks 1–3 ผ่านการตรวจรับแล้ว** (Task3 วันที่18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks4–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
 
 ## Global Constraints
 
@@ -106,15 +106,28 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 ## Task 3: ส่งคำร้องและเส้นทางอนุมัติ
 
+นโยบายที่ผู้ใช้ยืนยันเพิ่มเติม: ผู้จัดเส้นทางใหม่ต้องมี `attendance:directory-manage` และ MFA ล่าสุด พร้อม HR assignment ที่ยังมีผลตรง Workspace/Department ของคำร้องครบทั้งสามเงื่อนไข ไม่ได้สิทธิ์จากการเป็น HR หรือ Admin เพียงอย่างเดียว และไม่สร้างสิทธิ์จัดหน่วยงานชุดใหม่
+
 **Files:** สร้าง `Corrections/CorrectionRouting.cs`, `Corrections/CorrectionSubmission.cs`; tests `CorrectionRoutingTests.cs`
 
 **Interfaces:** ใช้ `IAttendanceRouteResolver.ResolveAsync(EmploymentSnapshot, CancellationToken): Task<AttendanceRouteDecision>` ของ6A; `CorrectionSubmission.SubmitAsync(Guid, CorrectionCommand, CancellationToken)` และ `RerouteAsync(Guid, CorrectionCommand, CancellationToken)` คืน `Task<CorrectionResult<CorrectionView>>`
 
-- [ ] RED: routeขาด/วน/self/ไม่มีHRคนอื่น409; หัวหน้ายื่นส่งหัวหน้าของตน; HRยื่นไม่อยู่candidate; membershipเปลี่ยนจนresolverปฏิเสธให้ค้างไม่override; pendingไม่expire; Returnedเกินกำหนดส่งไม่ได้
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CorrectionRoutingTests` คาดFAIL
-- [ ] Submitตรึงroute+revisionในtransaction; snapshotไม่ให้สิทธิ์ข้ามcurrentgrant Rerouteให้ผู้มี `attendance:directory-manage` พร้อมrecentMFAและหน่วยงานที่จัดการได้ ทำได้เฉพาะpending/routeblocked; คำนวณใหม่จากresolverเท่านั้น ไม่รับผู้อนุมัติจากbody; สร้างroute revision เก็บค่าproposalเดิม invalidates approvals กลับPendingSupervisor พร้อมเหตุผล/audit ไม่ต่อdeadlineพนักงาน
-- [ ] GREEN พร้อม race revokeระหว่างรอlockและ rerouteไม่ข้ามไปHR; หากcurrentgrantไม่มีหน่วยงานจัดการได้ให้403 ไม่ใช้Adminbypass
-- [ ] commit `feat(attendance): route correction revisions through current grants`
+- [x] RED: routeขาด/วน/self/ไม่มีHRคนอื่น409; หัวหน้ายื่นส่งหัวหน้าของตน; HRยื่นไม่อยู่candidate; membershipเปลี่ยนจนresolverปฏิเสธให้ค้างไม่override; pendingไม่expire; Returnedเกินกำหนดส่งไม่ได้
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CorrectionRoutingTests` พบ21FAILเพราะบริการยังไม่มี
+- [x] Submitตรึงroute+revisionในtransaction; snapshotไม่ให้สิทธิ์ข้ามcurrentgrant Rerouteให้ผู้มี `attendance:directory-manage` พร้อมrecentMFAและหน่วยงานที่จัดการได้ ทำได้เฉพาะpending/routeblocked; คำนวณใหม่จากresolverเท่านั้น ไม่รับผู้อนุมัติจากbody; สร้างroute revision เก็บค่าproposalเดิม invalidates approvals กลับPendingSupervisor พร้อมเหตุผล/audit ไม่ต่อdeadlineพนักงาน
+- [x] GREEN พร้อม race revokeระหว่างรอlockและ rerouteไม่ข้ามไปHR; หากcurrentgrantไม่มีหน่วยงานจัดการได้ให้403 ไม่ใช้Adminbypass
+- [x] commit `feat(attendance): route correction revisions through current grants`
+
+### ผลตรวจและขอบเขต Task 3
+
+- ชุดเฉพาะ **37/37**; backend ทั้งโครงการ **1,569/1,569** ใช้37.7179นาที ไม่มีskip; Node **60/60**; frontend/backend Build, Lint, backend Format และ diff check ผ่าน
+- ส่งคำร้องเฉพาะเจ้าของ ตรวจสถานะ/version/revision และ deadline จริงก่อนสร้าง route; ส่งใหม่หลัง Returned ใช้ revision ใหม่ถ้าฉบับเดิมเคยมี route แล้ว ไม่ใช้ผลอนุมัติเดิม
+- ผู้จัดเส้นทางต้องผ่านทั้งสามเงื่อนไขที่ผู้ใช้ยืนยัน ตรวจใหม่หลังรอ identity lock รวมการ retry; หัวหน้าใหม่มาจาก resolver จริง ไม่รับรายชื่อผู้อนุมัติจากคำสั่ง
+- เก็บ proposal, route และ approval ฉบับเก่าไว้; reroute สร้างฉบับใหม่กลับ PendingSupervisor และไม่เลื่อน deadline; pending ไม่หมดอายุระหว่างรอ
+- routeblocked หมายถึง pending ที่หาเส้นทางปัจจุบันไม่ได้ ไม่เพิ่มสถานะใหม่หรือเปิดให้ HR ส่ง Draft/Returned แทนพนักงาน หากภายหลังต้องการสถานะแยกต้องปรับสัญญา API ก่อน
+- เหตุผล reroute ครบ1–2000อักขระเก็บใน `CommandReason` ของ immutable receipt JSON; audit อ้าง command/revision เพื่อไม่ตัดข้อความตามข้อจำกัด metadata1000อักขระและไม่ใส่ข้อความอิสระใน security metadata ไม่ส่ง field นี้เพิ่มใน mutation response; Task5 ต้องอ่านบันทึกนี้ผ่านสิทธิ์ก่อนแสดงประวัติ หากเปลี่ยนที่เก็บต้องรักษาเหตุผลเดิมครบ
+- รอบ GREEN แรกพบ2ข้อผิดพลาดใน fixture: ลบ HR history ที่ระบบห้าม และอ้างคอลัมน์ audit ผิด แก้ fixture ให้ใช้ history ที่ยังคงอยู่และ typed EventType โดยไม่ลด production guard จากนั้นผ่าน21/21 และเพิ่ม coverage จน37/37
+- ตรวจทานโค้ดโดยผู้พัฒนาแล้ว; independent whole-branch review ยังอยู่ Task8 การอนุมัติ/ปรับเวลาจริงอยู่ Task4 และ HTTP/หน้าจออยู่ Tasks6–7 มือถือจริง/NAS จริงยังพัก และไม่ถือว่าอนุมัติ Production
 
 ## Task 4: อนุมัติ ส่งกลับ และใช้เวลาที่อนุมัติแบบatomic
 
@@ -182,4 +195,4 @@ R08–R12: Tasks1–4,6–7; R14–R15: Tasks3,5–7; R01–R07/R13: regression�
 
 ข้อเสนอในแผนที่ต้องยืนยันพร้อมอนุมัติ: reason1–2000, JSON64KiB, pagination1–100, การจัดrouteใหม่ผ่านdirectory-manageพร้อมscope/MFA, การใช้Adjustmentสำหรับcorrection-onlyแทนการปลอมlive event และการปฏิเสธเปลี่ยนวันเมื่อhistoricalmembershipไม่ตรงsnapshotเดิม ไม่เพิ่มadmin bypassเพื่อแก้ข้อขัดแย้งเหล่านี้
 
-ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–2 ผ่านแล้ว; ขั้นถัดไปคือTask3 เมื่อผู้ใช้ให้ดำเนินการต่อ
+ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–3 ผ่านแล้ว; ขั้นถัดไปคือTask4 เมื่อผู้ใช้ให้ดำเนินการต่อ
