@@ -39,10 +39,26 @@ internal sealed class AttendanceRecordingFixture(IdentityDatabase database) : IA
 
     public async Task<Guid> AddEventAsync(Guid dayId, string action = "CheckIn", DateTimeOffset? at = null)
     {
+        await using var db = Database.CreateContext();
+        return await AddEventAsync(db, dayId, action, at);
+    }
+
+    public async Task CloseDayAsync(Guid dayId, DateTimeOffset at)
+    {
+        await using var db = Database.CreateContext();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        if (!await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM attendance_events WHERE day_id={dayId} AND action='CheckIn') AS \"Value\"").SingleAsync())
+            await AddEventAsync(db, dayId, "CheckIn", Start);
+        await AddEventAsync(db, dayId, "CheckOut", at);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE attendance_days SET effective_out_utc={at},version=version+1 WHERE id={dayId}");
+        await tx.CommitAsync();
+    }
+
+    private static async Task<Guid> AddEventAsync(Tpr10DbContext db, Guid dayId, string action, DateTimeOffset? at)
+    {
         var id = Guid.NewGuid();
         var evidence = Guid.NewGuid();
         var occurred = at ?? Start;
-        await using var db = Database.CreateContext();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO evidence_objects(id,operation_id,owner_id,membership_id,workspace_id,department_id,snapshot_at_utc,occurred_at_utc,action,storage_id,storage_version,object_key)
             SELECT {evidence},gen_random_uuid(),employee_id,membership_id,workspace_id,department_id,{occurred},{occurred},{action},'00000000-0000-0000-0000-000000000061',1,

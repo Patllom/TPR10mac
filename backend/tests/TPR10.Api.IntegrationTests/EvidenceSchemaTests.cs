@@ -56,6 +56,8 @@ public sealed class EvidenceSchemaTests(PostgresFixture postgres)
     {
         await using var database = await CreateAsync();
         await using var db = database.CreateContext();
+        // Test the binding migration itself; later empty migrations can downgrade independently.
+        await db.GetService<IMigrator>().MigrateAsync("20260926084047_BindEvidenceToAttendanceEvents");
         await PublishedAsync(db);
         var history = await db.Database.GetAppliedMigrationsAsync();
         var error = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync(BeforeBinding));
@@ -382,12 +384,27 @@ public sealed class EvidenceSchemaTests(PostgresFixture postgres)
         await db.Database.ExecuteSqlRawAsync(Publish);
         await tx.CommitAsync();
     }
-    private static Task<TPR10.Api.Attendance.Recording.AttendanceEvent> AddEventAsync(Tpr10DbContext db, DateTimeOffset? at = null) =>
-        AttendanceEvidenceTestData.AddEventAsync(db, Guid.Parse("00000000-0000-0000-0000-000000000501"),
-            Guid.Parse("00000000-0000-0000-0000-000000000201"),
-            new(Guid.Parse("00000000-0000-0000-0000-000000000041"), Guid.Parse("00000000-0000-0000-0000-000000000031"),
-                Guid.Parse("00000000-0000-0000-0000-000000000001"), Guid.Parse("00000000-0000-0000-0000-000000000011"),
-                at ?? DateTimeOffset.Parse("2026-09-25T01:00:00Z")));
+    private static Task AddEventAsync(Tpr10DbContext db, DateTimeOffset? at = null)
+    {
+        // Frozen 6C columns: these migration tests run before newer model fields exist.
+        var instant = at ?? DateTimeOffset.Parse("2026-09-25T01:00:00Z");
+        var day = Guid.NewGuid();
+        var project = Guid.NewGuid();
+        var site = Guid.NewGuid();
+        return db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO projects(id,workspace_id,code,name,created_by)
+            VALUES({project},'00000000-0000-0000-0000-000000000001','SYNTHETIC','โครงการทดสอบ','00000000-0000-0000-0000-000000000031');
+            INSERT INTO sites(id,workspace_id,project_id,code,name,created_by)
+            VALUES({site},'00000000-0000-0000-0000-000000000001',{project},'SYNTHETIC','จุดทดสอบ','00000000-0000-0000-0000-000000000031');
+            INSERT INTO attendance_days(id,employee_id,work_date,membership_id,workspace_id,department_id,snapshot_at_utc,effective_in_utc)
+            VALUES({day},'00000000-0000-0000-0000-000000000031',({instant} AT TIME ZONE 'Asia/Bangkok')::date,
+                '00000000-0000-0000-0000-000000000041','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000011',{instant},{instant});
+            INSERT INTO attendance_events(id,day_id,actor_id,action,occurred_at_utc,device_captured_at_utc,workspace_id,project_id,site_id,
+                latitude,longitude,accuracy_meters,gps_sampled_at_utc,evidence_id,source)
+            VALUES('00000000-0000-0000-0000-000000000501',{day},'00000000-0000-0000-0000-000000000031','CheckIn',{instant},{instant},
+                '00000000-0000-0000-0000-000000000001',{project},{site},13,100,10,{instant},'00000000-0000-0000-0000-000000000201','live');
+            """);
+    }
     private static async Task<PostgresException> RejectAsync(Tpr10DbContext db, string sql, string expected)
     {
         var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(sql));
@@ -395,5 +412,6 @@ public sealed class EvidenceSchemaTests(PostgresFixture postgres)
         return error;
     }
     private static Task<int> CountAsync(Tpr10DbContext db, string table) => db.Database.SqlQueryRaw<int>($"SELECT count(*)::int AS \"Value\" FROM {table}").SingleAsync();
-    private static Task<string> RowsAsync(Tpr10DbContext db, string table) => db.Database.SqlQueryRaw<string>($"SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text AS \"Value\" FROM {table} t").SingleAsync();
+    // Compare retained business fields, excluding only the new internal transaction marker.
+    private static Task<string> RowsAsync(Tpr10DbContext db, string table) => db.Database.SqlQueryRaw<string>($"SELECT coalesce(jsonb_agg(to_jsonb(t)-'written_transaction_id' ORDER BY (to_jsonb(t)-'written_transaction_id')::text),'[]'::jsonb)::text AS \"Value\" FROM {table} t").SingleAsync();
 }

@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-module-6-attendance-design.md` โดยเฉพาะ R08–R12, §11–16; สัญญาส่งต่อ `docs/architecture/module-6c-exit-gate.md`
 
-สถานะ: **รออนุมัติแผน ยังไม่เริ่ม implementation** จัดทำ17ตุลาคม2026 บนสาขา6Cเพื่อส่งต่อ; เริ่มโค้ด6Dจากmainที่รวมPR6Cแล้วเท่านั้น ไม่mergeเอง
+สถานะ: **Task 1 ผ่านการตรวจรับแล้ว** วันที่17ตุลาคม2026 รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks2–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
 
 ## Global Constraints
 
@@ -61,11 +61,23 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 **Interfaces:** สร้าง CorrectionRequest, immutable CorrectionRevision, CorrectionApprovalAction, AttendanceAdjustment, CorrectionCommandReceipt และ CorrectionRouteSnapshot; requestversionเริ่ม1; revisionเลขเพิ่มต่อrequest; approvalunique(request,revision,step); adjustmentuniqueapprovedrevision; เก็บoriginalWorkDateและdeadlineanchorไม่ให้แก้
 
-- [ ] เขียนRED `Submitted_revision_is_immutable`, `Only_one_active_request_per_original_day`, `Expired_history_cannot_be_bypassed`, `Effective_change_requires_exact_approved_adjustment`, `Live_event_still_requires_evidence` และ migration up/down/up; rollbackที่มีbusinessdataต้องปฏิเสธ ไม่dropทิ้ง
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CorrectionSchemaTests` คาดFAILเพราะschema/guardsยังไม่มี
-- [ ] implement schema/indices/compositeFK/guardsตามสัญญาข้างต้น; uniqueactiveสำหรับOriginalWorkDate และตรวจtargetWorkDateภายใต้employee lockเพื่อกันสองคำร้องย้ายมาชนกัน
-- [ ] รันคำสั่งเดิมคาดผ่านทุกเคส พร้อมชุด AttendanceRecordingSchemaTests/EvidenceBindingTests
-- [ ] commit `feat(attendance): add correction schema and immutable adjustment guards`
+- [x] เขียนRED `Submitted_revision_is_immutable`, `Only_one_active_request_per_original_day`, `Expired_history_cannot_be_bypassed`, `Effective_change_requires_exact_approved_adjustment`, `Live_event_still_requires_evidence` และ migration up/down/up; rollbackที่มีbusinessdataต้องปฏิเสธ ไม่dropทิ้ง
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CorrectionSchemaTests` คาดFAILเพราะschema/guardsยังไม่มี
+- [x] implement schema/indices/compositeFK/guardsตามสัญญาข้างต้น; uniqueactiveสำหรับOriginalWorkDate และคงuniqueวันของAttendanceDayป้องกันtargetWorkDateชนกัน; การเรียกemployee lockในบริการอนุมัติอยู่Task4ตามสัญญาร่วม
+- [x] รันคำสั่งเดิมคาดผ่านทุกเคส พร้อมชุด AttendanceRecordingSchemaTests/EvidenceBindingTests
+- [x] commit `feat(attendance): add correction schema and immutable adjustment guards`
+
+### บันทึกการเชื่อมกับระบบเดิมของ Task 1
+
+- วันทำงานสัมพันธ์กับเวลาเข้าที่มีผลหลังอนุมัติ ส่วน snapshot ต้นสังกัดและเวลาของภาพต้นฉบับยังแก้ไม่ได้ การเปลี่ยนวันต้องมี adjustment ที่ตรงทั้งค่าก่อนและหลัง
+- การตรวจว่าการแก้วัน/เวลาและหลักฐานเกิดใน transaction เดียวกัน ใช้หมายเลขที่ trigger ฝั่งฐานข้อมูลเขียนเอง ไม่ใช้ค่า session ที่ผู้เรียกเปิดข้ามกติกาได้ และรองรับ savepoint ของ EF
+- ปรับเฉพาะ setup ของ regression tests ที่เคยปิดรอบด้วย SQL โดยตรง ให้สร้างเหตุการณ์ออกงานใน transaction เดียวกัน คง assertion เดิมทั้งหมด
+- Task4 ต้องเชื่อมการลงเวลาออกจริงกับวันที่เริ่มจากคำร้องและไม่มี CheckIn event โดยตรวจ approved adjustment; Task1 ไม่ปลด guard ของ live event ไว้ล่วงหน้า
+- การตรวจสิทธิ์ปัจจุบัน เส้นทางอนุมัติ การส่งกลับ/หมดอายุ และประวัติ Site เป็นหน้าที่บริการใน Tasks2–5; schema ไม่ใช่การส่งมอบ workflow ที่ใช้งานผ่านหน้าจอแล้ว
+- ปรับfixtureทดสอบmigrationเก่าให้ใช้คอลัมน์6Cที่ตรึงไว้ ไม่ใช้EFmodelล่าสุดกับschemaเก่า; เปรียบเทียบbusinessfieldsทุกช่องยกเว้นtransaction markerภายในที่เพิ่งเพิ่ม และpinรุ่นmigrationที่กำลังตรวจrollback ไม่ลดการตรวจหลักฐานเดิม
+- ผลสุดท้าย: backendทั้งโครงการ **1,498/1,498** (37.6523นาที), schemaใหม่17/17, migration regression70/70, Node60/60, frontend/backend Build, Lint, backend Format และdiff checkผ่าน ไม่มีskipในผลชุดเต็ม
+- รอบเต็มแรกพบ3 failures ในEvidenceSchemaTestsจากfixtureข้างต้นและหยุดตรวจเพื่อแก้ ไม่ถือว่ารอบนั้นผ่าน; รอบที่สองผ่านครบตามจำนวนข้างต้น
+- ตรวจทานdiffและสัญญาTask1โดยผู้พัฒนาแล้ว; independent whole-branch reviewยังอยู่Task8ตามกระบวนการNative ไม่อ้างว่าตรวจรับModule6Dทั้งชุดแล้ว
 
 ## Task 2: Draft, Revision และกำหนด7วัน
 
@@ -157,4 +169,4 @@ R08–R12: Tasks1–4,6–7; R14–R15: Tasks3,5–7; R01–R07/R13: regression�
 
 ข้อเสนอในแผนที่ต้องยืนยันพร้อมอนุมัติ: reason1–2000, JSON64KiB, pagination1–100, การจัดrouteใหม่ผ่านdirectory-manageพร้อมscope/MFA, การใช้Adjustmentสำหรับcorrection-onlyแทนการปลอมlive event และการปฏิเสธเปลี่ยนวันเมื่อhistoricalmembershipไม่ตรงsnapshotเดิม ไม่เพิ่มadmin bypassเพื่อแก้ข้อขัดแย้งเหล่านี้
 
-ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน รอผู้ใช้อนุมัติแผนก่อนเริ่มTask1
+ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน ผู้ใช้อนุมัติแผนและเริ่มTask1แล้ว; ขั้นถัดไปคือTask2เมื่อผู้ใช้ให้ดำเนินการต่อ

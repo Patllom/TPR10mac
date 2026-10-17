@@ -19,9 +19,9 @@ public sealed class AttendanceRecordingSchemaTests(PostgresFixture postgres)
     public async Task DuplicateDayAcrossWorkspacesRejected()
     {
         await using var f = await CreateAsync(postgres.ConnectionString);
-        await f.CreateOpenDayAsync(Employee, Start);
+        var day = await f.CreateOpenDayAsync(Employee, Start);
         await using var db = f.Database.CreateContext();
-        await db.Database.ExecuteSqlRawAsync("UPDATE attendance_days SET effective_out_utc=effective_in_utc+interval '1 hour',version=2");
+        await f.CloseDayAsync(day, Start.AddHours(1));
         await db.Database.ExecuteSqlRawAsync("""
             UPDATE employee_memberships SET valid_to_utc='2026-09-25T19:00:00Z',ended_by=created_by,version=2;
             INSERT INTO employee_memberships(id,user_id,workspace_id,department_id,valid_from_utc,created_by,reason)
@@ -34,10 +34,10 @@ public sealed class AttendanceRecordingSchemaTests(PostgresFixture postgres)
     public async Task OnlyOneOpenDayPerEmployee()
     {
         await using var f = await CreateAsync(postgres.ConnectionString);
-        await f.CreateOpenDayAsync(Employee, Start);
+        var day = await f.CreateOpenDayAsync(Employee, Start);
         Assert.Equal("23505", (await Assert.ThrowsAsync<PostgresException>(() => f.CreateOpenDayAsync(Employee, Start.AddDays(1)))).SqlState);
         await using var db = f.Database.CreateContext();
-        await db.Database.ExecuteSqlRawAsync("UPDATE attendance_days SET effective_out_utc=effective_in_utc+interval '8 hours',version=2");
+        await f.CloseDayAsync(day, Start.AddHours(8));
         await f.CreateOpenDayAsync(Employee, Start.AddDays(1));
         Assert.Equal(2, await CountAsync(db, "attendance_days"));
     }
@@ -130,7 +130,7 @@ public sealed class AttendanceRecordingSchemaTests(PostgresFixture postgres)
         await f.AddEventAsync(day);
         await using var db = f.Database.CreateContext();
         // Use a second day's row to avoid a duplicate action masking the payload constraint.
-        await db.Database.ExecuteSqlRawAsync("UPDATE attendance_days SET effective_out_utc=effective_in_utc+interval '1 hour',version=2");
+        await f.CloseDayAsync(day, Start.AddHours(1));
         var secondDay = await f.CreateOpenDayAsync(Employee, Start.AddDays(1));
         var columns = new[] { "id", "day_id", "actor_id", "action", "occurred_at_utc", "device_captured_at_utc", "workspace_id", "project_id", "site_id", "latitude", "longitude", "accuracy_meters", "gps_sampled_at_utc", "evidence_id", "source" };
         // A new evidence identity is necessary so the unique-evidence guard cannot mask other validation.
@@ -138,7 +138,7 @@ public sealed class AttendanceRecordingSchemaTests(PostgresFixture postgres)
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO evidence_objects(id,operation_id,owner_id,membership_id,workspace_id,department_id,snapshot_at_utc,occurred_at_utc,action,storage_id,storage_version,object_key)
             SELECT {evidence},gen_random_uuid(),owner_id,membership_id,workspace_id,department_id,snapshot_at_utc,occurred_at_utc,action,storage_id,storage_version,
-            'objects/' || left(replace({evidence}::text,'-',''),2) || '/' || replace({evidence}::text,'-','') FROM evidence_objects LIMIT 1
+            'objects/' || left(replace({evidence}::text,'-',''),2) || '/' || replace({evidence}::text,'-','') FROM evidence_objects WHERE action='CheckIn' LIMIT 1
             """);
         var values = columns.Select(c => c == column ? value : c switch
         {
@@ -148,7 +148,7 @@ public sealed class AttendanceRecordingSchemaTests(PostgresFixture postgres)
             "occurred_at_utc" => "occurred_at_utc+interval '1 day'",
             _ => c
         });
-        await RejectAsync(db, $"INSERT INTO attendance_events({string.Join(',', columns)}) SELECT {string.Join(',', values)} FROM attendance_events LIMIT 1", state);
+        await RejectAsync(db, $"INSERT INTO attendance_events({string.Join(',', columns)}) SELECT {string.Join(',', values)} FROM attendance_events WHERE action='CheckIn' LIMIT 1", state);
     }
 
     [Fact]

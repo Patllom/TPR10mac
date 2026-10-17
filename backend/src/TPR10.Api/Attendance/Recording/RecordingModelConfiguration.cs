@@ -23,7 +23,7 @@ internal static class RecordingModelConfiguration
         {
             t.HasCheckConstraint("ck_attendance_day_version", "version>=1");
             t.HasCheckConstraint("ck_attendance_day_time", "isfinite(work_date) AND isfinite(snapshot_at_utc) AND isfinite(effective_in_utc) AND (effective_out_utc IS NULL OR (isfinite(effective_out_utc) AND effective_out_utc>effective_in_utc))");
-            t.HasCheckConstraint("ck_attendance_day_date", "work_date=(snapshot_at_utc AT TIME ZONE 'Asia/Bangkok')::date");
+            t.HasCheckConstraint("ck_attendance_day_date", "work_date=(effective_in_utc AT TIME ZONE 'Asia/Bangkok')::date");
         });
 
         var e = model.Entity<AttendanceEvent>();
