@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-module-6-attendance-design.md` โดยเฉพาะ R08–R12, §11–16; สัญญาส่งต่อ `docs/architecture/module-6c-exit-gate.md`
 
-สถานะ: **Task 1 ผ่านการตรวจรับแล้ว** วันที่17ตุลาคม2026 รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks2–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
+สถานะ: **Tasks 1–2 ผ่านการตรวจรับแล้ว** วันที่17ตุลาคม2026 รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks3–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
 
 ## Global Constraints
 
@@ -85,11 +85,24 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 **Interfaces:** `CorrectionDeadline.First(DateOnly): DateTimeOffset`, `Returned(DateTimeOffset): DateTimeOffset`; service `CreateAsync(SaveCorrection, Guid commandId, CancellationToken): Task<CorrectionResult<CorrectionView>>`, `SaveAsync(Guid id, SaveCorrection, CorrectionCommand, CancellationToken)`; `CorrectionSiteHistory.ValidateAsync(Guid employeeId, CorrectionProposal, CancellationToken): Task<int?>`
 
-- [ ] RED: D25ก.ย.deadlineคือ2ต.ค.17:00UTC (3ต.ค.00:00ไทย); ก่อน1tickส่งได้/ตรงdeadlineไม่ได้; weekendนับ; Returnedคำนวณจากวันไทย; Draftsaveไม่ขยายdeadline; เปลี่ยนtargetdateไม่เลื่อนoriginaldeadline; actorbodyปลอมไม่ได้
-- [ ] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CorrectionDraftTests` คาดFAIL
-- [ ] implementเฉพาะเจ้าของและสถานะDraft/Returnedที่ยังไม่หมดอายุ; proposalเปลี่ยนสร้างrevisionใหม่ ไม่แก้revisionเก่า; ตรวจhistorical membership/assignmentจากข้อมูลที่เก็บจริง ไม่ใช้grantปัจจุบันแทนประวัติ ถ้าหาหลักฐานไม่ได้409
-- [ ] GREENคำสั่งเดิม พร้อม test expiredrecreate, missingboth, editsite/date, nofuturetime และinvalidtimeorder
-- [ ] commit `feat(attendance): add correction drafts and calendar deadlines`
+- [x] RED: D25ก.ย.deadlineคือ2ต.ค.17:00UTC (3ต.ค.00:00ไทย); ก่อน1tickบันทึกร่างได้/ตรงdeadlineไม่ได้; weekendนับ; Returnedคำนวณจากวันไทย; Draftsaveไม่ขยายdeadline; เปลี่ยนtargetdateไม่เลื่อนoriginaldeadline; actorbodyปลอมไม่ได้ การ submit จริงเชื่อมใน Task3
+- [x] รัน `dotnet test backend/TPR10.sln --filter FullyQualifiedName~CorrectionDraftTests` พบFAILตามคาดก่อนมีบริการ
+- [x] implementเฉพาะเจ้าของและสถานะDraft/Returnedที่ยังไม่หมดอายุ; proposalเปลี่ยนสร้างrevisionใหม่ ไม่แก้revisionเก่า; ตรวจhistorical membership/assignmentจากข้อมูลที่เก็บจริง ไม่ใช้grantปัจจุบันแทนประวัติ ถ้าหาหลักฐานไม่ได้409
+- [x] GREENคำสั่งเดิม พร้อม test expiredrecreate, missingboth, editsite/date, nofuturetime และinvalidtimeorder
+- [x] commit `feat(attendance): add correction drafts and calendar deadlines`
+
+### ผลตรวจและขอบเขต Task 2
+
+- สร้าง/บันทึกร่างจากตัวตนใน session ตรวจสิทธิ์ปัจจุบันหลังถือ identity/employee lock; request, revision, audit และ receipt บันทึกใน transaction เดียว
+- เก็บ revision เดิม ไม่ขยาย deadline เมื่อบันทึกหรือเปลี่ยนวันเสนอ; คำร้อง Returned ที่พ้นกำหนดเปลี่ยนเป็น Expired และไม่เพิ่ม revision
+- ประวัติ Site ใช้ exact assignment ช่วง CreatedAtUtc ถึงก่อน RevokedAtUtc และ membership ช่วงที่มีผลจริง ไม่อนุมานประวัติ capability จาก role ปัจจุบัน ส่วนสิทธิ์ทำรายการปัจจุบันตรวจ CanRecord แยกตามนโยบาย6A หากต้องพิสูจน์ capability ย้อนหลังละเอียดกว่านี้ต้องมีข้อมูลประวัติเพิ่ม
+- คำร้องใหม่ที่ไม่มี Day ต้องให้วันต้นเรื่องตรงวันเสนอฉบับแรก แล้วจึงแก้วันใน revision ได้โดยไม่เปลี่ยนวันต้นเรื่อง/กำหนดเดิม เพื่อป้องกันเลือกวันต้นเรื่องใหม่กว่าเวลาเพื่อยืดกำหนด
+- รับเวลาแบบ UTC หรือ offset เช่น +07:00 แล้วแปลงเป็น UTC ก่อน query และบันทึก ตรวจ regression กับ PostgreSQL จริงแล้ว ไม่เปลี่ยนความหมายของ instant
+- ชุดเฉพาะ **34/34**; backend ทั้งโครงการ **1,532/1,532** ใช้37.3197นาที ไม่มีskip; Node **60/60**; frontend/backend Build, Lint, backend Format และ diff check ผ่าน
+- หลักฐาน TDD: รอบแรก19FAILเพราะบริการยังไม่มี; พบ audit metadata ไม่ตรง allowlist และ test DateOnly ใช้ปฏิทินของเครื่อง จึงแก้ให้ใช้สัญญาเดิมและปฏิทินชัดเจน; test เพิ่มจับช่องวันต้นเรื่องและ offset ได้ก่อนแก้ production code
+- รอบเต็มแรกหยุดเพื่อเพิ่ม timezone regression จึงไม่ถือว่าผ่าน; ผลข้างต้นมาจากรอบเต็มสุดท้ายหลังแก้แล้ว ไม่ใช้ผลทดสอบบางส่วนแทนทั้งชุด
+- ตรวจทานโดยผู้พัฒนาแล้ว; independent whole-branch review ยังอยู่ Task8 ยังไม่มี HTTP endpoint/หน้าจอคำร้อง (Tasks6–7) และยังไม่ได้ส่งมอบเส้นทางส่ง/อนุมัติ (Tasks3–4)
+- มือถือจริง/NAS จริงยังพักตามคำสั่ง และไม่ถือว่าอนุมัติ Production
 
 ## Task 3: ส่งคำร้องและเส้นทางอนุมัติ
 
@@ -169,4 +182,4 @@ R08–R12: Tasks1–4,6–7; R14–R15: Tasks3,5–7; R01–R07/R13: regression�
 
 ข้อเสนอในแผนที่ต้องยืนยันพร้อมอนุมัติ: reason1–2000, JSON64KiB, pagination1–100, การจัดrouteใหม่ผ่านdirectory-manageพร้อมscope/MFA, การใช้Adjustmentสำหรับcorrection-onlyแทนการปลอมlive event และการปฏิเสธเปลี่ยนวันเมื่อhistoricalmembershipไม่ตรงsnapshotเดิม ไม่เพิ่มadmin bypassเพื่อแก้ข้อขัดแย้งเหล่านี้
 
-ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน ผู้ใช้อนุมัติแผนและเริ่มTask1แล้ว; ขั้นถัดไปคือTask2เมื่อผู้ใช้ให้ดำเนินการต่อ
+ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–2 ผ่านแล้ว; ขั้นถัดไปคือTask3 เมื่อผู้ใช้ให้ดำเนินการต่อ
