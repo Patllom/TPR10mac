@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-module-6-attendance-design.md` โดยเฉพาะ R08–R12, §11–16; สัญญาส่งต่อ `docs/architecture/module-6c-exit-gate.md`
 
-สถานะ: **Tasks 1–5 ผ่านการตรวจรับแล้ว** (18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks6–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
+สถานะ: **Tasks 1–6 ผ่านการตรวจรับแล้ว** (18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks7–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
 
 ## Global Constraints
 
@@ -183,11 +183,23 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 **Interfaces:** base `/api/v1/attendance/corrections`; POSTbase(Create), GETbase(mine), GET`/{id}`, POST`/{id}/revisions`(Save), POST`/{id}/submit`, `/supervisor-approve`, `/hr-approve`, `/return`, `/reroute`; GET`/approvals?stage=supervisor|hr` ภายใต้base ข้อมูลmutationตามSaveCorrection/CorrectionCommand ไม่รับactorId
 
-- [ ] REDสำหรับทุกroute/status/requiredfields/JSONenum; CSRF/MFA/permission/revocation/unknownfields; forgedbodyไม่เปลี่ยนstate;503ไม่logout
-- [ ] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CorrectionApiTests|FullyQualifiedName~CorrectionOpenApiTests'` และ `node --test tests/attendance-correction-client.test.mjs` คาดFAIL
-- [ ] implementtyped binding/allowlists/problem-details/limits/no-store ใช้session identityไม่เชื่อbody; clientmutationsรับCommandIdเดิมสำหรับการตรวจผล/explicitretry ไม่replayเอง; GETก่อนretryเพื่อตรวจrevisionปัจจุบัน
-- [ ] GREENและOpenAPIrouteinventoryเดิม อธิบายreadbasis/fieldomission/401403404409400429503; capJSON64KiB ไม่รับmultipart
-- [ ] commit `feat(attendance): add secured correction API contracts`
+- [x] REDสำหรับทุกroute/status/requiredfields/JSONenum; CSRF/MFA/permission/revocation/unknownfields; forgedbodyไม่เปลี่ยนstate;503ไม่logout
+- [x] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CorrectionApiTests|FullyQualifiedName~CorrectionOpenApiTests'` และ `node --test tests/attendance-correction-client.test.mjs` คาดFAIL
+- [x] implementtyped binding/allowlists/problem-details/limits/no-store ใช้session identityไม่เชื่อbody; clientmutationsรับCommandIdเดิมสำหรับการตรวจผล/explicitretry ไม่replayเอง; GETก่อนretryเพื่อตรวจrevisionปัจจุบัน
+- [x] GREENและOpenAPIrouteinventoryเดิม อธิบายreadbasis/fieldomission/401403404409400429503; capJSON64KiB ไม่รับmultipart
+- [x] commit `feat(attendance): add secured correction API contracts`
+
+### สัญญา HTTP ที่ยืนยันใน Task6
+
+- ผู้ใช้ยืนยัน: เมื่ออนุมัติสำเร็จให้แสดงข้อความสำเร็จแล้วกลับคิว ไม่เพิ่มสิทธิ์อ่านย้อนหลังจากการเคยอนุมัติ รายละเอียดภายหลังตรวจสิทธิ์ประวัติ6Aเดิม
+- ทุก mutation ตอบเฉพาะ `{ id, commandId }`; ไม่ส่ง proposal, history, employeeId หรือ readBasis จาก receipt ภายใน เก็บ receipt เดิมโดยไม่เปลี่ยน schema และตรวจ current authorization ซ้ำก่อนส่งผลภายใต้ identity delivery lock เดิม ระยะส่งสูงสุด5วินาที
+- POST สร้างใช้ `{ commandId, input: SaveCorrection }`; POST revisions ใช้ `{ input: SaveCorrection, command: CorrectionCommand }`; คำสั่งอื่นใช้ `CorrectionCommand` ตรง ๆ ทุก field ต้องมี แม้ค่าที่เป็น nullable ให้ส่ง null ปฏิเสธ field ไม่รู้จัก/ซ้ำทุกระดับและจำกัด JSON64KiB ไม่รับ multipart
+- GET รายการตนเองใช้ `?page=1&pageSize=20`; คิวใช้ `/approvals?stage=supervisor|hr&page=1&pageSize=20`; pageSize สูงสุด100 ค่านอกขอบเขต/ตัวกรองไม่รู้จัก/ซ้ำตอบ400 ขอบเขตถูกจำกัดก่อนนับและแบ่งหน้า
+- state ใน JSON คงเลขเดิม: 0 Draft, 1 PendingSupervisor, 2 PendingHr, 3 Returned, 4 Approved, 5 Expired; client ปฏิเสธค่าที่ไม่รู้จัก ไม่เปลี่ยน enum ของบริการหรือ receipt เดิม
+- client ไม่ retry/logout อัตโนมัติเมื่อ503หรือเครือข่ายล้มเหลว การ retry ที่ผู้ใช้สั่งเองอ่าน GET ก่อน ตรวจ version/revision/action สำหรับรายการเดิมและใช้ commandId/payload เดิม สำหรับ create ที่ผลหายยังไม่รู้ id ให้ตรวจรายการตนเองก่อน แล้วอาศัย receipt ฝั่ง API เป็นหลักฐาน ไม่อนุมานผลจากวันทำงานหรือรายการหน้าแรก
+- Task7 ต้องยกเลิกและล้างข้อมูลเมื่อเปลี่ยนบัญชี ตรวจ acknowledgment ให้ตรงคำสั่งที่ส่งก่อนแจ้งสำเร็จ และไม่ถือ404/503หลังส่งว่า rollback เสมอไป เพราะคำสั่งอาจ commit แล้วแต่สิทธิ์อ่านหรือ MFA สิ้นสุดก่อนส่ง response
+- ชุดเฉพาะ API/OpenAPI/delivery ผ่าน94กรณี; Node70กรณีและเว็บ Build/Lint ผ่านแล้ว ชุด backend ทั้งโครงการผ่าน1,655กรณี ไม่มีข้ามการทดสอบ ส่วนข้อความ OpenAPI แก้ฐานสิทธิ์เป็น `Supervisor` ให้ตรง enum จริง และตรวจ Build/Format/ชุดเฉพาะ94กรณีซ้ำผ่านก่อน commit ไม่มีการเปลี่ยน business logic หลังชุดเต็ม
+- ตรวจทานโดยผู้พัฒนาแล้ว; review อิสระทั้งสาขาอยู่ Task8 หน้าคำร้องใหม่อยู่ Task7 มือถือจริง/NAS จริงยังพัก ไม่ถือว่า Module6D หรือการตรวจรับ Production เสร็จแล้ว
 
 ## Task 7: หน้าคำร้องและคิวหัวหน้า/HR
 

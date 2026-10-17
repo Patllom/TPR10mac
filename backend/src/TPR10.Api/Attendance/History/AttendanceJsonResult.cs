@@ -31,6 +31,8 @@ public sealed class AttendanceJsonResult(Func<AttendanceDeliveryServices, Cancel
         var connectionOptions = new NpgsqlConnectionStringBuilder(original.Database.GetConnectionString()) { Pooling = false, Timeout = 5, CommandTimeout = 5 };
         await using var connection = new NpgsqlConnection(connectionOptions.ConnectionString);
         var delivering = false;
+        IResult Problem(int status) => http.Request.Path.StartsWithSegments("/api/v1/attendance/corrections")
+            ? CorrectionEndpoints.Problem(status) : RecordingEndpoints.Problem(status);
         try
         {
             await connection.OpenAsync(ct);
@@ -38,12 +40,16 @@ public sealed class AttendanceJsonResult(Func<AttendanceDeliveryServices, Cancel
             await using var db = new Tpr10DbContext(new DbContextOptionsBuilder<Tpr10DbContext>(options).UseNpgsql(connection).Options);
             var delivery = new AttendanceDeliveryServices(db, services);
             var result = await read(delivery, ct);
-            if (result.Value is null) { await RecordingEndpoints.Result(result, http).ExecuteAsync(http).WaitAsync(ct); return; }
+            if (result.Value is null)
+            {
+                await (http.Request.Path.StartsWithSegments("/api/v1/attendance/corrections")
+                ? Problem(result.Status) : RecordingEndpoints.Result(result, http)).ExecuteAsync(http).WaitAsync(ct); return;
+            }
             var bytes = JsonSerializer.SerializeToUtf8Bytes(result.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             if (bytes.Length > 1024 * 1024) throw new IOException("history-response-too-large");
             // Serialization is bounded and rechecked before the first byte is written.
             if (await delivery.RevalidateAsync(result.Value, ct) is { } denied)
-            { await RecordingEndpoints.Problem(denied).ExecuteAsync(http).WaitAsync(ct); return; }
+            { await Problem(denied).ExecuteAsync(http).WaitAsync(ct); return; }
             ct.ThrowIfCancellationRequested();
             http.Response.Headers.CacheControl = "no-store"; http.Response.Headers.XContentTypeOptions = "nosniff";
             http.Response.StatusCode = result.Status; http.Response.ContentType = "application/json; charset=utf-8"; http.Response.ContentLength = bytes.Length;
@@ -55,7 +61,7 @@ public sealed class AttendanceJsonResult(Func<AttendanceDeliveryServices, Cancel
         catch (Exception error) when (ScopeOperation.IsDatabaseFault(error) || error is IOException or OperationCanceledException or TimeoutException)
         {
             if (delivering || http.Response.HasStarted || ct.IsCancellationRequested) http.Abort();
-            else { http.Response.Clear(); await RecordingEndpoints.Problem(503).ExecuteAsync(http).WaitAsync(ct); }
+            else { http.Response.Clear(); await Problem(503).ExecuteAsync(http).WaitAsync(ct); }
         }
         // Dispose closes the non-pooled physical connection, releasing its session lock even on abort.
     }
@@ -69,6 +75,10 @@ public sealed class AttendanceDeliveryServices
     private readonly AttendanceHistory history;
     private readonly CaptureOperationStore operations;
     private readonly CorrectionQueries corrections;
+    private readonly CorrectionDraftService drafts;
+    private readonly CorrectionSubmission submission;
+    private readonly CorrectionApproval approval;
+    private Func<CancellationToken, Task<CorrectionResult<CorrectionView>>>? committedCommand;
     private string? correctionAudience;
     private int correctionPage, correctionSize;
     private AttendanceAudience? audience;
@@ -84,6 +94,28 @@ public sealed class AttendanceDeliveryServices
         operations = new CaptureOperationStore(db, identity, current, challenges, clock);
         corrections = new CorrectionQueries(db, identity, access, new AttendanceRouteResolver(db, identity, clock),
             new PermissionMutationGuard(db, current, new PermissionContext(), clock), audit, clock);
+        drafts = new(db, identity, access, audit, clock);
+        submission = new(db, identity, access, new PermissionMutationGuard(db, current, new PermissionContext(), clock),
+            new AttendanceRouteResolver(db, identity, clock), audit, clock);
+        approval = new(db, identity, new AttendanceRouteResolver(db, identity, clock), audit, clock);
+    }
+    public async Task<RecordingResult<object>> MutateCorrectionAsync(Guid? id, string action, SaveCorrection? input, CorrectionCommand command, CancellationToken ct)
+    {
+        Func<CancellationToken, Task<CorrectionResult<CorrectionView>>> execute = action switch
+        {
+            "create" => token => drafts.CreateAsync(input!, command.CommandId, token),
+            "save" => token => drafts.SaveAsync(id!.Value, input!, command, token),
+            "submit" => token => submission.SubmitAsync(id!.Value, command, token),
+            "reroute" => token => submission.RerouteAsync(id!.Value, command, token),
+            "supervisor-approve" or "hr-approve" or "return" => token => approval.DecideAsync(id!.Value, command, action, token),
+            _ => throw new InvalidOperationException("unknown-correction-command")
+        };
+        var result = await execute(ct); db.ChangeTracker.Clear();
+        if (result.Value is null) return Box(result);
+        // Revalidation is installed only after a durable receipt exists. The same command re-reads
+        // that receipt after checking current grants; it never runs a second business mutation.
+        committedCommand = execute;
+        return new(new CorrectionAcknowledgment(result.Value.Id, command.CommandId), result.Status, null, null);
     }
     public async Task<RecordingResult<object>> CurrentAsync(CancellationToken ct) => Box(await history.CurrentAsync(ct));
     public async Task<RecordingResult<object>> CorrectionAsync(Guid id, CancellationToken ct) => Box(await corrections.GetAsync(id, ct));
@@ -103,6 +135,11 @@ public sealed class AttendanceDeliveryServices
     }
     internal async Task<int?> RevalidateAsync(object value, CancellationToken ct)
     {
+        if (value is CorrectionAcknowledgment ack && committedCommand is { } recheck)
+        {
+            var result = await recheck(ct); db.ChangeTracker.Clear();
+            return result.Value is null ? result.Status : result.Value.Id != ack.Id ? 409 : null;
+        }
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var validation = await identity.ValidateSessionAsync(audience is AttendanceAudience.Team or AttendanceAudience.Hr, ct);
         if (validation.Status is { } status) return status;
