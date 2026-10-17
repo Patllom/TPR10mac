@@ -120,7 +120,19 @@ public sealed class AttendanceRecorder(Tpr10DbContext db, CaptureChallengeServic
             challenge.ConsumedOperationId = operation.Id;
             await audit.WriteAsync(new SecurityAuditRequest(operation.ActorId, null, operation.WorkspaceId, operation.ProjectId, operation.SiteId,
                 "attendance.record.commit", "attendance-event", record.Id, "success", new Dictionary<string, string>()), ct);
-            await db.SaveChangesAsync(ct); await commit.CommitAsync(ct);
+            // Publication/audit persistence can consume the remaining lease after validation.
+            // Keep the save and COMMIT bounded, and roll back if persistence crossed expiry.
+            var commitNow = DirectoryQueries.Now(clock);
+            if (commitNow >= challenge.ExpiresAtUtc) return Failure(400, "challenge-expired");
+            if (commitNow >= operation.LeaseUntilUtc) return Failure(409);
+            var deadline = challenge.ExpiresAtUtc < operation.LeaseUntilUtc ? challenge.ExpiresAtUtc : operation.LeaseUntilUtc;
+            using var deadlineCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadlineCancellation.CancelAfter(deadline - commitNow);
+            await db.SaveChangesAsync(deadlineCancellation.Token);
+            commitNow = DirectoryQueries.Now(clock);
+            if (commitNow >= challenge.ExpiresAtUtc) return Failure(400, "challenge-expired");
+            if (commitNow >= operation.LeaseUntilUtc) return Failure(409);
+            await commit.CommitAsync(deadlineCancellation.Token);
             return new(receipt, 201, null, null);
         }
         catch (StorageOperationException error) { return Failure(error.Status); }

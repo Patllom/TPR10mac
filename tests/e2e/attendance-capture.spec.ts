@@ -56,6 +56,79 @@ async function capture(page: Page) {
   await expect(page.getByAltText('ภาพรอยืนยัน ยังไม่ประทับเวลา')).toBeVisible();
 }
 
+for (const resultKind of ['upload', 'operation']) {
+  test(`review: silent account switch discards delayed ${resultKind}`, async ({ page, context }) => {
+    await setup(page, context); await capture(page);
+    let release!: () => void; let waiting = false;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/v1/attendance/check-ins', async route => {
+      if (resultKind === 'operation') return route.abort('failed');
+      waiting = true; await held; await route.fulfill({ status: 201, json: receipt() });
+    });
+    await page.route('**/api/v1/attendance/operations/*?action=CheckIn', async route => {
+      waiting = true; await held; await route.fulfill({ json: { state: 'Committed', receipt: receipt() } });
+    });
+    await page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true }).click();
+    if (resultKind === 'operation') await page.getByRole('button', { name: 'ตรวจผลลงเวลา', exact: true }).click();
+    await expect.poll(() => waiting).toBe(true);
+    await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { userId: 'different-account', stage: 'Active', permissions: [], mfaVerifiedAtUtc: null } }));
+    release();
+    await expect(page.locator('section').getByRole('alert')).toContainText('บัญชี');
+    await expect(page.getByText(/ลงเวลาสำเร็จ:/)).toHaveCount(0);
+    await expect(page.getByAltText('ภาพรอยืนยัน ยังไม่ประทับเวลา')).toHaveCount(0);
+  });
+}
+test('review: silent account switch before challenge must not open camera', async ({ page, context }) => {
+  await setup(page, context);
+  await expect(page.getByRole('button', { name: 'เปิดกล้อง', exact: true })).toBeEnabled();
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { userId: 'different-account', stage: 'Active', permissions: [], mfaVerifiedAtUtc: null } }));
+  await page.getByRole('button', { name: 'เปิดกล้อง', exact: true }).click();
+  await expect(page.locator('section').getByRole('alert')).toContainText('บัญชี');
+  expect(await page.evaluate(() => (window as unknown as { captureDevice: DeviceState }).captureDevice.tracks.length)).toBe(0);
+});
+test('review: interrupted camera cannot capture retained frame', async ({ page, context }) => {
+  await setup(page, context);
+  await page.getByRole('button', { name: 'เปิดกล้อง', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'ถ่ายภาพ', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const track = (window as unknown as { captureDevice: DeviceState }).captureDevice.tracks[0];
+    Object.defineProperty(track, 'muted', { get: () => true }); track.dispatchEvent(new Event('mute'));
+  });
+  await expect(page.locator('section').getByRole('alert')).toContainText('กล้อง');
+  await expect(page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true })).toBeDisabled();
+});
+test('review: live track without a fresh delivered frame cannot submit', async ({ page, context }) => {
+  await setup(page, context);
+  await page.getByRole('button', { name: 'เปิดกล้อง', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'ถ่ายภาพ', exact: true })).toBeVisible();
+  await page.getByLabel('ภาพจากกล้องสด').evaluate(video => {
+    Object.defineProperty(video, 'requestVideoFrameCallback', { value: () => 0 });
+  });
+  await page.getByRole('button', { name: 'ถ่ายภาพ', exact: true }).click();
+  await expect(page.locator('section').getByRole('alert')).toContainText('กล้องไม่ส่งภาพใหม่');
+  await expect(page.getByAltText('ภาพรอยืนยัน ยังไม่ประทับเวลา')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true })).toBeDisabled();
+});
+test('review: midnight after challenge requires continuous confirmation', async ({ page, context }) => {
+  await setup(page, context);
+  await page.unroute('**/api/v1/attendance/current');
+  const event = { id, occurredAtUtc: '2026-09-26T08:00:00Z', site: { ...site, isValid: true }, gps: { latitude: 13, longitude: 100, accuracyMeters: 10, sampledAtUtc: '2026-09-26T08:00:00Z' }, photo: { evidenceId: id } };
+  await page.route('**/api/v1/attendance/current', route => route.fulfill({ json: { openDay: { id, employeeId: id, workDate: '2026-09-26', version: 1, in: event, out: null, readBasis: 1, effectiveInUtc: event.occurredAtUtc, effectiveOutUtc: null }, todayCompleted: false, serverNowUtc: '2026-09-26T16:59:59Z' } }));
+  await page.route('**/api/v1/attendance/capture-challenges', route => route.fulfill({ status: 201, json: { id, serverNowUtc: '2026-09-26T16:59:59Z', expiresAtUtc: '2026-09-26T17:01:59Z' } }));
+  await page.reload(); await page.getByLabel('สถานที่ลงเวลา').selectOption(site.siteId);
+  await capture(page);
+  await expect(page.getByLabel('ยืนยันว่าทำงานต่อเนื่องจากรอบเดิม')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true })).toBeDisabled();
+});
+for (const code of ['invalid-capture-time', 'invalid-gps']) {
+  test(`review: actionable device clock error ${code}`, async ({ page, context }) => {
+    await setup(page, context); await capture(page);
+    await page.route('**/api/v1/attendance/check-ins', route => route.fulfill({ status: 400, json: { type: `urn:tpr10:attendance:${code}` } }));
+    await page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true }).click();
+    await expect(page.locator('section').getByRole('alert')).toContainText('เวลาอัตโนมัติ');
+  });
+}
+
 for (const [mode, message] of [['camera-denied', 'กล้อง'], ['gps-timeout', 'GPS'], ['gps-stale', 'GPS'], ['expired', 'หมดอายุ']]) {
   test(`ป้องกันส่งเมื่อ ${mode}`, async ({ page, context }) => {
     await setup(page, context, mode);

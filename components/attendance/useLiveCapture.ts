@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { subscribeAuthChanges } from '@/lib/auth/auth-change';
 import { isSessionView } from '@/lib/auth/session-view';
-import { issueCaptureChallenge, submitCapture, getCaptureOperation, recordingError } from '@/lib/attendance/recording-client';
+import { issueCaptureChallenge, submitCapture, getCaptureOperation, recordingError, recordingResponseError } from '@/lib/attendance/recording-client';
 import { bangkokDate, gpsSample, parseChallenge, parseCurrent, parseOperation, parseReceipt, parseSitePage, type CaptureChoice, type CaptureCurrent } from '@/lib/attendance/capture-view';
 import type { CaptureAction, CaptureMetadata, CaptureReceipt, CaptureSite, GpsSample } from '@/lib/attendance/recording-types';
 
@@ -38,9 +38,11 @@ export function useLiveCapture() {
   const epoch = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const checking = useRef(false);
+  const serverAnchor = useRef<{ utc: number; monotonic: number } | null>(null);
+  const serverNow = () => serverAnchor.current ? new Date(serverAnchor.current.utc + performance.now() - serverAnchor.current.monotonic).toISOString() : state.current.serverTime!;
   const update = useCallback((value: Partial<View>) => { state.current = { ...state.current, ...value }; setView(state.current); }, []);
   const release = useCallback(() => {
-    stream.current?.getTracks().forEach(track => track.stop()); stream.current = null;
+    stream.current?.getTracks().forEach(track => { track.onmute = null; track.onended = null; track.stop(); }); stream.current = null;
     if (video.current) video.current.srcObject = null;
     if (state.current.previewUrl) URL.revokeObjectURL(state.current.previewUrl);
     draft.current = null;
@@ -54,6 +56,19 @@ export function useLiveCapture() {
     release();
     update({ phase: pending.current ? 'uncertain' : 'error', previewUrl: null, gps: null, error: error instanceof Error ? error.message : 'ทำรายการไม่สำเร็จ กรุณาถ่ายใหม่' });
   }, [release, update]);
+  const sameAccount = useCallback(async (generation: number, signal: AbortSignal) => {
+    try {
+      const response = await fetch('/api/v1/auth/session', { ...options, signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]) });
+      const session: unknown = response.ok ? await response.json() : null;
+      if (generation !== epoch.current) return false;
+      if (!isSessionView(session) || session.stage !== 'Active') throw new Error('ตรวจสอบบัญชีไม่ได้ กรุณาโหลดข้อมูลใหม่');
+      if (session.userId !== actor.current) { pending.current = null; throw new Error('บัญชีเปลี่ยนแปลง กรุณาโหลดข้อมูลใหม่'); }
+      return true;
+    } catch (error) {
+      if (generation === epoch.current) { cancel(); update({ ...initial, loading: false, phase: 'error', error: error instanceof Error ? error.message : 'ตรวจสอบบัญชีไม่ได้ กรุณาโหลดข้อมูลใหม่' }); }
+      return false;
+    }
+  }, [cancel, update]);
   const load = useCallback(async () => {
     stop(); const generation = epoch.current; const c = new AbortController(); controller.current = c;
     update({ loading: true, current: null, choices: [], serverTime: null });
@@ -78,9 +93,11 @@ export function useLiveCapture() {
         if (!result.more) break;
       }
       if (generation !== epoch.current || document.hidden) return;
+      if (!await sameAccount(generation, c.signal)) return;
+      serverAnchor.current = { utc: Date.parse(current.serverNowUtc), monotonic: performance.now() };
       update({ current, choices, loading: false, serverTime: current.serverNowUtc, phase: pending.current ? 'uncertain' : 'idle' });
     } catch (error) { if (generation === epoch.current) { failure(error); update({ loading: false }); } }
-  }, [failure, stop, update]);
+  }, [failure, sameAccount, stop, update]);
 
   useEffect(() => {
     const hidden = () => { if (document.hidden) { stop(); update({ current: null, choices: [], serverTime: null, loading: true }); } else void load(); };
@@ -91,6 +108,7 @@ export function useLiveCapture() {
     void load();
     const expiration = setInterval(() => {
       if (draft.current && ['ready', 'captured'].includes(state.current.phase) && performance.now() >= draft.current.deadline) failure(new Error('การถ่ายภาพหมดอายุ กรุณาถ่ายใหม่'));
+      if (draft.current && serverAnchor.current) update({ serverTime: new Date(serverAnchor.current.utc + performance.now() - serverAnchor.current.monotonic).toISOString() });
     }, 500);
     return () => { cancel(); clearInterval(expiration); unsubscribe(); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', pagehide); };
   }, [cancel, failure, load, stop, update]);
@@ -107,13 +125,15 @@ export function useLiveCapture() {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('กล้องต้องใช้ HTTPS และเบราว์เซอร์ที่รองรับ');
       const key = crypto.randomUUID(); const requested = performance.now();
       const response = await issueCaptureChallenge({ action, site, idempotencyKey: key }, c.signal);
-      if (!response.ok) throw new Error(recordingError(response.status));
+      if (!response.ok) throw new Error(await recordingResponseError(response));
       const challenge = parseChallenge(await response.json());
       if (generation !== epoch.current) return;
+      if (!await sameAccount(generation, c.signal)) return;
       const lifetime = Date.parse(challenge.expiresAtUtc) - Date.parse(challenge.serverNowUtc);
       // Stop capture conservatively from request start; allow absent-operation recovery only
       // after the later response-receipt bound, never while the challenge could still commit.
       draft.current = { action, key, site, challengeId: challenge.id, deadline: requested + lifetime, settledAfter: performance.now() + lifetime + 1000 };
+      serverAnchor.current = { utc: Date.parse(challenge.serverNowUtc), monotonic: requested };
       update({ serverTime: challenge.serverNowUtc });
       // getUserMedia itself is not abortable. A late permission result must stop its tracks.
       const camera = navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } });
@@ -126,6 +146,10 @@ export function useLiveCapture() {
       finally { clearTimeout(timer); }
       if (generation !== epoch.current) { live.getTracks().forEach(t => t.stop()); return; }
       stream.current = live;
+      for (const track of live.getVideoTracks()) {
+        const interrupted = () => { if (generation === epoch.current) { cancel(); failure(new Error('กล้องถูกขัดจังหวะ กรุณาเปิดกล้องและถ่ายใหม่')); } };
+        track.onmute = interrupted; track.onended = interrupted;
+      }
       if (!video.current) throw new Error('กล้องไม่พร้อม กรุณาลองใหม่');
       video.current.srcObject = live;
       let playbackTimer: ReturnType<typeof setTimeout> | undefined;
@@ -150,7 +174,16 @@ export function useLiveCapture() {
     try {
       offline();
       if (performance.now() >= d.deadline) throw new Error('การถ่ายภาพหมดอายุ กรุณาถ่ายใหม่');
-      if (!v.videoWidth || !v.videoHeight || !stream.current?.getVideoTracks().some(t => t.readyState === 'live')) throw new Error('กล้องไม่พร้อม กรุณาถ่ายใหม่');
+      if (!v.videoWidth || !v.videoHeight || !stream.current?.getVideoTracks().some(t => t.readyState === 'live' && !t.muted && t.enabled)) throw new Error('กล้องไม่พร้อม กรุณาถ่ายใหม่');
+      // Require a newly delivered frame, not the last pixels retained by an interrupted video.
+      await new Promise<void>((resolve, reject) => {
+        let handle = 0;
+        const timer = setTimeout(() => { v.cancelVideoFrameCallback(handle); reject(new Error('กล้องไม่ส่งภาพใหม่ กรุณาเปิดกล้องและถ่ายใหม่')); }, 2000);
+        if (!v.requestVideoFrameCallback) { clearTimeout(timer); reject(new Error('เบราว์เซอร์ไม่รองรับการตรวจภาพสด กรุณาใช้เบราว์เซอร์รุ่นใหม่')); return; }
+        handle = v.requestVideoFrameCallback(() => { clearTimeout(timer); resolve(); });
+      });
+      if (generation !== epoch.current) return;
+      if (!stream.current?.getVideoTracks().some(t => t.readyState === 'live' && !t.muted && t.enabled)) throw new Error('กล้องไม่พร้อม กรุณาถ่ายใหม่');
       const scale = Math.min(1, 1920 / Math.max(v.videoWidth, v.videoHeight));
       const canvas = document.createElement('canvas'); canvas.width = Math.round(v.videoWidth * scale); canvas.height = Math.round(v.videoHeight * scale);
       canvas.getContext('2d')!.drawImage(v, 0, 0, canvas.width, canvas.height);
@@ -168,24 +201,27 @@ export function useLiveCapture() {
   async function submit(continuous: boolean) {
     const d = draft.current; const current = state.current.current;
     if (state.current.phase !== 'captured' || !d?.blob || !d.capturedAt || !current || pending.current) return;
-    if (d.action === 'CheckOut' && current.openDay && current.openDay.workDate !== bangkokDate(state.current.serverTime!) && !continuous) return;
+    if (d.action === 'CheckOut' && current.openDay && current.openDay.workDate !== bangkokDate(serverNow()) && !continuous) { update({ serverTime: serverNow() }); return; }
     const generation = epoch.current; const c = controller.current!;
     update({ phase: 'submitting', error: '' });
     try {
       offline(); const gps = await position(c.signal);
       if (generation !== epoch.current) return;
       if (performance.now() >= d.deadline) throw new Error('การถ่ายภาพหมดอายุ กรุณาถ่ายใหม่');
+      if (d.action === 'CheckOut' && current.openDay && current.openDay.workDate !== bangkokDate(serverNow()) && !continuous) { update({ phase: 'captured', serverTime: serverNow(), error: 'ข้ามวันแล้ว กรุณายืนยันว่าทำงานต่อเนื่อง' }); return; }
       const metadata: CaptureMetadata = { challengeId: d.challengeId, idempotencyKey: d.key, site: d.site, gps, deviceCapturedAtUtc: d.capturedAt, confirmContinuousWork: continuous, expectedDayVersion: current.openDay?.version ?? null };
       pending.current = { key: d.key, action: d.action, settledAfter: d.settledAfter };
       const response = await submitCapture(d.action, metadata, d.blob, c.signal);
       if (generation !== epoch.current) return;
       if (!response.ok) {
+        if (!await sameAccount(generation, c.signal)) return;
         // Conflict, rate-limit or server failure may follow an earlier successful attempt.
         if (![409, 429].includes(response.status) && response.status < 500) pending.current = null;
-        throw new Error(recordingError(response.status));
+        throw new Error(await recordingResponseError(response));
       }
       const receipt = parseReceipt(await response.json());
       if (generation !== epoch.current) return;
+      if (!await sameAccount(generation, c.signal)) return;
       pending.current = null; release(); update({ phase: 'success', receipt, gps: null, previewUrl: null });
     } catch (error) { if (generation === epoch.current) failure(error); }
   }
@@ -207,6 +243,7 @@ export function useLiveCapture() {
       if (!response.ok) throw new Error(recordingError(response.status));
       const operation = parseOperation(await response.json());
       if (generation !== epoch.current) return;
+      if (!await sameAccount(generation, controller.current!.signal)) return;
       if (operation.state === 'Committed') { pending.current = null; release(); update({ phase: 'success', receipt: operation.receipt, previewUrl: null, gps: null }); }
       else if (operation.state === 'Processing') update({ error: 'ระบบกำลังประมวลผล กรุณารอสักครู่แล้วตรวจผลอีกครั้ง' });
       else { pending.current = null; await load(); update({ error: 'คำขอเดิมไม่สำเร็จหรือหมดอายุ กรุณาตรวจสถานะรอบและถ่ายใหม่' }); }

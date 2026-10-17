@@ -14,6 +14,12 @@
 
 ## Global Constraints
 
+ผลตรวจ6Cล่าสุด17ตุลาคม2026: Backend1,481/1,481 Node60/60 HTTPSdev72/72 prod74/74 และBuild/Lint/formatผ่าน พร้อมจัดทำแผน6D แต่ยังไม่commit/push/merge6C และยังไม่รับรองProduction; timeoutเดิมไม่พบซ้ำในชุดใหม่ ไม่อ้างcausal fix ผลเดือนกันยายนด้านล่างเป็นประวัติ
+
+คำสั่งผู้ใช้ 17 ตุลาคม 2026: พักการตรวจมือถือจริงและ NAS จริงของ6Cไว้ก่อน โดยไม่ถือว่าผ่าน ไม่ขวางการวางแผน6D แต่ยังคง technical gate และยังไม่อนุมัติ Production
+
+ความคืบหน้า Task9 วันที่28กันยายน2026: แก้ independent review 5 ประเด็นสำคัญและเพิ่ม local pair restore drill แล้ว Backend1,481/1,481, Node60/60 และ Build/Lint/formatผ่าน แต่ HTTPS production-build matrix ล่าสุดผ่าน73/74 มี scopes timeout ที่ยังหาต้นเหตุไม่ได้ จึงยังไม่ปิด Task9 และไม่มี commit/push/merge รอบนี้ ดู [รายงาน6C](../../architecture/module-6c-exit-gate.md) กับ [แบบรับงานอุปกรณ์](../../architecture/module-6c-device-acceptance.md) มือถือ/NAS/Production ยังรอตรวจ
+
 - กล้องสดทั้งเข้า/ออก ภาพมีเวลาจากเซิร์ฟเวอร์; GPS ต้องมีแต่ไม่มี geofence
 - วันละหนึ่งคู่ต่อ user/workDate ทั่วระบบ นับวันไทยตามเวลาเข้า ออกข้ามวันและต่าง Site/Workspace ได้เฉพาะมี exact assignment
 - หัวหน้าดู GPS ลูกทีมโดยตรงแต่ไม่มีรูป; HR ตามหน่วยงานดูได้ทั้งคู่; own data ดูได้ทั้งคู่; Admin ไม่ bypass

@@ -6,6 +6,18 @@ const id = '12345678-1234-1234-1234-123456789abc';
 const site = { workspaceId: id, projectId: id, siteId: id };
 const metadata = { challengeId: id, idempotencyKey: id, site, deviceCapturedAtUtc: '2026-09-26T00:00:00Z', gps: { latitude: 13, longitude: 100, accuracyMeters: 10, sampledAtUtc: '2026-09-26T00:00:00Z' }, confirmContinuousWork: false, expectedDayVersion: null };
 function client() { assert.ok(existsSync('lib/attendance/recording-client.ts'), 'recording transport is implemented'); return loadTs('lib/attendance/recording-client.ts'); }
+test('server clock/GPS problems map to actionable allowlisted text, never server-supplied HTML', async () => {
+  const api = client();
+  for (const code of ['invalid-capture-time', 'invalid-gps']) {
+    assert.match(await api.recordingResponseError(Response.json({ type: `urn:tpr10:attendance:${code}` }, { status: 400 })), /เวลาอัตโนมัติ/);
+  }
+  assert.match(await api.recordingResponseError(Response.json({ type: 'urn:tpr10:attendance:challenge-expired' }, { status: 400 })), /หมดอายุ/);
+  for (const body of [{ type: 'https://untrusted.invalid/invalid-gps', detail: '<script>secret</script>' }, { type: 123 }]) {
+    assert.equal(await api.recordingResponseError(Response.json(body, { status: 400 })), api.recordingError(400));
+  }
+  assert.equal(await api.recordingResponseError(new Response('not-json', { status: 400 })), api.recordingError(400));
+  assert.equal(await api.recordingResponseError(Response.json({ type: 'urn:tpr10:attendance:invalid-gps' }, { status: 503 })), api.recordingError(503));
+});
 test('capture transport uses exact routes, fresh CSRF and browser multipart boundary', async () => {
   const api = client(); const original = global.fetch, calls = [];
   global.fetch = async (path, options) => { calls.push([path, options]); return path.endsWith('/csrf') ? Response.json({ token: 'synthetic' }) : Response.json({}, { status: 201 }); };

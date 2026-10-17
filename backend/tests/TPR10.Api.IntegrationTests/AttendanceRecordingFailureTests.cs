@@ -145,7 +145,7 @@ public sealed class AttendanceRecordingFailureTests(PostgresFixture postgres)
         Assert.Equal(EvidenceState.Prepared, (await db.Set<EvidenceObject>().SingleAsync()).State);
     }
     private sealed class DeadlineAudit(TPR10.Api.Data.Tpr10DbContext db, TPR10.Api.Correlation.ICorrelationContext correlation,
-        TimeProvider clock, int seconds) : IAuditEventWriter
+        TimeProvider clock, int seconds, string action = "attendance.evidence.prepare") : IAuditEventWriter
     {
         private readonly AuditEventWriter inner = new(db, correlation, clock);
         public Task WriteAsync(string eventType, Guid targetId, IReadOnlyDictionary<string, string> metadata, CancellationToken ct, Guid? actorId = null) =>
@@ -153,8 +153,19 @@ public sealed class AttendanceRecordingFailureTests(PostgresFixture postgres)
         public async Task WriteAsync(SecurityAuditRequest request, CancellationToken ct)
         {
             await inner.WriteAsync(request, ct);
-            if (request.Action == "attendance.evidence.prepare") ((ManualTimeProvider)clock).Advance(TimeSpan.FromSeconds(seconds));
+            if (request.Action == action) ((ManualTimeProvider)clock).Advance(TimeSpan.FromSeconds(seconds));
         }
+    }
+    [Theory]
+    [InlineData(61, 409)]
+    [InlineData(120, 400)]
+    public async Task Final_audit_crossing_deadline_cannot_publish(int seconds, int expected)
+    {
+        await using var f = await OnlineRecordingFixture.CreateAsync(postgres.ConnectionString, services =>
+            services.AddScoped<IAuditEventWriter>(s => new DeadlineAudit(s.GetRequiredService<TPR10.Api.Data.Tpr10DbContext>(),
+                s.GetRequiredService<TPR10.Api.Correlation.ICorrelationContext>(), s.GetRequiredService<TimeProvider>(), seconds, "attendance.record.commit")));
+        Assert.Equal(expected, (await f.Record(EvidenceAction.CheckIn, await f.Capture.Metadata())).Status);
+        await AssertNothingPublished(f);
     }
     internal static async Task AssertNothingPublished(OnlineRecordingFixture f)
     {

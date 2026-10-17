@@ -52,3 +52,16 @@ export function recordingError(status: number): string {
   if (status >= 500) return 'บริการลงเวลาไม่พร้อมใช้งาน กรุณาตรวจสถานะก่อนลองใหม่';
   return 'ลงเวลาไม่สำเร็จ กรุณาตรวจข้อมูลและถ่ายใหม่';
 }
+export async function recordingResponseError(response: Response): Promise<string> {
+  if (response.status === 400) {
+    try {
+      const problem: unknown = await response.json();
+      if (problem && typeof problem === 'object' && 'type' in problem) {
+        if (problem.type === 'urn:tpr10:attendance:invalid-capture-time') return 'เวลาอุปกรณ์ไม่ตรงกับเซิร์ฟเวอร์ กรุณาเปิดวันที่และเวลาอัตโนมัติแล้วถ่ายใหม่';
+        if (problem.type === 'urn:tpr10:attendance:invalid-gps') return 'GPS เก่าหรือเวลาไม่ถูกต้อง กรุณาเปิดเวลาอัตโนมัติและรับพิกัดใหม่ก่อนถ่าย';
+        if (problem.type === 'urn:tpr10:attendance:challenge-expired') return 'คำขอถ่ายภาพหมดอายุ กรุณาถ่ายใหม่';
+      }
+    } catch { /* Unknown/malformed bodies never supply UI text. */ }
+  }
+  return recordingError(response.status);
+}

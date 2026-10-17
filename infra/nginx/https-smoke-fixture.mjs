@@ -1,7 +1,7 @@
 // Acceptance แบบ opt-in: Docker + .NET 10 + OpenSSL + Next build ที่สร้างแล้ว
 // ไม่เพิ่ม CA ใน trust store, ไม่พิมพ์ token/cookie/key และล้างเฉพาะทรัพยากรที่สร้างเอง
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, openSync, closeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -17,6 +17,8 @@ const suffix = root.split('-').at(-1).toLowerCase();
 const containers = [];
 let network;
 let web;
+let webLog;
+const diagnostics = process.env.TPR10_SMOKE_DIAGNOSTICS === '1';
 const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, { encoding: 'utf8', timeout: 180000, ...options });
   if (result.status !== 0) throw new Error(`${command} ${args.slice(0, 2).join(' ')} ล้มเหลว: ${result.error?.message ?? result.stderr}`);
@@ -57,6 +59,11 @@ try {
   run(process.execPath, ['infra/nginx/render-config.mjs', join(root, 'https.conf'), '--https'], {
     env: { ...process.env, TPR10_WEB_UPSTREAM: `host.docker.internal:${port}`, TPR10_API_UPSTREAM: '127.0.0.1:5080', TPR10_TLS_CERT: '/tls/server.pem', TPR10_TLS_KEY: '/tls/server.key' }
   });
+  if (diagnostics) {
+    const config = readFileSync(join(root, 'https.conf'), 'utf8');
+    writeFileSync(join(root, 'https.conf'), "log_format smoke_timing '$request_method $uri $status $request_time $upstream_status $upstream_connect_time $upstream_header_time $upstream_response_time';\n" + config.replace('server_name localhost;', 'server_name localhost;\n    access_log /dev/stdout smoke_timing;'));
+    webLog = openSync(join(root, 'web.log'), 'w', 0o600);
+  }
   console.log('เริ่ม PostgreSQL, nginx และ API ในเครือข่ายทดสอบแยก');
   network = docker('network', 'create', `tpr10-csrf-${suffix}`);
   const database = startContainer('--network', network, '--network-alias', 'smoke-db', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'postgres:17.11-alpine3.24');
@@ -103,7 +110,7 @@ try {
     'mcr.microsoft.com/dotnet/aspnet:10.0', 'dotnet', 'TPR10.Api.dll');
   await waitFor(() => tls('/api/health/ready', ['--fail']).includes('ready'), 'API ผ่าน HTTPS');
   web = spawn(process.execPath, ['node_modules/next/dist/bin/next', port === '4000' ? 'dev' : 'start', '-p', port, '--hostname', '127.0.0.1'], {
-    stdio: 'ignore',
+    stdio: diagnostics ? ['ignore', webLog, webLog] : 'ignore',
     env: { ...process.env, TPR10_API_ORIGIN: 'https://localhost:4443', NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), TPR10_SCOPE_TEST_UI: spec === 'tests/e2e/scopes.spec.ts' ? 'true' : '' }
   });
   await waitFor(async () => (await fetch(`http://127.0.0.1:${port}`)).ok, 'Next');
@@ -117,6 +124,12 @@ try {
       stdio: 'inherit', timeout: 600000,
       env: { ...process.env, NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), PLAYWRIGHT_FIREFOX_POLICIES_JSON: policies, TPR10_E2E_DATABASE: database, TPR10_E2E_API: api }
     });
+    if (diagnostics) {
+      // Only paths/status/timing for public page/assets; no query, headers, bodies or private DOM.
+      const proxyLog = spawnSync('docker', ['logs', proxy], { encoding: 'utf8', timeout: 10000 });
+      console.log('public proxy timings:', (proxyLog.stdout ?? '').split('\n').filter(line => /^GET \/(?:login |\_next\/[^? ]* )/.test(line)).slice(-500).join('\n'));
+      console.log('Next login timings:', readFileSync(join(root, 'web.log'), 'utf8').split('\n').filter(line => /^\s*GET \/login \d{3} in /.test(line)).slice(-50).join('\n'));
+    }
     if (browserTests.status !== 0) throw new Error('Browser E2E ไม่ผ่าน');
     console.log('Browser E2E ผ่าน HTTPS ที่เชื่อถือ CA เฉพาะ profile ทดสอบ');
     // The outage test restarts Docker, which returns before the API is ready.
@@ -166,6 +179,7 @@ try {
     await Promise.race([new Promise(done => web.once('exit', done)), delay(3000)]);
     if (web.exitCode === null) web.kill('SIGKILL');
   }
+  if (webLog !== undefined) closeSync(webLog);
   for (const id of containers.reverse()) spawnSync('docker', ['rm', '-f', id], { stdio: 'ignore', timeout: 15000 });
   if (network) spawnSync('docker', ['network', 'rm', network], { stdio: 'ignore', timeout: 15000 });
   rmSync(root, { recursive: true, force: true });

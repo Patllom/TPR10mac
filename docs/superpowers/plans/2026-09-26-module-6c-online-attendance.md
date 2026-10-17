@@ -231,6 +231,12 @@ Assert.NotNull(CaptureValidation.Validate(metadata with {
 
 ### Task 9: ตรวจทั้งสาขาและเอกสารรับงาน
 
+ผลล่าสุด17ตุลาคม2026: Backend1,481/1,481, Node60/60, HTTPSdev72/72/prod74/74, Build/Lint/format/diffผ่านครบ ไปขั้นจัดทำแผน6Dได้ มือถือ/NASพักตามอนุมัติ ยังไม่รับรองProduction; timeoutเดิมไม่พบซ้ำแต่ยังไม่ทราบสาเหตุ งานแก้Reviewยังไม่commit/push/merge ดูรายงานตรวจรับฉบับล่าสุด ข้อความ28กันยายนด้านล่างเป็นประวัติ
+
+ปรับขอบเขตตามคำสั่งผู้ใช้ 17 ตุลาคม 2026: พัก Mobile-device และ NAS จริงไว้ก่อน แยกเป็น deferred acceptance ไม่ถือว่าผ่าน และไม่ขวางการวางแผน6D ส่วน technical gate (Test/Build/Lint/backend/HTTPS และ review) ยังต้องตรวจครบ Production ยังไม่อนุมัติ
+
+สถานะ 28 กันยายน 2026: ตรวจอิสระทั้งสาขาและแก้ 5 Important findings ด้วย RED→GREEN แล้ว Backend 1,481/1,481, Node 60/60, กล้อง HTTPS dev/production-build อย่างละ27/27 และ Build/Lint/format ผ่าน แต่ matrix production-build ล่าสุดผ่าน73/74 มี scopes timeout1กรณี ยังหาต้นเหตุไม่ได้ การวินิจฉัยที่ผ่านภายหลังไม่ถือว่าแก้แล้ว จึงยังไม่ปิด Task9 และยังไม่ commit/push/merge ดู [รายงานตรวจรับ](../../architecture/module-6c-exit-gate.md) และ [เกณฑ์อุปกรณ์จริง](../../architecture/module-6c-device-acceptance.md) Mobile/NAS/Production ยังรอตรวจ
+
 **ไฟล์สร้าง:** `docs/architecture/module-6c-exit-gate.md`, `docs/architecture/module-6c-device-acceptance.md`
 
 **ไฟล์แก้:** แผนนี้และdelivery-map; แก้source/testsเฉพาะfindingที่มีREDพิสูจน์ก่อนแก้
