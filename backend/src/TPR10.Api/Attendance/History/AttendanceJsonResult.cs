@@ -3,12 +3,14 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TPR10.Api.Attendance.Access;
+using TPR10.Api.Attendance.Corrections;
 using TPR10.Api.Attendance.Evidence;
 using TPR10.Api.Attendance.Recording;
 using TPR10.Api.Auditing;
 using TPR10.Api.Correlation;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Sessions;
+using TPR10.Api.Identity.Authorization;
 using TPR10.Api.Organization;
 using TPR10.Api.Scopes;
 
@@ -66,6 +68,9 @@ public sealed class AttendanceDeliveryServices
     private readonly AttendanceAccess access;
     private readonly AttendanceHistory history;
     private readonly CaptureOperationStore operations;
+    private readonly CorrectionQueries corrections;
+    private string? correctionAudience;
+    private int correctionPage, correctionSize;
     private AttendanceAudience? audience;
     public AttendanceDeliveryServices(Tpr10DbContext db, IServiceProvider services)
     {
@@ -77,8 +82,16 @@ public sealed class AttendanceDeliveryServices
             services.GetRequiredService<IDataProtectionProvider>(), audit, clock);
         var challenges = new CaptureChallengeService(db, identity, current, access, audit, clock);
         operations = new CaptureOperationStore(db, identity, current, challenges, clock);
+        corrections = new CorrectionQueries(db, identity, access, new AttendanceRouteResolver(db, identity, clock),
+            new PermissionMutationGuard(db, current, new PermissionContext(), clock), audit, clock);
     }
     public async Task<RecordingResult<object>> CurrentAsync(CancellationToken ct) => Box(await history.CurrentAsync(ct));
+    public async Task<RecordingResult<object>> CorrectionAsync(Guid id, CancellationToken ct) => Box(await corrections.GetAsync(id, ct));
+    public async Task<RecordingResult<object>> CorrectionsAsync(string requested, int page, int size, CancellationToken ct)
+    {
+        correctionAudience = requested; correctionPage = page; correctionSize = size;
+        return Box(await corrections.ListAsync(requested, page, size, ct));
+    }
     public async Task<RecordingResult<object>> DayAsync(Guid id, CancellationToken ct) => Box(await history.GetAsync(id, ct));
     public async Task<RecordingResult<object>> ListAsync(AttendanceAudience requested, AttendanceListQuery query, CancellationToken ct)
     { audience = requested; return Box(await history.ListAsync(requested, query, ct)); }
@@ -93,6 +106,8 @@ public sealed class AttendanceDeliveryServices
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var validation = await identity.ValidateSessionAsync(audience is AttendanceAudience.Team or AttendanceAudience.Hr, ct);
         if (validation.Status is { } status) return status;
+        if (value is CorrectionPage or CorrectionView)
+            return await corrections.RevalidateAsync(value, correctionAudience, correctionPage, correctionSize, ct);
         AttendanceDayView[] days = value switch { AttendancePage p => p.Items, AttendanceDayView day => [day], CurrentAttendanceView { OpenDay: { } day } => [day], _ => [] };
         foreach (var day in days)
         {
@@ -100,9 +115,12 @@ public sealed class AttendanceDeliveryServices
             if (row is null) return 404;
             var decision = await access.ReadAsync(new(row.MembershipId, row.EmployeeId, row.WorkspaceId, row.DepartmentId, row.SnapshotAtUtc), ct);
             if (decision.Status is { } denied) return denied;
-            if (!decision.CanRead || decision.Basis != day.ReadBasis || decision.CanReadPhoto != (day.In.Photo is not null)) return 404;
+            if (!decision.CanRead || decision.Basis != day.ReadBasis
+                || day.In is { } entered && decision.CanReadPhoto != (entered.Photo is not null)
+                || day.Out is { } exited && decision.CanReadPhoto != (exited.Photo is not null)) return 404;
         }
         return null;
     }
     private static RecordingResult<object> Box<T>(RecordingResult<T> result) => new(result.Value, result.Status, result.Code, result.RetryAfterSeconds);
+    private static RecordingResult<object> Box<T>(CorrectionResult<T> result) => new(result.Value, result.Status, result.Problem, null);
 }

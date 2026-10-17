@@ -10,7 +10,7 @@ import type { AttendanceEventView } from '@/lib/attendance/recording-types';
 function EventDetail({ event, label, audience }: { event: AttendanceEventView | null; label: string; audience: HistoryAudience }) {
   return <div className="min-w-0 space-y-2 rounded-xl border border-slate-300 p-4">
     <h4 className="font-semibold">{label}</h4>
-    {!event ? <p>ยังไม่มีเวลาออก</p> : <>
+    {!event ? <p>ไม่มีหลักฐานถ่ายสดสำหรับเวลา{label}</p> : <>
       <time dateTime={event.occurredAtUtc}>{thaiTime(event.occurredAtUtc)}</time>
       <dl className="space-y-1 text-sm">
         <dt>รหัสสถานที่{label}</dt><dd className="break-all">{event.site.siteId}</dd>
@@ -61,9 +61,13 @@ export default function AttendanceHistory({ audience }: { audience: HistoryAudie
         <h3 className="font-bold">{attendanceDayLabel(day.workDate)}</h3>
         {audience !== 'Mine' && <p className="break-all">รหัสพนักงาน: {day.employeeId}</p>}
         <p>สิทธิ์: {basis[day.readBasis]}</p>
-        {day.out && bangkokDate(day.in.occurredAtUtc) !== bangkokDate(day.out.occurredAtUtc) && <p>ทำงานข้ามวัน</p>}
+        {day.effectiveOutUtc && bangkokDate(day.effectiveInUtc) !== bangkokDate(day.effectiveOutUtc) && <p>ทำงานข้ามวัน</p>}
         <div className="grid min-w-0 gap-4 sm:grid-cols-2"><EventDetail event={day.in} label="เข้า" audience={audience} /><EventDetail event={day.out} label="ออก" audience={audience} /></div>
         <p className="text-sm">เวลาที่ใช้คำนวณ: เข้า {thaiTime(day.effectiveInUtc)} · ออก {day.effectiveOutUtc ? thaiTime(day.effectiveOutUtc) : 'ยังไม่มี'}</p>
+        {!!day.adjustments?.length && <div className="space-y-2 text-sm"><p>มีการแก้ไขเวลาที่อนุมัติแล้ว · หลักฐานถ่ายสดด้านบนยังเป็นข้อมูลเดิม</p>
+          <p className="break-all">สถานที่ตามเวลาที่ใช้คำนวณ: เข้า {day.effectiveInSite?.siteId} · ออก {day.effectiveOutSite?.siteId ?? 'ยังไม่มี'}</p>
+          <ul>{day.adjustments.map(a => <li key={`${a.requestId}-${a.revision}`} className="break-all">คำร้อง {a.requestId} ฉบับ {a.revision} · อนุมัติ {thaiTime(a.appliedAtUtc)}</li>)}</ul>
+        </div>}
       </li>)}</ol>
       <div className="flex flex-wrap gap-4">
         <button className="rounded-xl border px-4 py-2" disabled={cursors.length < 2} onClick={() => setCursors(x => x.slice(0, -1))}>ประวัติหน้าก่อนหน้า</button>

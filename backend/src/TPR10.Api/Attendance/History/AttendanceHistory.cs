@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Attendance.Access;
+using TPR10.Api.Attendance.Corrections;
 using TPR10.Api.Attendance.Directory;
 using TPR10.Api.Attendance.Evidence;
 using TPR10.Api.Attendance.Recording;
@@ -86,11 +87,25 @@ public sealed class AttendanceHistory(Tpr10DbContext db, AttendanceReadScope sco
         {
             var decision = await policy.ReadAsync(new(day.MembershipId, day.EmployeeId, day.WorkspaceId, day.DepartmentId, day.SnapshotAtUtc), ct);
             if (decision.Status is { } denied || !decision.CanRead) throw new AttendanceReadDeniedException(decision.Status ?? 404);
-            var entered = events.SingleOrDefault(e => e.DayId == day.Id && e.Action == EvidenceAction.CheckIn)
-                ?? throw new AttendanceReadDeniedException(503);
+            var entered = events.SingleOrDefault(e => e.DayId == day.Id && e.Action == EvidenceAction.CheckIn);
             var exited = events.SingleOrDefault(e => e.DayId == day.Id && e.Action == EvidenceAction.CheckOut);
-            rows.Add(new(day.Id, day.WorkDate, day.Version, day.EmployeeId, Event(entered, decision.CanReadPhoto),
-                exited is null ? null : Event(exited, decision.CanReadPhoto), decision.Basis, day.EffectiveInUtc, day.EffectiveOutUtc));
+            var adjustments = await db.Set<AttendanceAdjustment>().AsNoTracking().Where(x => x.DayId == day.Id)
+                .OrderBy(x => x.AfterVersion).ToArrayAsync(ct);
+            var last = adjustments.LastOrDefault();
+            if (entered is null && last is null) throw new AttendanceReadDeniedException(503);
+            var revision = last is null ? null : await db.Set<CorrectionRevision>().AsNoTracking()
+                .SingleAsync(x => x.RequestId == last.RequestId && x.Revision == last.Revision, ct);
+            var originalIn = entered is null ? null : Event(entered, decision.CanReadPhoto);
+            var originalOut = exited is null ? null : Event(exited, decision.CanReadPhoto);
+            rows.Add(new(day.Id, day.WorkDate, day.Version, day.EmployeeId, originalIn, originalOut,
+                decision.Basis, day.EffectiveInUtc, day.EffectiveOutUtc)
+            {
+                EffectiveInSite = revision is null ? originalIn?.Site : new(revision.InWorkspaceId, revision.InProjectId, revision.InSiteId),
+                EffectiveOutSite = day.EffectiveOutUtc is null ? null : revision is null || day.Version > last!.AfterVersion
+                    ? originalOut?.Site : new(revision.OutWorkspaceId!.Value, revision.OutProjectId, revision.OutSiteId),
+                Adjustments = adjustments.Select(x => new AttendanceAdjustmentView(x.RequestId, x.Revision, x.AppliedAtUtc,
+                    x.BeforeInUtc, x.BeforeOutUtc, x.AfterInUtc, x.AfterOutUtc)).ToArray()
+            });
             await audit.WriteAsync(new SecurityAuditRequest(current.Entity!.UserId, null, day.WorkspaceId, null, null,
                 "attendance.history.read", "attendance-day", day.Id, "success", new Dictionary<string, string> { ["source"] = decision.Basis.ToString() }), ct);
         }
@@ -100,7 +115,8 @@ public sealed class AttendanceHistory(Tpr10DbContext db, AttendanceReadScope sco
             var day = days[index];
             var latest = await policy.ReadAsync(new(day.MembershipId, day.EmployeeId, day.WorkspaceId, day.DepartmentId, day.SnapshotAtUtc), ct);
             if (latest.Status is not null || !latest.CanRead || latest.Basis != rows[index].ReadBasis
-                || latest.CanReadPhoto != (rows[index].In.Photo is not null))
+                || rows[index].In is { } entered && latest.CanReadPhoto != (entered.Photo is not null)
+                || rows[index].Out is { } exited && latest.CanReadPhoto != (exited.Photo is not null))
                 throw new AttendanceReadDeniedException(latest.Status ?? 404);
         }
         return rows.ToArray();

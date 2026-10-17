@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-module-6-attendance-design.md` โดยเฉพาะ R08–R12, §11–16; สัญญาส่งต่อ `docs/architecture/module-6c-exit-gate.md`
 
-สถานะ: **Tasks 1–3 ผ่านการตรวจรับแล้ว** (Task3 วันที่18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks4–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
+สถานะ: **Tasks 1–5 ผ่านการตรวจรับแล้ว** (18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks6–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
 
 ## Global Constraints
 
@@ -158,11 +158,24 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 **Interfaces:** `CorrectionQueries.ListAsync(string audience, int pageNumber, int pageSize, CancellationToken): Task<CorrectionResult<CorrectionPage>>`; `GetAsync(Guid, CancellationToken): Task<CorrectionResult<CorrectionView>>`; `CorrectionPage` มีitems,total,pageNumber,pageSize; audience mine/supervisor/hr; pageเริ่ม1,size1–100
 
-- [ ] RED: scopeก่อนpagination; original/adjustedเวลาแยก; correction-onlyไม่มีimage/GPS; หัวหน้าไม่มีevidenceIDs/URLs; HRข้ามหน่วย404; adminไม่มีbypass; expiredอ่านประวัติได้
-- [ ] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CorrectionReadTests|FullyQualifiedName~CorrectionDeliveryTests'` คาดFAIL
-- [ ] implementผ่านpolicy6Aและcurrentroute; workflowgrantให้เฉพาะคำร้องที่ต้องตัดสิน ไม่เปิดประวัติทั้งองค์กร ใช้delivery lock/recheck/no-storeแบบAttendanceJsonResultเดิม
-- [ ] GREENพร้อม revokeระหว่างquery/audit/serialize, cursor/pageinvalid400, late responseไม่เผยข้อมูล และhistory6Cทั้งหมด
-- [ ] commit `feat(attendance): expose scoped correction history and queues`
+- [x] RED: scopeก่อนpagination; original/adjustedเวลาแยก; correction-onlyไม่มีimage/GPS; หัวหน้าไม่มีevidenceIDs/URLs; HRข้ามหน่วย404; adminไม่มีbypass; expiredอ่านประวัติได้
+- [x] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CorrectionReadTests|FullyQualifiedName~CorrectionDeliveryTests'` คาดFAIL
+- [x] implementผ่านpolicy6Aและcurrentroute; workflowgrantให้เฉพาะคำร้องที่ต้องตัดสิน ไม่เปิดประวัติทั้งองค์กร ใช้delivery lock/recheck/no-storeแบบAttendanceJsonResultเดิม
+- [x] GREENพร้อม revokeระหว่างquery/audit/serialize, cursor/pageinvalid400, late responseไม่เผยข้อมูล และhistory6Cทั้งหมด
+- [x] commit `feat(attendance): expose scoped correction history and queues`
+
+### ขอบเขตและข้อตัดสิน Task 5
+
+- รายการ `mine` อ่านเฉพาะของตนเอง; คิว `supervisor`/`hr` จำกัดตามขั้นที่รอตัดสิน เส้นทางและสิทธิ์ปัจจุบันก่อนนับจำนวนและแบ่งหน้า ไม่ให้ route เก่าแทนสิทธิ์ปัจจุบัน
+- สิทธิ์ workflow อ่านเฉพาะคำร้องที่ตนต้องตัดสิน ไม่ทำให้ได้สิทธิ์อ่านประวัติลงเวลาหรือภาพทั้งหน่วยงาน ผู้มีสิทธิ์ประวัติ6Aอ่านรายละเอียดคำร้องที่เคยส่งแล้วได้ตามขอบเขตเดิม ร่างที่ยังไม่เคยส่งเป็นส่วนตัวของเจ้าของ หากต้องการเปิดร่างแก่ผู้อื่นต้องอนุมัตินโยบายเพิ่ม
+- เพิ่ม `History` แบบ optional เฉพาะรายละเอียดคำร้อง: revision, เส้นทาง, ผลอนุมัติ/ส่งกลับ และเหตุผลเปลี่ยนเส้นทางเต็มจาก immutable receipt; ไม่ใส่ใน list และไม่เปลี่ยน constructor/receipt เดิม ลดผลกระทบต่อ retry ทั้งนี้ต้องมี regression ตรวจสัญญาเดิม
+- ประวัติลงเวลาแยก event/ภาพ/GPS เดิมออกจาก effective time และ adjustment; วันที่มาจากคำร้องมี `in: null` ได้เมื่อมี adjustment รองรับ ไม่สร้างหลักฐานถ่ายสดปลอม หัวหน้าไม่ได้ evidence ID หรือ URL
+- สถานที่ effective มาจาก revision ที่อนุมัติล่าสุด เว้นกรณีลงเวลาออกจริงหลัง adjustment ใช้ Site ของ event ออก; ถ้าตีความผิดอาจแสดงสถานที่เก่า จึงตรวจทั้ง correction-only, เวลาเข้า–ออกจากคำร้อง และ checkout จริงหลังคำร้อง
+- ขยายไฟล์ Task5 ไปยัง parser/type/component ประวัติเดิมเพื่อรองรับข้อมูลใหม่ หากไม่ปรับหน้าเดิมจะปฏิเสธวันที่ไม่มี live event; ไม่ใช่การเริ่มหน้าคำร้องใหม่ใน Task7
+- ส่ง JSON ผ่าน `AttendanceJsonResult` เดิม: ถือ identity delivery lock, ตรวจสิทธิ์ซ้ำหลัง audit และก่อนส่ง byte แรก, no-store และจำกัดเวลาส่ง 5 วินาที มีการทดสอบการถอนสิทธิ์ก่อน query, หมดอายุระหว่าง audit/หลังอ่าน และปล่อย lock เมื่อสำเร็จหรือ abort
+- ชุดเฉพาะ Task5 และประวัติเดิมผ่าน58/58 (Task5เพิ่ม25กรณี); backend ทั้งชุดผ่าน1,626/1,626 ไม่มีข้าม ใช้เวลา38.4260นาที สิ้นสุด17ตุลาคม2026 ประมาณ19:20UTC; Node61/61, frontend Build/Lint ผ่าน; backend Build0warnings0errors และ Format ผ่าน
+- HTTPS history บน production-build พอร์ต4001 ผ่าน11/11 พร้อม TLS/CSRF/cookie/host checks ไม่ใช่การ deploy Production และไม่แทนผลมือถือจริง/NAS จริง
+- ตรวจทานโค้ดโดยผู้พัฒนา; review อิสระทั้งสาขาอยู่ Task8, API/หน้าคำร้องอยู่ Tasks6–7, ไม่มี push/merge และมือถือจริง/NAS จริงยังพัก
 
 ## Task 6: HTTP API, OpenAPI และ client contracts
 
