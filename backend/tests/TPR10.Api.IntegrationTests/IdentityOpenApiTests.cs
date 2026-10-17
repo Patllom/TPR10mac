@@ -119,7 +119,8 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
                 .Select(m => $"{m.Name} {p.Name}")).Order().ToArray();
         var expected = Contracts.Select(row => $"{row[1]} {row[0]}")
             .Concat(ScopeRecordOpenApiTests.Contracts().Select(row => $"{row[1]} {row[0]}"))
-            .Concat(AttendanceDirectoryOpenApiTests.ExpectedOperations()).Concat(StorageOpenApiTests.ExpectedOperations()).Concat(EvidenceOpenApiTests.ExpectedOperations()).Order().ToArray();
+            .Concat(AttendanceDirectoryOpenApiTests.ExpectedOperations()).Concat(StorageOpenApiTests.ExpectedOperations()).Concat(EvidenceOpenApiTests.ExpectedOperations())
+            .Concat(AttendanceRecordingOpenApiTests.Routes.Select(route => (route is "capture-challenges" or "check-ins" or "check-outs" ? "post" : "get") + " /api/v1/attendance/" + route)).Order().ToArray();
         Assert.Equal(expected, actual);
         var cookie = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("SessionCookie");
         Assert.Equal("apiKey", cookie.GetProperty("type").GetString());

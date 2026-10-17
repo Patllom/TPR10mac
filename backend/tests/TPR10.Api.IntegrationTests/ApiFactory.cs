@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace TPR10.Api.IntegrationTests;
 
 public sealed class ApiFactory(string connectionString, string environment = "Testing", TimeProvider? clock = null,
-    Dictionary<string, string?>? settings = null, DbCommandInterceptor? interceptor = null) : WebApplicationFactory<Program>
+    Dictionary<string, string?>? settings = null, DbCommandInterceptor? interceptor = null,
+    Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
 {
     public DbCommandInterceptor? CommandInterceptor { get; set; } = interceptor;
     public async Task<HttpClient> CreateCsrfClientAsync()
@@ -36,5 +37,6 @@ public sealed class ApiFactory(string connectionString, string environment = "Te
             new Dictionary<string, string?> { ["TPR10_CONNECTION_STRING"] = connectionString }));
         if (settings is not null)
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
+        if (configureServices is not null) builder.ConfigureServices(configureServices);
     }
 }

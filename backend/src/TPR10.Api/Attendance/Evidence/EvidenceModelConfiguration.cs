@@ -79,6 +79,8 @@ internal static class EvidenceModelConfiguration
         binding.HasKey(x => x.EvidenceId);
         binding.HasIndex(x => x.EventId).IsUnique();
         binding.HasOne<EvidenceObject>().WithMany().HasForeignKey(x => x.EvidenceId).OnDelete(DeleteBehavior.Restrict);
+        binding.HasOne<Recording.AttendanceEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_evidence_binding_attendance_event");
 
         var job = Entity<MigrationJob>(model, "evidence_migration_jobs");
         job.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("Pending");

@@ -5,6 +5,7 @@ using TPR10.Api.Scopes;
 using TPR10.Api.Auditing;
 using TPR10.Api.Attendance.Storage;
 using TPR10.Api.Attendance.Evidence;
+using TPR10.Api.Attendance.Recording;
 
 namespace TPR10.Api.Attendance;
 
@@ -13,6 +14,11 @@ public static class AttendanceRegistration
     public static IServiceCollection AddAttendance(this IServiceCollection services)
     {
         services.AddScoped<DirectoryService>();
+        services.AddScoped<CaptureChallengeService>();
+        services.AddScoped<CaptureOperationStore>();
+        services.AddScoped<AttendanceRecorder>();
+        services.AddScoped<Access.AttendanceReadScope>();
+        services.AddScoped<History.AttendanceHistory>();
         services.AddOptions<StorageOptions>().BindConfiguration("AttendanceStorage");
         services.AddSingleton<StorageRuntime>();
         services.AddScoped<StorageRegistry>();

@@ -12,6 +12,58 @@ namespace TPR10.Api.IntegrationTests;
 [Collection("database")]
 public sealed class EvidenceSchemaTests(PostgresFixture postgres)
 {
+    private const string BeforeBinding = "20260926074317_AddAttendanceRecording";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Legacy_binding_without_matching_event_stops_upgrade_without_rewriting_history(bool mismatchedTime)
+    {
+        await using var database = await CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync(BeforeBinding);
+        await db.Database.ExecuteSqlRawAsync(ObjectInsert);
+        await db.Database.ExecuteSqlRawAsync(Prepare);
+        if (mismatchedTime) await AddEventAsync(db, DateTimeOffset.Parse("2026-09-25T01:00:01Z"));
+        await db.Database.ExecuteSqlRawAsync(Publish);
+        var history = await db.Database.GetAppliedMigrationsAsync();
+        var bindings = await RowsAsync(db, "evidence_bindings");
+        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
+        Assert.Equal("P0001", error.SqlState);
+        Assert.Contains("Evidence binding preflight", error.MessageText);
+        Assert.Equal(history, await db.Database.GetAppliedMigrationsAsync());
+        Assert.Equal(bindings, await RowsAsync(db, "evidence_bindings"));
+        Assert.Equal(mismatchedTime ? 1 : 0, await CountAsync(db, "attendance_events"));
+    }
+
+    [Fact]
+    public async Task Matching_legacy_binding_upgrades_without_changing_retained_records()
+    {
+        await using var database = await CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync(BeforeBinding);
+        await PublishedAsync(db);
+        var bindings = await RowsAsync(db, "evidence_bindings");
+        var events = await RowsAsync(db, "attendance_events");
+        await db.Database.MigrateAsync();
+        Assert.Equal(bindings, await RowsAsync(db, "evidence_bindings"));
+        Assert.Equal(events, await RowsAsync(db, "attendance_events"));
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
+    public async Task Bound_attendance_prevents_downgrade_that_would_remove_protection()
+    {
+        await using var database = await CreateAsync();
+        await using var db = database.CreateContext();
+        await PublishedAsync(db);
+        var history = await db.Database.GetAppliedMigrationsAsync();
+        var error = await Assert.ThrowsAsync<PostgresException>(() => db.GetService<IMigrator>().MigrateAsync(BeforeBinding));
+        Assert.Equal("P0001", error.SqlState);
+        Assert.Equal(history, await db.Database.GetAppliedMigrationsAsync());
+        Assert.Equal(1, await CountAsync(db, "evidence_bindings"));
+    }
+
     private const string Previous = "20260924193737_ProtectAttendanceDirectoryHistory";
     private const string ObjectInsert = """
         INSERT INTO evidence_objects(id,operation_id,owner_id,membership_id,workspace_id,department_id,snapshot_at_utc,occurred_at_utc,action,storage_id,storage_version,object_key,state,version)
@@ -161,13 +213,14 @@ public sealed class EvidenceSchemaTests(PostgresFixture postgres)
     [Theory]
     [InlineData("UPDATE evidence_objects SET state='Published',version=3")]
     [InlineData("UPDATE evidence_locations SET state='Active',version=2; UPDATE evidence_objects SET state='Published',version=3")]
-    [InlineData("INSERT INTO evidence_bindings(evidence_id,event_id,published_at_utc) SELECT id,gen_random_uuid(),now() FROM evidence_objects")]
+    [InlineData("INSERT INTO evidence_bindings(evidence_id,event_id,published_at_utc) SELECT id,'00000000-0000-0000-0000-000000000501',now() FROM evidence_objects")]
     public async Task Publication_requires_binding_and_both_verified_active_variants_at_commit(string sql)
     {
         await using var database = await CreateAsync();
         await using var db = database.CreateContext();
         await db.Database.ExecuteSqlRawAsync(ObjectInsert);
         await db.Database.ExecuteSqlRawAsync(Prepare);
+        await AddEventAsync(db);
         await RejectAsync(db, sql, "23514");
         Assert.Equal(0, await CountAsync(db, "evidence_bindings"));
     }
@@ -324,8 +377,17 @@ public sealed class EvidenceSchemaTests(PostgresFixture postgres)
     {
         await db.Database.ExecuteSqlRawAsync(ObjectInsert);
         await db.Database.ExecuteSqlRawAsync(Prepare);
+        await using var tx = await TPR10.Api.Scopes.ScopeOperation.BeginAsync(db, default);
+        await AddEventAsync(db);
         await db.Database.ExecuteSqlRawAsync(Publish);
+        await tx.CommitAsync();
     }
+    private static Task<TPR10.Api.Attendance.Recording.AttendanceEvent> AddEventAsync(Tpr10DbContext db, DateTimeOffset? at = null) =>
+        AttendanceEvidenceTestData.AddEventAsync(db, Guid.Parse("00000000-0000-0000-0000-000000000501"),
+            Guid.Parse("00000000-0000-0000-0000-000000000201"),
+            new(Guid.Parse("00000000-0000-0000-0000-000000000041"), Guid.Parse("00000000-0000-0000-0000-000000000031"),
+                Guid.Parse("00000000-0000-0000-0000-000000000001"), Guid.Parse("00000000-0000-0000-0000-000000000011"),
+                at ?? DateTimeOffset.Parse("2026-09-25T01:00:00Z")));
     private static async Task<PostgresException> RejectAsync(Tpr10DbContext db, string sql, string expected)
     {
         var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(sql));

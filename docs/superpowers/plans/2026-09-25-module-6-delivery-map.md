@@ -10,9 +10,15 @@
 
 **Spec:** [Design Spec ที่ผู้ใช้อนุมัติ](../specs/2026-09-25-module-6-attendance-design.md)
 
-สถานะวันที่26กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6B Tasks1–7ส่งมอบในสาขาแยกแล้ว ส่วน Task8 ผ่านการตรวจทางเทคนิค แก้ dev transport timeout และยืนยัน HTTPS dev34/prod36 พร้อม Test/Build/Lint/Review แล้ว ผู้ใช้อนุญาตcommit/push/เปิดPRงาน6B แต่ยังไม่mergeในรอบจัดส่งนี้ และไม่มีNASสำหรับตรวจจริง จึงไม่ถือว่า6Bพร้อมProduction ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6C–6Dยังไม่มีtask-level implementation plan
+สถานะวันที่28กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6BครบงานทางเทคนิคและPR #3 mergeเข้าmainแล้วที่ `8a965af` แต่ NASจริง/Production ยังรอตรวจ ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6C Tasks1–8ผ่านเกณฑ์ในเครื่อง รอบTask8 Node59/59, history HTTPS dev11/11 และ production-build11/11, กล้อง regression19/19, backendที่เกี่ยวข้อง111/111 และBuild/Lint/formatผ่าน ไม่ได้รันbackendทั้งโครงการซ้ำจากผล1,478/1,478ของTask6 ยังเหลือTask9และยังไม่push/mergeงาน6C; 6Dยังไม่จัดทำtask-level plan
 
 ## Global Constraints
+
+ผลตรวจ6Cล่าสุด17ตุลาคม2026: Backend1,481/1,481 Node60/60 HTTPSdev72/72 prod74/74 และBuild/Lint/formatผ่าน พร้อมจัดทำแผน6D แต่ยังไม่commit/push/merge6C และยังไม่รับรองProduction; timeoutเดิมไม่พบซ้ำในชุดใหม่ ไม่อ้างcausal fix ผลเดือนกันยายนด้านล่างเป็นประวัติ
+
+คำสั่งผู้ใช้ 17 ตุลาคม 2026: พักการตรวจมือถือจริงและ NAS จริงของ6Cไว้ก่อน โดยไม่ถือว่าผ่าน ไม่ขวางการวางแผน6D แต่ยังคง technical gate และยังไม่อนุมัติ Production
+
+ความคืบหน้า Task9 วันที่28กันยายน2026: แก้ independent review 5 ประเด็นสำคัญและเพิ่ม local pair restore drill แล้ว Backend1,481/1,481, Node60/60 และ Build/Lint/formatผ่าน แต่ HTTPS production-build matrix ล่าสุดผ่าน73/74 มี scopes timeout ที่ยังหาต้นเหตุไม่ได้ จึงยังไม่ปิด Task9 และไม่มี commit/push/merge รอบนี้ ดู [รายงาน6C](../../architecture/module-6c-exit-gate.md) กับ [แบบรับงานอุปกรณ์](../../architecture/module-6c-device-acceptance.md) มือถือ/NAS/Production ยังรอตรวจ
 
 - กล้องสดทั้งเข้า/ออก ภาพมีเวลาจากเซิร์ฟเวอร์; GPS ต้องมีแต่ไม่มี geofence
 - วันละหนึ่งคู่ต่อ user/workDate ทั่วระบบ นับวันไทยตามเวลาเข้า ออกข้ามวันและต่าง Site/Workspace ได้เฉพาะมี exact assignment
@@ -65,7 +71,8 @@
 ## การส่งมอบเอกสารในรอบนี้
 
 - [Implementation Plan 6A — บุคลากรและสิทธิ์](2026-09-25-module-6a-directory-access.md) มีไฟล์ สัญญา DTO, RED/GREEN, commands และ exit gate พร้อมให้ตรวจ
-- [Implementation Plan 6B — หลักฐานภาพและที่เก็บ](2026-09-25-module-6b-evidence-storage.md) ผู้ใช้อนุมัติแล้ว Tasks1–7ส่งมอบและTask8ผ่านtechnical gate โดยNASจริง/Productionยังค้าง; แผน6Cจะล็อกcapture payloadและevent transaction; แผน6Dจะล็อก revision/state transitions หลังมี event contractจริง
+- [Implementation Plan 6B — หลักฐานภาพและที่เก็บ](2026-09-25-module-6b-evidence-storage.md) ผ่านtechnical gateและmerge PR #3แล้ว โดยNASจริง/Productionยังค้าง
+- [Implementation Plan 6C — ลงเวลาออนไลน์](2026-09-26-module-6c-online-attendance.md) Tasks1–8 ส่งมอบschema/lock, read gate, challenge/operation, atomic recording, current/history services, HTTP API, หน้ากล้อง/GPS และหน้าประวัติส่วนตัว/หัวหน้า/HR แล้วในสาขาทำงาน ถัดไป Task9 ตรวจทั้งสาขา/อุปกรณ์จริง ดู [รายงาน Task8](../../architecture/module-6c-task8-private-history.md); แผน6Dจะล็อกrevision/state transitionsหลังมีevent contractจริง
 - ยังไม่มีการอนุมัติแผนใดจากการอนุมัติ Spec เพียงครั้งเดียว ต้องอนุมัติแผนก่อน execution แต่ไม่ย้อนถามข้อกำหนดที่ยืนยันแล้ว
 - วิธีทำงาน Native ที่ใช้ในModuleก่อนหน้ายังคงใช้ได้: ผู้ทำหลักทำTDDและหนึ่ง fresh whole-branch review ต่อระยะ; ผู้ใช้เปลี่ยนเป็น subagent-driven ได้ก่อนเริ่ม
 - ไม่รวมการแก้ปัญหา Preview หรือบัญชีทดสอบในแผนนี้ ไม่แตะไฟล์ pre-merge-backup และไม่อัปเกรด dependency โดยไม่มีเหตุผล

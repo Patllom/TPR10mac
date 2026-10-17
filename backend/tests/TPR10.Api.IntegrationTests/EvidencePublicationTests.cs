@@ -228,6 +228,7 @@ public sealed class EvidencePublicationTests(PostgresFixture postgres)
         var publish = writerType.GetMethod("StagePublicationAsync")!;
         await using (var tx = await ScopeOperation.BeginAsync(db, CancellationToken.None))
         {
+            await AttendanceEvidenceTestData.AddEventAsync(db, publication.EventId, pin.EvidenceId, subject);
             await (Task)publish.Invoke(writer, [publication, CancellationToken.None])!;
             await db.SaveChangesAsync();
             await tx.RollbackAsync();
@@ -237,6 +238,7 @@ public sealed class EvidencePublicationTests(PostgresFixture postgres)
         Assert.Equal(EvidenceState.Prepared, (await db.Set<EvidenceObject>().SingleAsync()).State);
         await using (var tx = await ScopeOperation.BeginAsync(db, CancellationToken.None))
         {
+            await AttendanceEvidenceTestData.AddEventAsync(db, publication.EventId, pin.EvidenceId, subject);
             await (Task)publish.Invoke(writer, [publication, CancellationToken.None])!;
             await db.SaveChangesAsync();
             await tx.CommitAsync();

@@ -523,6 +523,367 @@ namespace TPR10.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.AttendanceDay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("department_id");
+
+                    b.Property<DateTimeOffset>("EffectiveInUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_in_utc");
+
+                    b.Property<DateTimeOffset?>("EffectiveOutUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_out_utc");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employee_id");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("membership_id");
+
+                    b.Property<DateTimeOffset>("SnapshotAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("snapshot_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("work_date");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique()
+                        .HasFilter("effective_out_utc IS NULL");
+
+                    b.HasIndex("EmployeeId", "WorkDate")
+                        .IsUnique();
+
+                    b.HasIndex("MembershipId", "EmployeeId", "WorkspaceId", "DepartmentId");
+
+                    b.ToTable("attendance_days", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_attendance_day_date", "work_date=(snapshot_at_utc AT TIME ZONE 'Asia/Bangkok')::date");
+
+                            t.HasCheckConstraint("ck_attendance_day_time", "isfinite(work_date) AND isfinite(snapshot_at_utc) AND isfinite(effective_in_utc) AND (effective_out_utc IS NULL OR (isfinite(effective_out_utc) AND effective_out_utc>effective_in_utc))");
+
+                            t.HasCheckConstraint("ck_attendance_day_version", "version>=1");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.AttendanceEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<double>("AccuracyMeters")
+                        .HasColumnType("double precision")
+                        .HasColumnName("accuracy_meters");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid>("DayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("day_id");
+
+                    b.Property<DateTimeOffset>("DeviceCapturedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("device_captured_at_utc");
+
+                    b.Property<Guid>("EvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<DateTimeOffset>("GpsSampledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("gps_sampled_at_utc");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("site_id");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("source");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvidenceId")
+                        .IsUnique();
+
+                    b.HasIndex("DayId", "Action")
+                        .IsUnique();
+
+                    b.HasIndex("DayId", "ActorId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "SiteId");
+
+                    b.ToTable("attendance_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_attendance_event_action", "action IN ('CheckIn','CheckOut')");
+
+                            t.HasCheckConstraint("ck_attendance_event_gps", "latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180 AND accuracy_meters>0 AND accuracy_meters<'Infinity'::float8");
+
+                            t.HasCheckConstraint("ck_attendance_event_source", "source='live'");
+
+                            t.HasCheckConstraint("ck_attendance_event_time", "isfinite(occurred_at_utc) AND isfinite(device_captured_at_utc) AND isfinite(gps_sampled_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.AttendanceOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid>("ChallengeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("challenge_id");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("department_id");
+
+                    b.Property<long?>("ExpectedDayVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_day_version");
+
+                    b.Property<long>("FencingVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("fencing_version");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<DateTimeOffset>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until_utc");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("membership_id");
+
+                    b.Property<Guid>("MembershipWorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("membership_workspace_id");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<string>("PayloadSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_sha256");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid?>("ResultEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("result_event_id");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result_json");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("site_id");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Processing")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("TargetDayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_day_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChallengeId")
+                        .IsUnique();
+
+                    b.HasIndex("ResultEventId");
+
+                    b.HasIndex("ActorId", "Action", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("MembershipId", "ActorId", "MembershipWorkspaceId", "DepartmentId");
+
+                    b.HasIndex("ChallengeId", "ActorId", "SessionId", "Action", "WorkspaceId", "ProjectId", "SiteId", "IdempotencyKey");
+
+                    b.ToTable("attendance_operations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_attendance_operation_day", "target_day_id<>'00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_attendance_operation_hash", "payload_sha256 ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_attendance_operation_result", "(state='Committed' AND result_event_id IS NOT NULL AND result_json IS NOT NULL AND jsonb_typeof(result_json)='object' AND octet_length(result_json::text)<=4096) OR (state<>'Committed' AND result_event_id IS NULL AND result_json IS NULL)");
+
+                            t.HasCheckConstraint("ck_attendance_operation_state", "state IN ('Processing','Committed','Expired','Failed')");
+
+                            t.HasCheckConstraint("ck_attendance_operation_time", "isfinite(occurred_at_utc) AND isfinite(lease_until_utc) AND lease_until_utc>occurred_at_utc");
+
+                            t.HasCheckConstraint("ck_attendance_operation_version", "version>=1 AND fencing_version>=1 AND (expected_day_version IS NULL OR expected_day_version>=1)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.CaptureChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid?>("ConsumedOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("consumed_operation_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<DateTimeOffset>("IssuedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at_utc");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("site_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConsumedOperationId", "Id");
+
+                    b.HasIndex("SessionId", "ActorId");
+
+                    b.HasIndex("ActorId", "Action", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "SiteId");
+
+                    b.ToTable("capture_challenges", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_capture_action", "action IN ('CheckIn','CheckOut')");
+
+                            t.HasCheckConstraint("ck_capture_key", "idempotency_key<>'00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_capture_time", "isfinite(issued_at_utc) AND isfinite(expires_at_utc) AND expires_at_utc=issued_at_utc+interval '120 seconds'");
+                        });
+                });
+
             modelBuilder.Entity("TPR10.Api.Attendance.Storage.MigrationItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2153,6 +2514,13 @@ namespace TPR10.Api.Data.Migrations
 
             modelBuilder.Entity("TPR10.Api.Attendance.Evidence.EvidenceBinding", b =>
                 {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_evidence_binding_attendance_event");
+
                     b.HasOne("TPR10.Api.Attendance.Evidence.EvidenceObject", null)
                         .WithMany()
                         .HasForeignKey("EvidenceId")
@@ -2187,6 +2555,84 @@ namespace TPR10.Api.Data.Migrations
                         .WithMany()
                         .HasForeignKey("MembershipId", "OwnerId", "WorkspaceId", "DepartmentId")
                         .HasPrincipalKey("Id", "UserId", "WorkspaceId", "DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.AttendanceDay", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Directory.EmployeeMembership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId", "EmployeeId", "WorkspaceId", "DepartmentId")
+                        .HasPrincipalKey("Id", "UserId", "WorkspaceId", "DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.AttendanceEvent", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Evidence.EvidenceObject", null)
+                        .WithMany()
+                        .HasForeignKey("EvidenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceDay", null)
+                        .WithMany()
+                        .HasForeignKey("DayId", "ActorId")
+                        .HasPrincipalKey("Id", "EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Organization.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "SiteId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.AttendanceOperation", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceEvent", null)
+                        .WithMany()
+                        .HasForeignKey("ResultEventId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TPR10.Api.Attendance.Directory.EmployeeMembership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId", "ActorId", "MembershipWorkspaceId", "DepartmentId")
+                        .HasPrincipalKey("Id", "UserId", "WorkspaceId", "DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Recording.CaptureChallenge", null)
+                        .WithMany()
+                        .HasForeignKey("ChallengeId", "ActorId", "SessionId", "Action", "WorkspaceId", "ProjectId", "SiteId", "IdempotencyKey")
+                        .HasPrincipalKey("Id", "ActorId", "SessionId", "Action", "WorkspaceId", "ProjectId", "SiteId", "IdempotencyKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Recording.CaptureChallenge", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ConsumedOperationId", "Id")
+                        .HasPrincipalKey("Id", "ChallengeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TPR10.Api.Identity.Data.IdentitySession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId", "ActorId")
+                        .HasPrincipalKey("Id", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Organization.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "SiteId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -60,11 +60,11 @@ public sealed class EvidenceReader(Tpr10DbContext db, ScopeAccess session, IAtte
     {
         var identity = await session.ValidateSessionAsync(false, ct);
         if (identity.Status is { } status) return new(status, AttendanceReadBasis.None, null);
-        var row = await db.Set<EvidenceObject>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == EvidenceState.Published, ct);
-        if (row is null || !await db.Set<EvidenceBinding>().AnyAsync(x => x.EvidenceId == id, ct)) return new(404, AttendanceReadBasis.None, null);
-        var decision = await access.ReadAsync(new(row.MembershipId, row.OwnerId, row.WorkspaceId, row.DepartmentId, row.SnapshotAtUtc), ct);
+        var subject = await History.AttendanceEvidenceSubject.ResolveAsync(db, id, ct);
+        if (subject is null) return new(404, AttendanceReadBasis.None, null);
+        var decision = await access.ReadAsync(subject, ct);
         return decision.Status is null && decision.CanReadPhoto
-            ? new(null, decision.Basis, row.WorkspaceId)
+            ? new(null, decision.Basis, subject.WorkspaceId)
             : new(decision.Status ?? 404, AttendanceReadBasis.None, null);
     }
 }

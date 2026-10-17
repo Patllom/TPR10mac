@@ -21,6 +21,8 @@ using TPR10.Api.Attendance;
 using TPR10.Api.Attendance.Directory;
 using TPR10.Api.Attendance.Storage;
 using TPR10.Api.Attendance.Evidence;
+using TPR10.Api.Attendance.Recording;
+using TPR10.Api.Attendance.History;
 
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
@@ -59,6 +61,7 @@ app.UseForwardedHeaders();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseRouting();
+app.Use(async (context, next) => { RecordingEndpoints.ApplyCaptureBodyLimit(context); await next(context); });
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/v1"))
@@ -101,6 +104,8 @@ app.MapAttendanceAccess();
 app.MapAttendanceStorage();
 app.MapAttendanceMigrations();
 app.MapAttendanceEvidence();
+app.MapAttendanceRecording();
+app.MapAttendanceHistory();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");
