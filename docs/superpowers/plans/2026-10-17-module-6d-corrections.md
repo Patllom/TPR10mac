@@ -131,15 +131,26 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 ## Task 4: อนุมัติ ส่งกลับ และใช้เวลาที่อนุมัติแบบatomic
 
-**Files:** สร้าง `Corrections/CorrectionApproval.cs`, `Corrections/CorrectionAdjustmentWriter.cs`; แก้ `Recording/AttendancePairing.cs` เฉพาะการอ่านeffective stateหากจำเป็น; tests `CorrectionApprovalTests.cs`, `CorrectionRaceTests.cs`
+**Files:** สร้าง `Corrections/CorrectionApproval.cs`, `Corrections/CorrectionAdjustmentWriter.cs`; tests `CorrectionApprovalTests.cs`, `CorrectionRaceTests.cs`; ใช้ fixture ร่วมจาก `CorrectionRoutingTests.cs`; เพิ่ม migration `AllowCorrectedAttendanceCheckout` โดยไม่แก้ migration เก่า ไม่ต้องแก้ `AttendancePairing.cs` เพราะอ่าน effective state อยู่แล้ว
 
 **Interfaces:** `CorrectionApproval.DecideAsync(Guid id, CorrectionCommand command, string decision, CancellationToken): Task<CorrectionResult<CorrectionView>>`; decisionallowlist supervisor-approve/hr-approve/return; `CorrectionAdjustmentWriter.ApplyAsync(Guid requestId, int revision, CancellationToken): Task<int?>` ต้องอยู่ในtransactionเจ้าของเดิม ไม่commitเอง
 
-- [ ] RED: HRก่อนหัวหน้า403/409, คนเดิมสองขั้น403, self403, staleversion409, returnไม่มีเหตุผล400, retryเดิมไม่ซ้ำ, returnจากHRแล้วส่งใหม่ต้องหัวหน้าใหม่
-- [ ] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CorrectionApprovalTests|FullyQualifiedName~CorrectionRaceTests'` คาดFAIL
-- [ ] HRcommitถือidentity→employee lock ตรวจcurrentgrants, baselineDayVersion, uniqueวัน/รอบเปิด, วันไทย/เวลา/Siteประวัติ เขียนapproval+adjustment+dayversion+audit+receiptในtransactionเดียว; conflictไม่ปรับเวลาให้ส่งกลับได้ pendingไม่expire
-- [ ] GREEN: checkoutชนapprovalผู้ชนะ1, audit/DBfailไม่มีpartialsuccess, newdayขาดทั้งคู่ไม่สร้างภาพ/GPS, correctionปิดรอบเก่าแล้วเริ่มวันใหม่ได้, originalfilechecksum/eventไม่เปลี่ยน, disableactorขณะรอlockปฏิเสธ
-- [ ] commit `feat(attendance): apply two-step corrections atomically`
+- [x] RED: HRก่อนหัวหน้า403/409, คนเดิมสองขั้น403, self403, staleversion409, returnไม่มีเหตุผล400, retryเดิมไม่ซ้ำ, returnจากHRแล้วส่งใหม่ต้องหัวหน้าใหม่
+- [x] รัน `dotnet test backend/TPR10.sln --filter 'FullyQualifiedName~CorrectionApprovalTests|FullyQualifiedName~CorrectionRaceTests'` พบ16FAILเพราะบริการยังไม่มี; เพิ่มREDอีก2กรณีสำหรับการลงเวลาออกของวันจากคำร้องและการย้อน migration
+- [x] HRcommitถือidentity→employee lock ตรวจcurrentgrants, baselineDayVersion, uniqueวัน/รอบเปิด, วันไทย/เวลา/Siteประวัติ เขียนapproval+adjustment+dayversion+audit+receiptในtransactionเดียว; conflictไม่ปรับเวลาให้ส่งกลับได้ pendingไม่expire
+- [x] GREEN: checkoutชนapprovalผู้ชนะ1, audit/DBfailไม่มีpartialsuccess, newdayขาดทั้งคู่ไม่สร้างภาพ/GPS, correctionปิดรอบเก่าแล้วเริ่มวันใหม่ได้, originalfilechecksum/eventไม่เปลี่ยน, disableactorขณะรอlockปฏิเสธ
+- [x] commit `feat(attendance): apply two-step corrections atomically`
+
+### ผลตรวจและขอบเขต Task 4
+
+- เทสต์ใหม่ **32กรณี**; ชุดรวม approval/race/routing/schema **86/86** ผ่าน; backend ทั้งโครงการ **1,601/1,601** ใช้38.2753นาที ไม่มีskip; Node **60/60**; frontend/backend Build, Lint, backend Format และ diff check ผ่าน
+- หัวหน้าอนุมัติก่อน HR คนอื่นเสมอ ตรวจบัญชี สิทธิ์ MFA และเส้นทางปัจจุบันก่อนใช้ receipt ซ้ำ ไม่เพิ่ม Admin bypass; คำร้องที่ pending ไม่หมดอายุเพราะเลยกำหนดยื่น
+- ส่งกลับได้ทั้งสองขั้นพร้อมเหตุผล เริ่มกำหนดส่งใหม่จากวันที่ส่งกลับ; การส่งอีกครั้งสร้าง revision/route ใหม่และเริ่มหัวหน้าใหม่ ไม่ใช้ผลอนุมัติฉบับก่อน
+- การอนุมัติขั้นสุดท้ายกับการลงเวลาออกจริงแข่งกันได้เพียงผู้ชนะเดียว อีกฝ่ายได้409; เมื่อ conflict ยังส่งกลับได้ ไม่มี approval/adjustment/receipt/audit ค้างบางส่วน
+- วันขาดทั้งคู่สร้างเฉพาะ effective attendance และ adjustment ไม่สร้างภาพหรือ GPS ย้อนหลัง; การปิดรอบเก่าด้วยคำร้องทำให้เริ่มรอบวันใหม่ได้ โดยไฟล์และ event เดิมไม่เปลี่ยน
+- ข้อตัดสินเพิ่มเติม: เพิ่ม migration ใหม่ให้กฎ checkout ใช้ approved adjustment ที่ตรง effective-in เป็นหลักฐานแทน live CheckIn ได้สำหรับวันที่มาจากคำร้อง ไม่แก้ frozen migration เก่าหรือลดกฎ evidence/immutability; rollback ปฏิเสธเมื่อมี adjustment ที่ต้องเก็บรักษา หากกฎนี้ผิดอาจทำให้ checkout ถูกปฏิเสธหรือไร้หลักฐาน จึงมี real recorder และ migration regression กำกับ
+- รอบขยายครั้งแรกผ่าน85/86 เพราะ fixture ถอน Site assignment ขาดผู้ถอนและเหตุผล แก้เฉพาะ fixture ให้ครบ constraint เดิม แล้วผ่าน86/86 ไม่ลดกฎ production
+- ตรวจทานโค้ดโดยผู้พัฒนาแล้ว; independent whole-branch review ยังอยู่ Task8; HTTP/หน้าจออยู่ Tasks6–7 ไม่ได้เปิดใช้งานคำร้องบนหน้าเว็บใน Taskนี้ ไม่มี push/merge และไม่ใช่การอนุมัติ Production; มือถือจริง/NAS จริงยังพัก
 
 ## Task 5: อ่านคำร้อง คิวอนุมัติ และประวัติหลังแก้ไข
 
@@ -195,4 +206,4 @@ R08–R12: Tasks1–4,6–7; R14–R15: Tasks3,5–7; R01–R07/R13: regression�
 
 ข้อเสนอในแผนที่ต้องยืนยันพร้อมอนุมัติ: reason1–2000, JSON64KiB, pagination1–100, การจัดrouteใหม่ผ่านdirectory-manageพร้อมscope/MFA, การใช้Adjustmentสำหรับcorrection-onlyแทนการปลอมlive event และการปฏิเสธเปลี่ยนวันเมื่อhistoricalmembershipไม่ตรงsnapshotเดิม ไม่เพิ่มadmin bypassเพื่อแก้ข้อขัดแย้งเหล่านี้
 
-ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–3 ผ่านแล้ว; ขั้นถัดไปคือTask4 เมื่อผู้ใช้ให้ดำเนินการต่อ
+ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–4 ผ่านแล้ว; ขั้นถัดไปคือTask5 เมื่อผู้ใช้ให้ดำเนินการต่อ

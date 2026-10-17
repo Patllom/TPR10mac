@@ -287,9 +287,13 @@ public sealed class CorrectionRoutingTests(PostgresFixture postgres)
         Assert.True(await db.AuditMetadata.AnyAsync(x => x.AuditEventId == audit.Id && x.Key == "evidence-reference" && x.Value.Contains(command.CommandId.ToString())));
     }
 
-    private async Task<CaptureFixture> Fixture()
+    internal async Task<CaptureFixture> Fixture()
     {
         var f = await CaptureFixture.CreateAsync(postgres.ConnectionString, s => { s.AddScoped<PermissionContext>(); s.AddScoped<PermissionMutationGuard>(); });
+        await SeedRoute(f); return f;
+    }
+    internal static async Task SeedRoute(CaptureFixture f)
+    {
         await using var db = f.Data.Database.CreateContext();
         await db.Database.ExecuteSqlRawAsync("""
             UPDATE user_scope_assignments SET created_at_utc='2026-09-01T00:00:00Z',version=version+1;
@@ -305,9 +309,9 @@ public sealed class CorrectionRoutingTests(PostgresFixture postgres)
             INSERT INTO sessions(id,user_id,token_hash,stage,created_at_utc,last_seen_at_utc,expires_at_utc,mfa_verified_at_utc,security_version) VALUES ('00000000-0000-0000-0000-000000000072','00000000-0000-0000-0000-000000000033',decode(repeat('bc',32),'hex'),'Active','2026-09-25T16:00:00Z','2026-09-25T17:00:00Z','2026-09-26T17:00:00Z','2026-09-25T17:00:00Z',1);
             """);
         db.Add(new MfaFactor { Id = Guid.NewGuid(), UserId = Hr, ProtectedSecret = "synthetic-test-only", CreatedAtUtc = f.Clock.GetUtcNow(), ConfirmedAtUtc = f.Clock.GetUtcNow() });
-        await db.SaveChangesAsync(); return f;
+        await db.SaveChangesAsync();
     }
-    private static async Task<CorrectionView> Draft(CaptureFixture f)
+    internal static async Task<CorrectionView> Draft(CaptureFixture f)
     {
         await using var scope = await f.ScopeAsync();
         var service = ActivatorUtilities.CreateInstance<CorrectionDraftService>(scope.ServiceProvider);
@@ -325,7 +329,7 @@ public sealed class CorrectionRoutingTests(PostgresFixture postgres)
         var service = ActivatorUtilities.CreateInstance(scope.ServiceProvider, type);
         return await (Task<CorrectionResult<CorrectionView>>)type.GetMethod(reroute ? "RerouteAsync" : "SubmitAsync")!.Invoke(service, [id, command, CancellationToken.None])!;
     }
-    private static async Task MoveClock(CaptureFixture f, DateTimeOffset at)
+    internal static async Task MoveClock(CaptureFixture f, DateTimeOffset at)
     {
         f.Clock.Advance(at - f.Clock.GetUtcNow()); await using var db = f.Data.Database.CreateContext();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE sessions SET last_seen_at_utc={at.ToUniversalTime()},expires_at_utc={at.AddDays(1).ToUniversalTime()},mfa_verified_at_utc=CASE WHEN mfa_verified_at_utc IS NULL THEN NULL ELSE {at.ToUniversalTime()} END");
