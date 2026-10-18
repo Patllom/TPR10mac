@@ -55,7 +55,7 @@ export function parseCorrection(value: unknown): CorrectionView {
   if (!correctionId(r.id) || !correctionId(r.employeeId) || !day(r.originalWorkDate) || !positive(r.version) || ![0, 1, 2, 3, 4, 5].includes(r.state as number)
     || !utc(r.deadlineUtc) || !positive(r.currentRevision) || !proposal(r.proposal) || !nullable(r.baselineDayVersion, positive)
     || !Array.isArray(r.actions) || !r.actions.every(x => correctionActions.includes(x)) || new Set(r.actions).size !== r.actions.length
-    || !['Own', 'Supervisor', 'Hr', 'WorkflowSupervisor', 'WorkflowHr'].includes(r.readBasis as string)
+    || !['Own', 'Supervisor', 'Hr', 'WorkflowSupervisor', 'WorkflowHr', 'WorkflowRouting'].includes(r.readBasis as string)
     || Object.hasOwn(r, 'history') && !history(r.history)
     || Object.hasOwn(r, 'comparison') && !comparison(r.comparison)) return invalid();
   return r as CorrectionView;

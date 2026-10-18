@@ -8,12 +8,39 @@ using TPR10.Api.Auditing;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Authorization;
 using TPR10.Api.Scopes;
+using TPR10.Api.Scopes.Data;
+using TPR10.Api.Organization.Data;
 
 namespace TPR10.Api.Attendance.Corrections;
+
+public sealed record CorrectionSiteChoice(CorrectionSite Site, string Label);
+public sealed record CorrectionSitePage(CorrectionSiteChoice[] Items, int Total, int PageNumber, int PageSize, DateTimeOffset AtUtc);
 
 public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, IAttendanceAccess policy,
     IAttendanceRouteResolver resolver, PermissionMutationGuard guard, IAuditEventWriter audit, TimeProvider clock)
 {
+    public Task<CorrectionResult<CorrectionSitePage>> SitesAsync(DateTimeOffset at, int page, int size, CancellationToken ct) =>
+        RunAsync(token => SitePageAsync(at, page, size, token), null, page, size, ct);
+
+    private async Task<CorrectionSitePage> SitePageAsync(DateTimeOffset at, int page, int size, CancellationToken ct)
+    {
+        var session = await identity.ValidateSessionAsync(false, ct);
+        if (session.Status is { } denied) throw new AttendanceReadDeniedException(denied);
+        if (!(await policy.DescribeAsync(ct)).CanRecord) throw new AttendanceReadDeniedException(403);
+        if (at <= DateTimeOffset.MinValue || at > clock.GetUtcNow() || page < 1 || size is < 1 or > 100
+            || page > int.MaxValue / size) throw new AttendanceReadDeniedException(400);
+        at = at.ToUniversalTime();
+        var employee = session.ActorId;
+        var memberships = new CorrectionSiteHistory(db).Memberships(employee, at);
+        var query = db.Set<Site>().AsNoTracking().Where(s => db.Set<ScopeAssignment>().Any(a => a.UserId == employee
+            && a.WorkspaceId == s.WorkspaceId && a.ProjectId == s.ProjectId && a.SiteId == s.Id
+            && a.CreatedAtUtc <= at && (a.RevokedAtUtc == null || at < a.RevokedAtUtc)) && memberships.Any());
+        var total = await query.CountAsync(ct);
+        var rows = await query.OrderBy(s => s.Id).Skip((page - 1) * size).Take(size)
+            .Select(s => new CorrectionSiteChoice(new(s.WorkspaceId, s.ProjectId, s.Id), s.Name)).ToArrayAsync(ct);
+        return new(rows, total, page, size, at);
+    }
+
     public Task<CorrectionResult<CorrectionPage>> ListAsync(string audience, int pageNumber, int pageSize, CancellationToken ct) =>
         RunAsync(token => PageAsync(audience, pageNumber, pageSize, token), audience, pageNumber, pageSize, ct);
 
@@ -22,12 +49,19 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
 
     private async Task<CorrectionPage> PageAsync(string audience, int pageNumber, int pageSize, CancellationToken ct)
     {
-        var session = await identity.ValidateSessionAsync(audience is "supervisor" or "hr", ct);
+        var session = await identity.ValidateSessionAsync(audience is "supervisor" or "hr" or "routing", ct);
         if (session.Status is { } denied) throw new AttendanceReadDeniedException(denied);
-        if (audience is not ("mine" or "supervisor" or "hr") || pageNumber < 1 || pageSize is < 1 or > 100
+        if (audience is not ("mine" or "supervisor" or "hr" or "routing") || pageNumber < 1 || pageSize is < 1 or > 100
             || (long)(pageNumber - 1) * pageSize > int.MaxValue) throw new AttendanceReadDeniedException(400);
         IQueryable<CorrectionRequest> query;
         if (audience == "mine") query = ValidRequests().Where(x => x.EmployeeId == session.ActorId);
+        else if (audience == "routing")
+        {
+            if (!await guard.AllowsAsync(session.ActorId, DirectoryService.Capability, ct)) throw new AttendanceReadDeniedException(403);
+            var units = DirectoryQueries.Hr(db, DirectoryQueries.Now(clock)).Where(x => x.UserId == session.ActorId);
+            query = ValidRequests().Where(r => (r.State == CorrectionState.PendingSupervisor || r.State == CorrectionState.PendingHr)
+                && units.Any(u => u.WorkspaceId == r.WorkspaceId && u.DepartmentId == r.DepartmentId));
+        }
         else
         {
             var capability = audience == "supervisor" ? "attendance:approve-supervisor" : "attendance:approve-hr";
@@ -103,8 +137,10 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
         var submitted = await db.Set<CorrectionRouteSnapshot>().AnyAsync(x => x.RequestId == row.Id, ct);
         var head = !own && await (await WorkflowAsync(actor, "supervisor", ct)).AnyAsync(x => x.Id == row.Id, ct);
         var hr = !own && await (await WorkflowAsync(actor, "hr", ct)).AnyAsync(x => x.Id == row.Id, ct);
-        if (!own && !(submitted && read.CanRead) && !head && !hr) throw new AttendanceReadDeniedException(404);
-        var basis = read.CanRead ? read.Basis.ToString() : head ? "WorkflowSupervisor" : "WorkflowHr";
+        var routing = row.State is CorrectionState.PendingSupervisor or CorrectionState.PendingHr
+            && await new CorrectionRouting(db, guard, resolver, clock).CanRerouteAsync(actor, row, ct);
+        if (!own && !(submitted && read.CanRead) && !head && !hr && !routing) throw new AttendanceReadDeniedException(404);
+        var basis = read.CanRead ? read.Basis.ToString() : head ? "WorkflowSupervisor" : hr ? "WorkflowHr" : "WorkflowRouting";
         var state = row.State is CorrectionState.Draft or CorrectionState.Returned && clock.GetUtcNow() >= row.DeadlineUtc
             ? CorrectionState.Expired : row.State;
         var actions = new List<string>();
@@ -112,8 +148,7 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
             actions.AddRange(["save", "submit"]);
         if (head) actions.AddRange(["supervisor-approve", "return"]);
         if (hr) actions.AddRange(["hr-approve", "return"]);
-        if (row.State is CorrectionState.PendingSupervisor or CorrectionState.PendingHr
-            && await new CorrectionRouting(db, guard, resolver, clock).CanRerouteAsync(actor, row, ct)) actions.Add("reroute");
+        if (routing) actions.Add("reroute");
         var revision = await db.Set<CorrectionRevision>().AsNoTracking().SingleAsync(x => x.RequestId == row.Id && x.Revision == row.CurrentRevision, ct);
         return new(row.Id, row.EmployeeId, row.OriginalWorkDate, row.Version, state, row.DeadlineUtc,
             row.CurrentRevision, CorrectionApproval.Proposal(revision), revision.BaselineDayVersion, actions.ToArray(), basis);
@@ -160,6 +195,7 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
             {
                 CorrectionPage => await PageAsync(audience!, page, size, ct),
                 CorrectionView v => await DetailAsync(v.Id, false, ct),
+                CorrectionSitePage p => await SitePageAsync(p.AtUtc, p.PageNumber, p.PageSize, ct),
                 _ => throw new AttendanceReadDeniedException(404)
             };
             var original = value is CorrectionView detail ? detail with { History = null } : value;
@@ -175,7 +211,7 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
         {
             await using var tx = await ScopeOperation.BeginAsync(db, deadline.Token);
             var value = await read(deadline.Token);
-            var actor = await identity.ValidateSessionAsync(audience is "supervisor" or "hr", deadline.Token);
+            var actor = await identity.ValidateSessionAsync(audience is "supervisor" or "hr" or "routing", deadline.Token);
             if (actor.Status is { } denied) throw new AttendanceReadDeniedException(denied);
             var views = value switch { CorrectionPage p => p.Items, CorrectionView v => [v], _ => Array.Empty<CorrectionView>() };
             foreach (var v in views)

@@ -9,8 +9,9 @@ import { getCorrection, listCorrections, sendCorrection, retryCorrection, retryC
 import { correctionError, correctionId, parseCorrection, parseCorrectionAck, parseCorrectionPage, validateCorrectionBody } from '@/lib/attendance/correction-view';
 import type { CorrectionAction, CorrectionAudience, CorrectionCommand, CorrectionPage, CorrectionView, CreateCorrection, ReviseCorrection, SaveCorrection } from '@/lib/attendance/correction-types';
 import CorrectionForm from './CorrectionForm';
+import { loadCorrectionSites } from '@/lib/attendance/correction-site-client';
 const states = ['ร่าง', 'รอหัวหน้า', 'รอ HR', 'ส่งกลับแก้ไข', 'อนุมัติแล้ว', 'หมดอายุ'];
-const basis = { Own: 'ของตนเอง', Supervisor: 'สายบังคับบัญชา', Hr: 'HR ที่ได้รับมอบหมาย', WorkflowSupervisor: 'ผู้อนุมัติขั้นหัวหน้าของคำร้องนี้', WorkflowHr: 'ผู้อนุมัติขั้น HR ของคำร้องนี้' };
+const basis = { Own: 'ของตนเอง', Supervisor: 'สายบังคับบัญชา', Hr: 'HR ที่ได้รับมอบหมาย', WorkflowSupervisor: 'ผู้อนุมัติขั้นหัวหน้าของคำร้องนี้', WorkflowHr: 'ผู้อนุมัติขั้น HR ของคำร้องนี้', WorkflowRouting: 'ผู้จัดเส้นทางคำร้องในหน่วยงานที่ได้รับมอบหมาย' };
 const time = (v: string | null | undefined) => v ? thaiTime(v) : 'ไม่มีเวลา';
 type Pending = { action: 'create' | CorrectionAction; id: string | null; body: CreateCorrection | ReviseCorrection | CorrectionCommand; actor: string };
 type State = { loading: boolean; page?: CorrectionPage; detail?: CorrectionView; form?: SaveCorrection; choices?: CaptureChoice[]; message?: string; error?: string; uncertain?: boolean; generation: number };
@@ -66,6 +67,18 @@ export default function CorrectionPortal({ audience = 'mine' }: { audience?: Cor
     const editable = audience === 'mine' && detail.actions.includes('save');
     return { detail, choices: editable ? await choices(signal) : [], form: editable ? { dayId: detail.comparison.dayId, originalWorkDate: detail.originalWorkDate, expectedDayVersion: detail.comparison.current?.version ?? null, proposal: detail.proposal } : undefined };
   }); }
+  async function historicalChoices(inUtc: string, outUtc: string | null) {
+    const generation = epoch.current, user = actor.current;
+    if (!user || !controller.current || document.hidden) throw new HttpFailure(403);
+    const signal = AbortSignal.any([controller.current.signal, AbortSignal.timeout(15000)]);
+    const before = await account(signal);
+    if (before !== user) { clear(); window.location.reload(); throw new HttpFailure(403); }
+    const result = await loadCorrectionSites(inUtc, outUtc, signal);
+    const after = await account(signal);
+    if (generation !== epoch.current || signal.aborted || document.hidden) throw new HttpFailure(403);
+    if (after !== user) { clear(); window.location.reload(); throw new HttpFailure(403); }
+    return result;
+  }
   function create() { pending.current = null; void run(async (signal, user) => {
     const selectedDay = new URLSearchParams(window.location.search).get('day');
     let form: SaveCorrection = { dayId: null, originalWorkDate: '', expectedDayVersion: null, proposal: { workDate: bangkokDate(new Date().toISOString()), inUtc: '', outUtc: null, inSite: { workspaceId: '', projectId: '', siteId: '' }, outSite: null, reason: '' } };
@@ -116,7 +129,7 @@ export default function CorrectionPortal({ audience = 'mine' }: { audience?: Cor
     {state.page && <><ol className="space-y-3">{state.page.items.map(v => <li key={v.id} className="rounded-xl border p-4"><p>วันต้นเรื่อง {v.originalWorkDate} · {states[v.state]} · ฉบับ {v.currentRevision}</p>{audience !== 'mine' && <p className="break-all">รหัสพนักงาน: {v.employeeId}</p>}<button className="underline" onClick={() => open(v.id)}>เปิดคำร้อง</button></li>)}</ol>{state.page.total === 0 && <p>ไม่มีคำร้องในคิวนี้</p>}
       <div className="flex flex-wrap gap-4"><button disabled={page <= 1} onClick={() => setPage(x => x - 1)}>หน้าก่อนหน้า</button><span>หน้า {page}</span><button disabled={page * 20 >= state.page.total} onClick={() => setPage(x => x + 1)}>หน้าถัดไป</button></div></>}
     {state.detail && <CorrectionDetail key={`${state.generation}-${state.detail.id}`} detail={state.detail} act={mutate} />}
-    {state.form && <CorrectionForm key={state.generation} initial={state.form} choices={state.choices ?? []} busy={state.loading} save={input => mutate(state.detail ? 'save' : 'create', input)} />}
+    {state.form && <CorrectionForm key={state.generation} initial={state.form} choices={state.choices ?? []} busy={state.loading} loadChoices={historicalChoices} save={input => mutate(state.detail ? 'save' : 'create', input)} />}
   </div>;
 }
 function CorrectionDetail({ detail: d, act }: { detail: CorrectionView; act: (action: CorrectionAction, input?: SaveCorrection, reason?: string | null) => void }) {

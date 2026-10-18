@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-module-6-attendance-design.md` โดยเฉพาะ R08–R12, §11–16; สัญญาส่งต่อ `docs/architecture/module-6c-exit-gate.md`
 
-สถานะ: **Tasks 1–7 ผ่านการตรวจรับทางเทคนิคแล้ว; เหลือ Task8 รับงานรวม** (18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Task8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่อนุมัติ Production
+สถานะ: **Tasks1–8 ผ่านเกณฑ์ทางเทคนิคในเครื่องแล้ว** (18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; งาน6Dยังไม่push/merge มือถือจริง/NASยังพัก และยังไม่อนุมัติ Production
 
 ## Global Constraints
 
@@ -240,15 +240,19 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 ## Task 8: รับงานรวมและส่งต่อ
 
+ผู้ใช้อนุมัติแนวทางแก้ review เพิ่มเติมแล้ว 18 ตุลาคม 2026: ปฏิเสธอนุมัติเปิดรอบที่เคย checkout สดแล้ว แต่ยังแก้ค่าเวลาออกได้; เพิ่มคิวจัดเส้นทางเฉพาะ directory-manage + recent MFA + current HR unit โดยไม่เพิ่มภาพ/GPS/ประวัติทั่วไป; เพิ่ม API ตัวเลือก Site ย้อนหลังเฉพาะเจ้าของตามเวลาที่เสนอ ไม่เพิ่มสิทธิ์ลงเวลาปัจจุบัน ขอบเขตนี้แทนข้อจำกัดไม่เพิ่มAPIสำหรับการแก้reviewดังกล่าว ไม่ต้องขออนุมัติสามข้อนี้ซ้ำ
+
+สถานะ 18 ตุลาคม 2026: แก้Importantทั้ง5ข้อพร้อม regression และตรวจครบ backend1,677/1,677, Node74/74, HTTPS dev91/91 + production-build93/93, Build/Lint/format/diff check ผ่าน ตาม [รายงานรับงานรวม](../../architecture/module-6d-exit-gate.md) เก็บรอบล้มเหลวและเหตุผลแก้ fixture ไว้ ไม่ใช้ผลTask7แทนTask8 ไม่มีpush/merge
+
 **Files:** สร้าง `docs/architecture/module-6d-exit-gate.md`; แก้deliverymapและแผนนี้; เพิ่ม `CorrectionRecoveryTests.cs` สำหรับrestore original+adjustment+approvalสัมพันธ์ครบ
 
-**Interfaces:** รับผลงานTasks1–7 ไม่เพิ่มAPIธุรกิจใหม่
+**Interfaces:** รับผลงานTasks1–7 รวม APIสถานที่ย้อนหลังและคิวจัดเส้นทางตามขอบเขตแก้ review ที่อนุมัติด้านบน ไม่เพิ่มสิทธิ์ธุรกิจอื่น
 
-- [ ] เพิ่มacceptance restore DB+รูปสังเคราะห์ ตรวจoriginalchecksum/adjustedtimes/revision/ผู้อนุมัติไม่หาย ไม่อ้างว่าเป็นprocess-killหรือNASจริง
-- [ ] รันbackendทั้งโครงการ `dotnet test backend/TPR10.sln`, `dotnet build backend/TPR10.sln --no-restore`, `dotnet format backend/TPR10.sln --verify-no-changes --no-restore`; `npm test`, `npm run lint`, `npm run build`, `git diff --check` คาดexit0ทั้งหมด ไม่มีskipซ่อนacceptance
-- [ ] รันHTTPSmatrixเดิม6Cทั้งdev/prodและcorrectionsใหม่; independent whole-branchreviewหนึ่งครั้ง ตรวจspecและแก้Importantด้วยRED→GREENก่อนตรวจซ้ำ
-- [ ] รายงานไทยแยกtechnical/currentpassing tests/known timeout risk/mobileNAS deferred/Productionยังรอ; ระบุผู้รับผิดชอบข้อมูลretentioncapacitybackup ยังไม่ลบภาพอัตโนมัติ
-- [ ] commit `docs(attendance): record module 6d verification and handoff`; ไม่push/mergeจนผู้ใช้สั่ง
+- [x] เพิ่มacceptance restore DB+รูปสังเคราะห์ ตรวจoriginalchecksum/adjustedtimes/revision/ผู้อนุมัติไม่หาย ไม่อ้างว่าเป็นprocess-killหรือNASจริง
+- [x] รันbackendทั้งโครงการครบinventoryด้วย4shardsไม่ซ้ำ และตรวจshardที่แก้testใหม่ทั้ง420กรณี; Build/format, Node/Lint/Build/diff check ผ่าน ไม่มีskipซ่อนacceptance
+- [x] รันHTTPSmatrixเดิม6Cทั้งdev/prodและcorrectionsใหม่; independent whole-branchreviewหนึ่งครั้ง ตรวจspecและแก้Importantด้วยRED→GREENก่อนตรวจชุดเต็ม
+- [x] รายงานไทยแยกtechnical/currentpassing tests/known timeout risk/mobileNAS deferred/Productionยังรอ; ระบุผู้รับผิดชอบข้อมูลretentioncapacitybackup ยังไม่ลบภาพอัตโนมัติ
+- [x] บันทึกงานด้วย commit `docs(attendance): record module 6d verification and handoff`; ไม่push/mergeจนผู้ใช้สั่ง
 
 ## ตรวจแผนกับSpec
 
@@ -256,4 +260,4 @@ R08–R12: Tasks1–4,6–7; R14–R15: Tasks3,5–7; R01–R07/R13: regression�
 
 ข้อเสนอในแผนที่ต้องยืนยันพร้อมอนุมัติ: reason1–2000, JSON64KiB, pagination1–100, การจัดrouteใหม่ผ่านdirectory-manageพร้อมscope/MFA, การใช้Adjustmentสำหรับcorrection-onlyแทนการปลอมlive event และการปฏิเสธเปลี่ยนวันเมื่อhistoricalmembershipไม่ตรงsnapshotเดิม ไม่เพิ่มadmin bypassเพื่อแก้ข้อขัดแย้งเหล่านี้
 
-ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–7 ผ่านแล้ว; ขั้นถัดไปคือTask8 รวม independent whole-branch review
+ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–8 ผ่านเกณฑ์ทางเทคนิคในเครื่องแล้ว; การรวมสาขาและProductionเป็นขั้นตอนแยกที่ยังไม่อนุมัติ

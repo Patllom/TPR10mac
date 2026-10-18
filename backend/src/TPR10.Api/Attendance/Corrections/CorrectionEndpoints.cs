@@ -30,6 +30,8 @@ public static class CorrectionEndpoints
             .WithMetadata(Metadata("", false));
         group.MapGet("/approvals", (HttpContext http) => List(http, true)).Produces<CorrectionPage>()
             .WithMetadata(Metadata("", true));
+        group.MapGet("/sites", SiteChoices).Produces<CorrectionSitePage>()
+            .WithMetadata(Metadata("attendance:record", false));
         group.MapGet("/{id:guid}", (Guid id, HttpContext http) => http.Request.Query.Count != 0 ? Problem(400)
             : new AttendanceJsonResult((s, ct) => s.CorrectionAsync(id, ct))).Produces<CorrectionView>()
             .WithMetadata(Metadata("", false));
@@ -46,12 +48,24 @@ public static class CorrectionEndpoints
         return endpoints;
     }
     private static DirectoryEndpointMetadata Metadata(string capability, bool mfa) => new("attendance-corrections", capability, mfa);
+    private static IResult SiteChoices(HttpContext http)
+    {
+        var q = http.Request.Query;
+        if (q.Any(x => x.Value.Count != 1 || x.Key is not ("at" or "page" or "pageSize"))
+            || !DateTimeOffset.TryParseExact(q["at"], ["yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", "yyyy-MM-dd'T'HH:mm:sszzz", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz"],
+                CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at)) return Problem(400);
+        var page = 1; var size = 100;
+        if (q.ContainsKey("page") && !int.TryParse(q["page"], NumberStyles.None, CultureInfo.InvariantCulture, out page)
+            || q.ContainsKey("pageSize") && !int.TryParse(q["pageSize"], NumberStyles.None, CultureInfo.InvariantCulture, out size)
+            || page < 1 || size is < 1 or > 100 || page > int.MaxValue / size) return Problem(400);
+        return new AttendanceJsonResult((s, ct) => s.CorrectionSitesAsync(at, page, size, ct));
+    }
     private static IResult List(HttpContext http, bool queue)
     {
         var query = http.Request.Query;
         if (query.Any(x => x.Value.Count != 1 || x.Key is not ("page" or "pageSize") && !(queue && x.Key == "stage"))) return Problem(400);
         var audience = queue ? query["stage"].ToString() : "mine";
-        if (queue && audience is not ("supervisor" or "hr")) return Problem(400);
+        if (queue && audience is not ("supervisor" or "hr" or "routing")) return Problem(400);
         var page = 1; var size = 20;
         if (query.ContainsKey("page") && !int.TryParse(query["page"], NumberStyles.None, CultureInfo.InvariantCulture, out page)
             || query.ContainsKey("pageSize") && !int.TryParse(query["pageSize"], NumberStyles.None, CultureInfo.InvariantCulture, out size)

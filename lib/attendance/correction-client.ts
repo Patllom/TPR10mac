@@ -18,7 +18,7 @@ export async function getCorrection(id: string, signal?: AbortSignal): Promise<R
   checkId(id); return fetch(`${root}/${id}`, { ...options, signal: bounded(signal) });
 }
 export async function listCorrections(audience: CorrectionAudience, page = 1, pageSize = 20, signal?: AbortSignal): Promise<Response> {
-  if (!['mine', 'supervisor', 'hr'].includes(audience) || !Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100 || page > Math.floor(2147483647 / pageSize)) throw new Error('ตัวกรองคำร้องไม่ถูกต้อง');
+  if (!['mine', 'supervisor', 'hr', 'routing'].includes(audience) || !Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100 || page > Math.floor(2147483647 / pageSize)) throw new Error('ตัวกรองคำร้องไม่ถูกต้อง');
   return fetch(`${root}${audience === 'mine' ? '?' : `/approvals?stage=${audience}&`}page=${page}&pageSize=${pageSize}`, { ...options, signal: bounded(signal) });
 }
 export async function sendCorrection(action: 'create' | CorrectionAction, id: string | null, body: unknown, signal?: AbortSignal, beforeDispatch?: () => Promise<void>): Promise<Response> {

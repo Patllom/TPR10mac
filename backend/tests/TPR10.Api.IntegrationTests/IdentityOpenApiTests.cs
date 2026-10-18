@@ -121,7 +121,7 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
             .Concat(ScopeRecordOpenApiTests.Contracts().Select(row => $"{row[1]} {row[0]}"))
             .Concat(AttendanceDirectoryOpenApiTests.ExpectedOperations()).Concat(StorageOpenApiTests.ExpectedOperations()).Concat(EvidenceOpenApiTests.ExpectedOperations())
             .Concat(AttendanceRecordingOpenApiTests.Routes.Select(route => (route is "capture-challenges" or "check-ins" or "check-outs" ? "post" : "get") + " /api/v1/attendance/" + route))
-            .Concat(new[] { "get /api/v1/attendance/corrections", "post /api/v1/attendance/corrections", "get /api/v1/attendance/corrections/{id}", "get /api/v1/attendance/corrections/approvals" })
+            .Concat(new[] { "get /api/v1/attendance/corrections", "post /api/v1/attendance/corrections", "get /api/v1/attendance/corrections/{id}", "get /api/v1/attendance/corrections/approvals", "get /api/v1/attendance/corrections/sites" })
             .Concat(new[] { "revisions", "submit", "supervisor-approve", "hr-approve", "return", "reroute" }.Select(x => "post /api/v1/attendance/corrections/{id}/" + x)).Order().ToArray();
         Assert.Equal(expected, actual);
         var cookie = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("SessionCookie");

@@ -118,6 +118,8 @@ public sealed class AttendanceDeliveryServices
         return new(new CorrectionAcknowledgment(result.Value.Id, command.CommandId), result.Status, null, null);
     }
     public async Task<RecordingResult<object>> CurrentAsync(CancellationToken ct) => Box(await history.CurrentAsync(ct));
+    public async Task<RecordingResult<object>> CorrectionSitesAsync(DateTimeOffset at, int page, int size, CancellationToken ct) =>
+        Box(await corrections.SitesAsync(at, page, size, ct));
     public async Task<RecordingResult<object>> CorrectionAsync(Guid id, CancellationToken ct) => Box(await corrections.GetAsync(id, ct));
     public async Task<RecordingResult<object>> CorrectionsAsync(string requested, int page, int size, CancellationToken ct)
     {
@@ -143,7 +145,7 @@ public sealed class AttendanceDeliveryServices
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var validation = await identity.ValidateSessionAsync(audience is AttendanceAudience.Team or AttendanceAudience.Hr, ct);
         if (validation.Status is { } status) return status;
-        if (value is CorrectionPage or CorrectionView)
+        if (value is CorrectionPage or CorrectionView or CorrectionSitePage)
             return await corrections.RevalidateAsync(value, correctionAudience, correctionPage, correctionSize, ct);
         AttendanceDayView[] days = value switch { AttendancePage p => p.Items, AttendanceDayView day => [day], CurrentAttendanceView { OpenDay: { } day } => [day], _ => [] };
         foreach (var day in days)

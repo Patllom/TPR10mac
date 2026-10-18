@@ -63,6 +63,8 @@ public sealed class CorrectionDraftService(Tpr10DbContext db, ScopeAccess access
             if (row is null && now >= deadline) return Failure(400);
             if (row is null && await db.Set<CorrectionRequest>().AnyAsync(x => x.EmployeeId == actor
                 && x.OriginalWorkDate == input.OriginalWorkDate && x.State != CorrectionState.Approved, ct)) return Failure(409);
+            if (await new CorrectionTargetGuard(db, clock).ValidateAsync(actor, id, input.OriginalWorkDate,
+                input.Proposal.WorkDate, true, ct) is { } targetError) return Failure(targetError);
             var history = new CorrectionSiteHistory(db);
             if (await history.ValidateAsync(actor, input.Proposal, ct) is { } invalid) return Failure(invalid);
             var membership = await history.Memberships(actor, input.Proposal.InUtc).SingleAsync(ct);

@@ -14,6 +14,45 @@ namespace TPR10.Api.IntegrationTests;
 public sealed class CorrectionReadTests(PostgresFixture postgres)
 {
     [Theory]
+    [InlineData("mfa", 403)]
+    [InlineData("unit", 200)]
+    [InlineData("capability", 403)]
+    public async Task Routing_queue_does_not_bypass_current_authority(string fault, int expected)
+    {
+        await using var f = await new CorrectionApprovalTests(postgres).Fixture(); var v = await Pending(f);
+        await using var db = f.Data.Database.CreateContext();
+        if (fault == "mfa") await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE sessions SET mfa_verified_at_utc={f.Clock.GetUtcNow().AddMinutes(-15)} WHERE id={HrSession}");
+        if (fault == "unit") await db.Database.ExecuteSqlRawAsync("UPDATE hr_assignments SET valid_to_utc='2026-09-25T17:00:00Z',ended_by=user_id,version=version+1");
+        if (fault == "capability") await db.Database.ExecuteSqlRawAsync("DELETE FROM role_permissions WHERE permission_id='20000000-0000-0000-0000-000000000018'");
+        var result = await Read(f, "ListAsync", HrSession, "routing", 1, 20);
+        Assert.Equal(expected, result.Status);
+        if (expected == 200) Assert.Equal(0, result.Value.GetProperty("total").GetInt32());
+        Assert.NotEqual(200, (await Read(f, "GetAsync", HrSession, v.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Routing_manager_can_discover_stranded_pending_requests_without_history_or_photo_grants()
+    {
+        await using var f = await new CorrectionApprovalTests(postgres).Fixture(); var v = await Pending(f);
+        await OtherUnit(f, v);
+        await using var db = f.Data.Database.CreateContext();
+        await db.Database.ExecuteSqlRawAsync("UPDATE reporting_lines SET valid_to_utc='2026-09-25T17:00:00Z',ended_by=employee_user_id,version=version+1");
+        var page = await Read(f, "ListAsync", HrSession, "routing", 1, 20);
+        Assert.Equal(200, page.Status);
+        Assert.Equal(1, page.Value.GetProperty("total").GetInt32());
+        Assert.Equal(v.Id, page.Value.GetProperty("items")[0].GetProperty("id").GetGuid());
+        var detail = await Read(f, "GetAsync", HrSession, v.Id);
+        Assert.Equal(200, detail.Status);
+        Assert.Equal("WorkflowRouting", detail.Value.GetProperty("readBasis").GetString());
+        Assert.Equal(new[] { "reroute" }, detail.Value.GetProperty("actions").EnumerateArray().Select(x => x.GetString()));
+        Assert.DoesNotContain("evidence", detail.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("latitude", detail.Value.ToString());
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM role_permissions WHERE permission_id='20000000-0000-0000-0000-000000000018'");
+        Assert.Equal(403, (await Read(f, "ListAsync", HrSession, "routing", 1, 20)).Status);
+        Assert.Equal(404, (await Read(f, "GetAsync", HrSession, v.Id)).Status);
+    }
+
+    [Theory]
     [InlineData("original")]
     [InlineData("open")]
     [InlineData("closed")]
@@ -136,7 +175,8 @@ public sealed class CorrectionReadTests(PostgresFixture postgres)
         v = (await Decide(f, v, "supervisor-approve")).Value!;
         await using var db = f.Data.Database.CreateContext();
         if (fault == "wrong-unit") await db.Database.ExecuteSqlRawAsync("UPDATE hr_assignments SET workspace_id='00000000-0000-0000-0000-000000000002',department_id='00000000-0000-0000-0000-000000000012',version=version+1");
-        if (fault == "admin-only") await db.Database.ExecuteSqlRawAsync("DELETE FROM user_roles WHERE user_id='00000000-0000-0000-0000-000000000033' AND role_id='00000000-0000-0000-0000-000000000083'");
+        // Remove both explicit attendance grants; routing is now a separately approved read basis.
+        if (fault == "admin-only") await db.Database.ExecuteSqlRawAsync("DELETE FROM user_roles WHERE user_id='00000000-0000-0000-0000-000000000033' AND role_id IN ('00000000-0000-0000-0000-000000000083','00000000-0000-0000-0000-000000000084')");
         if (fault == "revoked") await db.Database.ExecuteSqlRawAsync("UPDATE hr_assignments SET valid_to_utc='2026-09-25T17:00:00Z',ended_by=user_id,version=version+1");
         var result = await Read(f, "GetAsync", HrSession, v.Id);
         Assert.Equal(404, result.Status); Assert.Equal(JsonValueKind.Null, result.Value.ValueKind);

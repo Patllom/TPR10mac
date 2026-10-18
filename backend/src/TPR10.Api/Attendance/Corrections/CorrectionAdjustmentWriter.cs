@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Attendance.Directory;
+using TPR10.Api.Attendance.Evidence;
 using TPR10.Api.Attendance.Recording;
 using TPR10.Api.Data;
 
@@ -27,6 +28,10 @@ public sealed class CorrectionAdjustmentWriter(Tpr10DbContext db, TimeProvider c
             || day.WorkspaceId != request.WorkspaceId || day.DepartmentId != request.DepartmentId
             || day.SnapshotAtUtc != request.SnapshotAtUtc)) return 409;
         if (day is null && proposal.BaselineDayVersion is not null) return 409;
+        if (await new CorrectionTargetGuard(db, clock).ValidateAsync(request.EmployeeId, request.Id,
+            request.OriginalWorkDate, proposal.WorkDate, false, ct) is { } targetError) return targetError;
+        if (proposal.OutUtc is null && day is not null && await db.Set<AttendanceEvent>()
+            .AnyAsync(x => x.DayId == day.Id && x.Action == EvidenceAction.CheckOut, ct)) return 409;
         if (await db.Set<AttendanceDay>().AnyAsync(x => x.EmployeeId == request.EmployeeId && x.Id != request.DayId
             && (x.WorkDate == proposal.WorkDate || (proposal.OutUtc == null && x.EffectiveOutUtc == null)), ct)) return 409;
         var adjustment = new AttendanceAdjustment

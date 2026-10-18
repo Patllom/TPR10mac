@@ -78,12 +78,23 @@ for (const resultKind of ['upload', 'operation']) {
     await expect(page.getByAltText('ภาพรอยืนยัน ยังไม่ประทับเวลา')).toHaveCount(0);
   });
 }
-test('review: silent account switch before challenge must not open camera', async ({ page, context }) => {
+test('review: silent account switch during challenge must not open camera', async ({ page, context }) => {
   await setup(page, context);
   await expect(page.getByRole('button', { name: 'เปิดกล้อง', exact: true })).toBeEnabled();
-  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { userId: 'different-account', stage: 'Active', permissions: [], mfaVerifiedAtUtc: null } }));
+  // Change the synthetic account at the challenge boundary, after browser focus.
+  // A permanent browser-only mismatch before click makes ScopeFrame reload against
+  // the unchanged SSR cookie forever; it never reaches the camera identity fence.
+  let switched = false;
+  await page.route('**/api/v1/auth/session', route => switched
+    ? route.fulfill({ json: { userId: 'different-account', stage: 'Active', permissions: [], mfaVerifiedAtUtc: null } })
+    : route.fallback());
+  await page.route('**/api/v1/attendance/capture-challenges', route => {
+    switched = true;
+    return route.fulfill({ status: 201, json: { id, serverNowUtc: now(), expiresAtUtc: new Date(Date.now() + 120000).toISOString() } });
+  });
   await page.getByRole('button', { name: 'เปิดกล้อง', exact: true }).click();
   await expect(page.locator('section').getByRole('alert')).toContainText('บัญชี');
+  expect(switched).toBe(true);
   expect(await page.evaluate(() => (window as unknown as { captureDevice: DeviceState }).captureDevice.tracks.length)).toBe(0);
 });
 test('review: interrupted camera cannot capture retained frame', async ({ page, context }) => {
@@ -173,7 +184,7 @@ test('เน็ตหลุดหลังส่งต้องตรวจ oper
 });
 test('offline ไม่เก็บคิว และออกข้ามวันต้องยืนยันต่อเนื่อง', async ({ page, context }) => {
   await setup(page, context, 'ok', true);
-  await expect(page.getByText(/Module 6D/)).toBeVisible(); await capture(page);
+  await expect(page.getByText('หากลืมลงเวลา ให้ไปเมนูคำร้องแก้ไขเวลาผ่านหัวหน้าและ HR ไม่สามารถแก้เวลาย้อนหลังจากหน้านี้ และต้องปิดรอบเดิมก่อนเริ่มรอบใหม่', { exact: true })).toBeVisible(); await capture(page);
   await expect(page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true })).toBeDisabled();
   await page.getByLabel('ยืนยันว่าทำงานต่อเนื่องจากรอบเดิม').check();
   await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); window.dispatchEvent(new Event('offline')); });

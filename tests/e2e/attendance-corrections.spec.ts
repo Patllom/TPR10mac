@@ -38,6 +38,68 @@ async function setup(page: Page, context: BrowserContext, state = 0) {
   await expect(page.getByRole('heading', { name: 'คำร้องแก้ไขเวลา', exact: true })).toBeVisible();
   return { calls, change: (next: Partial<typeof value>) => { value = { ...value, ...next }; } };
 }
+test('แก้เฉพาะเหตุผลไม่เปลี่ยนวินาทีและเศษวินาทีเดิม', async ({ page, context }) => {
+  const fixture = await setup(page, context);
+  fixture.change({ proposal: { ...proposal, inUtc: '2026-10-17T01:00:45.123456Z', outUtc: '2026-10-17T10:00:59.456789Z' } });
+  await page.getByRole('button', { name: 'เปิดคำร้อง', exact: true }).click();
+  await page.getByLabel('เหตุผลคำร้อง').fill('แก้เฉพาะเหตุผล');
+  await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'สำเร็จ' })).toBeVisible();
+  const saved = fixture.calls.find(x => x.path.endsWith('/revisions'))!.body as { input: { proposal: typeof proposal } };
+  expect(saved.input.proposal.inUtc).toBe('2026-10-17T01:00:45.123456Z');
+  expect(saved.input.proposal.outUtc).toBe('2026-10-17T10:00:59.456789Z');
+});
+test('ผู้จัดเส้นทางเปิดคิวคำร้องค้างและส่งเริ่มหัวหน้าใหม่ได้', async ({ page, context }) => {
+  const fixture = await setup(page, context);
+  fixture.change({ state: 1, actions: ['reroute'], readBasis: 'WorkflowRouting' });
+  await page.goto('/portal/attendance/approvals');
+  await page.getByLabel('ขั้นพิจารณา').selectOption('routing');
+  await page.getByRole('button', { name: 'เปิดคำร้อง', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'อนุมัติ', exact: true })).toHaveCount(0);
+  await page.getByLabel('เหตุผลส่งกลับหรือจัดเส้นทาง').fill('เปลี่ยนหัวหน้า');
+  await page.getByRole('button', { name: 'จัดเส้นทางใหม่', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'สำเร็จ' })).toBeVisible();
+  expect(fixture.calls.some(x => x.method === 'POST' && x.path.endsWith('/reroute'))).toBe(true);
+});
+test('คำร้องขาดทั้งคู่เลือกสถานที่เก่าตามเวลาที่เสนอได้', async ({ page, context }) => {
+  const fixture = await setup(page, context);
+  const oldSite = { ...site, siteId: '77777777-7777-4777-8777-777777777777' };
+  await page.route('**/api/v1/attendance/corrections/sites?*', r => r.fulfill({ json: {
+    items: [{ site: oldSite, label: 'สถานที่เก่าที่เคยได้รับมอบหมาย' }], total: 1, pageNumber: 1, pageSize: 100, atUtc: new URL(r.request().url()).searchParams.get('at')
+  } }));
+  await page.getByRole('button', { name: 'สร้างคำร้อง', exact: true }).click();
+  await page.getByLabel('วันทำงานที่ขอแก้').fill('2026-10-17');
+  await page.getByLabel('เวลาเข้า (ประเทศไทย)').fill('2026-10-17T08:00');
+  await page.getByLabel('เวลาออก (ประเทศไทย)').fill('2026-10-17T17:00');
+  await page.getByRole('button', { name: 'โหลดสถานที่ตามเวลาที่เสนอ', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'โหลดสถานที่แล้ว' })).toBeVisible();
+  await page.getByLabel('สถานที่เข้า').selectOption(oldSite.siteId);
+  await page.getByLabel('สถานที่ออก').selectOption(oldSite.siteId);
+  await page.getByLabel('เหตุผลคำร้อง').fill('ย้ายสถานที่แล้ว แต่ขอแก้ของวันก่อน');
+  await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'สำเร็จ' })).toBeVisible();
+  const sent = fixture.calls.find(x => x.method === 'POST')!.body as { input: { proposal: typeof proposal } };
+  expect(sent.input.proposal.inSite).toEqual(oldSite);
+  expect(sent.input.proposal.outSite).toEqual(oldSite);
+});
+test('สถานที่ย้อนหลังตอบช้าหลังเปลี่ยนบัญชีต้องไม่แสดงข้อมูลเดิม', async ({ page, context }) => {
+  await setup(page, context); let release!: () => void, waiting = false;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/v1/attendance/corrections/sites?*', async r => {
+    waiting = true; await held;
+    await r.fulfill({ json: { items: [{ site, label: 'สถานที่ส่วนตัวบัญชีเดิม' }], total: 1, pageNumber: 1, pageSize: 100, atUtc: new URL(r.request().url()).searchParams.get('at') } }).catch(() => {});
+  });
+  await page.getByRole('button', { name: 'สร้างคำร้อง', exact: true }).click();
+  await page.getByLabel('เวลาเข้า (ประเทศไทย)').fill('2026-10-17T08:00');
+  await page.getByRole('button', { name: 'โหลดสถานที่ตามเวลาที่เสนอ', exact: true }).click();
+  await expect.poll(() => waiting).toBe(true);
+  await session(context, 'e2e-other');
+  await page.route('**/api/v1/attendance/corrections?*', r => r.fulfill({ json: { items: [], total: 0, pageNumber: 1, pageSize: 20 } }));
+  release();
+  await expect(page.getByText('ไม่มีคำร้องในคิวนี้')).toBeVisible();
+  await expect(page.getByLabel('เหตุผลคำร้อง')).toHaveCount(0);
+  await expect(page.getByText('สถานที่ส่วนตัวบัญชีเดิม')).toHaveCount(0);
+});
 test('สร้างร่างด้วยเวลาไทยและส่งคำร้องโดยไม่สร้างรูปย้อนหลัง', async ({ page, context }) => {
   const fixture = await setup(page, context);
   await page.getByRole('button', { name: 'สร้างคำร้อง', exact: true }).click();

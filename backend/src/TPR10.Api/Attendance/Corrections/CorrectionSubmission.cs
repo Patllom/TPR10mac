@@ -60,6 +60,8 @@ public sealed class CorrectionSubmission(Tpr10DbContext db, ScopeAccess access, 
                 return Failure(400);
             }
             var revision = await db.Set<CorrectionRevision>().AsNoTracking().SingleAsync(x => x.RequestId == id && x.Revision == row.CurrentRevision, ct);
+            if (await new CorrectionTargetGuard(db, clock).ValidateAsync(row.EmployeeId, id, row.OriginalWorkDate,
+                revision.WorkDate, !reroute, ct) is { } targetError) return Failure(targetError);
             var route = await routing.ResolveAsync(row, ct);
             if (route.Status is { } invalid) return Failure(invalid);
             if (reroute || await db.Set<CorrectionRouteSnapshot>().AnyAsync(x => x.RequestId == id && x.Revision == row.CurrentRevision, ct))

@@ -10,6 +10,83 @@ namespace TPR10.Api.IntegrationTests;
 [Collection("database")]
 public sealed class CorrectionDraftTests(PostgresFixture postgres)
 {
+    [Fact]
+    public async Task Timely_changed_date_keeps_returned_window_and_can_complete_both_approvals()
+    {
+        await using var f = await new CorrectionApprovalTests(postgres).Fixture();
+        var draft = await CorrectionRoutingTests.Draft(f);
+        var changed = new SaveCorrection(null, draft.OriginalWorkDate, null, draft.Proposal with
+        { WorkDate = new(2026, 9, 24), InUtc = DateTimeOffset.Parse("2026-09-24T01:00:00Z") });
+        await using (var scope = await f.ScopeAsync())
+        {
+            var saved = await ActivatorUtilities.CreateInstance<CorrectionDraftService>(scope.ServiceProvider).SaveAsync(draft.Id, changed, CorrectionApprovalTests.Command(draft), default);
+            Assert.Equal(200, saved.Status); draft = saved.Value!;
+        }
+        var pending = await CorrectionApprovalTests.Submit(f, draft);
+        await CorrectionRoutingTests.MoveClock(f, DateTimeOffset.Parse("2026-10-10T17:00:00Z"));
+        var returned = await CorrectionApprovalTests.Decide(f, pending, "return");
+        Assert.Equal(200, returned.Status);
+        await using (var scope = await f.ScopeAsync())
+        {
+            var saved = await ActivatorUtilities.CreateInstance<CorrectionDraftService>(scope.ServiceProvider).SaveAsync(draft.Id, changed, CorrectionApprovalTests.Command(returned.Value!), default);
+            Assert.Equal(200, saved.Status); draft = saved.Value!;
+        }
+        pending = await CorrectionApprovalTests.Submit(f, draft);
+        pending = (await CorrectionApprovalTests.Decide(f, pending, "supervisor-approve")).Value!;
+        Assert.Equal(200, (await CorrectionApprovalTests.Decide(f, pending, "hr-approve")).Status);
+        await using var db = f.Data.Database.CreateContext();
+        Assert.Equal(new DateOnly(2026, 9, 24), (await db.Set<AttendanceAdjustment>().SingleAsync()).AfterWorkDate);
+    }
+
+    [Fact]
+    public async Task Target_day_deadline_is_rechecked_at_submission_not_reserved_by_saving()
+    {
+        await using var f = await new CorrectionApprovalTests(postgres).Fixture();
+        var draft = await CorrectionRoutingTests.Draft(f);
+        var changed = new SaveCorrection(null, draft.OriginalWorkDate, null, draft.Proposal with
+        { WorkDate = new(2026, 9, 24), InUtc = DateTimeOffset.Parse("2026-09-24T01:00:00Z") });
+        await using (var scope = await f.ScopeAsync())
+        {
+            var saved = await ActivatorUtilities.CreateInstance<CorrectionDraftService>(scope.ServiceProvider).SaveAsync(draft.Id, changed, CorrectionApprovalTests.Command(draft), default);
+            Assert.Equal(200, saved.Status); draft = saved.Value!;
+        }
+        await CorrectionRoutingTests.MoveClock(f, DateTimeOffset.Parse("2026-10-01T17:00:00Z"));
+        await using var sending = await f.ScopeAsync();
+        var result = await ActivatorUtilities.CreateInstance<CorrectionSubmission>(sending.ServiceProvider).SubmitAsync(draft.Id, CorrectionApprovalTests.Command(draft), default);
+        Assert.Equal(400, result.Status);
+        await using var db = f.Data.Database.CreateContext();
+        Assert.Empty(await db.Set<CorrectionRouteSnapshot>().ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Saving_another_day_cannot_bypass_an_expired_target_request()
+    {
+        await using var f = await Fixture();
+        var old = Proposal() with { OriginalWorkDate = new(2026, 9, 24), Proposal = Proposal().Proposal with { WorkDate = new(2026, 9, 24), InUtc = DateTimeOffset.Parse("2026-09-24T01:00:00Z") } };
+        Assert.Equal(201, Status(await Call(f, "CreateAsync", old, Guid.NewGuid(), CancellationToken.None)));
+        await using var db = f.Data.Database.CreateContext();
+        await db.Database.ExecuteSqlRawAsync("UPDATE correction_requests SET state='Expired',version=version+1");
+        Assert.Equal(201, Status(await Call(f, "CreateAsync", Proposal(), Guid.NewGuid(), CancellationToken.None)));
+        var fresh = await db.Set<CorrectionRequest>().SingleAsync(x => x.State == CorrectionState.Draft);
+        var changed = Proposal() with { Proposal = old.Proposal };
+        Assert.Equal(409, Status(await Call(f, "SaveAsync", fresh.Id, changed, new CorrectionCommand(Guid.NewGuid(), fresh.Version, 1, null), CancellationToken.None)));
+        Assert.Equal(2, await db.Set<CorrectionRevision>().CountAsync());
+    }
+
+    [Fact]
+    public async Task Changing_to_an_older_day_does_not_borrow_the_newer_days_deadline()
+    {
+        await using var f = await Fixture();
+        await CorrectionRoutingTests.MoveClock(f, DateTimeOffset.Parse("2026-10-01T17:00:00Z"));
+        var created = await Call(f, "CreateAsync", Proposal(), Guid.NewGuid(), CancellationToken.None);
+        Assert.Equal(201, Status(created));
+        await using var db = f.Data.Database.CreateContext();
+        var row = await db.Set<CorrectionRequest>().SingleAsync();
+        var changed = Proposal() with { Proposal = Proposal().Proposal with { WorkDate = new(2026, 9, 24), InUtc = DateTimeOffset.Parse("2026-09-24T01:00:00Z") } };
+        Assert.Equal(400, Status(await Call(f, "SaveAsync", row.Id, changed, new CorrectionCommand(Guid.NewGuid(), row.Version, 1, null), CancellationToken.None)));
+        Assert.Single(await db.Set<CorrectionRevision>().ToArrayAsync());
+    }
+
     [Theory]
     [InlineData("2026-09-25", "2026-10-02T17:00:00Z")]
     [InlineData("2026-09-26", "2026-10-03T17:00:00Z")]

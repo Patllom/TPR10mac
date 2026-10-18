@@ -10,6 +10,8 @@
 
 **Spec:** [Design Spec ที่ผู้ใช้อนุมัติ](../specs/2026-09-25-module-6-attendance-design.md)
 
+สถานะล่าสุด 18 ตุลาคม 2026: **6D Tasks1–8 ผ่านเกณฑ์ทางเทคนิคในเครื่องแล้ว** บนสาขา `codex/module-6d-corrections`; แก้Important5ข้อจากreviewครบ ตรวจbackend1,677/1,677 Node74/74 HTTPSdev91/91และproduction-build93/93 พร้อมBuild/Lint/formatผ่าน ยังไม่push/mergeหรืออนุมัติProduction มือถือจริง/NASยังพัก ดู [รายงาน6D](../../architecture/module-6d-exit-gate.md) ข้อความวันที่ก่อนหน้าด้านล่างเป็นประวัติ ไม่ใช่สถานะ6Dปัจจุบัน
+
 สถานะวันที่28กันยายน2026: 6AครบTasks1–6และรวมPR #2 เข้าmainบนGitHubแล้วที่ `27a184e`; 6BครบงานทางเทคนิคและPR #3 mergeเข้าmainแล้วที่ `8a965af` แต่ NASจริง/Production ยังรอตรวจ ดู [รายงานตรวจรับ6B](../../architecture/module-6b-exit-gate.md) ส่วน6C Tasks1–8ผ่านเกณฑ์ในเครื่อง รอบTask8 Node59/59, history HTTPS dev11/11 และ production-build11/11, กล้อง regression19/19, backendที่เกี่ยวข้อง111/111 และBuild/Lint/formatผ่าน ไม่ได้รันbackendทั้งโครงการซ้ำจากผล1,478/1,478ของTask6 ยังเหลือTask9และยังไม่push/mergeงาน6C; 6Dยังไม่จัดทำtask-level plan
 
 ## Global Constraints

@@ -23,6 +23,78 @@ public sealed class CorrectionApiTests(PostgresFixture postgres)
 {
     internal const string Root = "/api/v1/attendance/corrections";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Discovery_revalidates_authority_before_first_byte(bool routing)
+    {
+        await using var f = await new CorrectionApprovalTests(postgres).Fixture();
+        await CorrectionApprovalTests.Pending(f);
+        await using var factory = new ApiFactory(f.Data.Database.ConnectionString, clock: f.Clock);
+        using var scope = factory.Services.CreateScope();
+        await EvidenceRevocationTests.SetSession(scope.ServiceProvider, routing ? Guid.Parse("00000000-0000-0000-0000-000000000033") : CaptureFixture.Employee);
+        var http = EvidenceRevocationTests.Context(scope.ServiceProvider); http.Request.Path = Root;
+        await new AttendanceJsonResult(async (s, ct) =>
+        {
+            var result = routing ? await s.CorrectionsAsync("routing", 1, 20, ct)
+                : await s.CorrectionSitesAsync(DateTimeOffset.Parse("2026-09-25T01:00:00Z"), 1, 100, ct);
+            Assert.Equal(200, result.Status); Assert.NotNull(result.Value);
+            f.Clock.Advance(TimeSpan.FromMinutes(routing ? 15 : 31));
+            return result;
+        }).ExecuteAsync(http);
+        Assert.Equal(routing ? 403 : 401, http.Response.StatusCode);
+        http.Response.Body.Position = 0;
+        Assert.DoesNotContain("items", await new StreamReader(http.Response.Body).ReadToEndAsync());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("?at=invalid")]
+    [InlineData("?at=2026-09-25T01:00:00Z&at=2026-09-25T02:00:00Z")]
+    [InlineData("?at=2026-09-25T01:00:00Z&pageSize=101")]
+    [InlineData("?at=2026-09-25T01:00:00Z&page=0")]
+    [InlineData("?at=2027-09-25T01:00:00Z")]
+    public async Task Historical_sites_reject_invalid_or_unbounded_queries(string query)
+    {
+        await using var f = await new CorrectionApprovalTests(postgres).Fixture();
+        await using var factory = new ApiFactory(f.Data.Database.ConnectionString, clock: f.Clock);
+        using var owner = await Client(factory, f, CaptureFixture.Session);
+        using var response = await owner.GetAsync(Root + "/sites" + query);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Historical_site_choices_use_own_retained_interval_not_todays_scope()
+    {
+        await using var f = await new CorrectionApprovalTests(postgres).Fixture();
+        await using var db = f.Data.Database.CreateContext();
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE user_scope_assignments SET revoked_at_utc='2026-09-25T12:00:00Z',revoked_by=user_id,revocation_reason='ย้าย',version=version+1;
+            INSERT INTO sites(id,workspace_id,project_id,code,name,created_by)
+            SELECT '00000000-0000-0000-0000-000000000052',workspace_id,project_id,'S2','ปัจจุบัน',created_by FROM sites;
+            INSERT INTO user_scope_assignments(id,user_id,workspace_id,project_id,site_id,role_id,created_at_utc,created_by,reason)
+            SELECT gen_random_uuid(),user_id,workspace_id,project_id,'00000000-0000-0000-0000-000000000052',role_id,'2026-09-25T12:00:00Z',created_by,reason FROM user_scope_assignments;
+            """);
+        await using var factory = new ApiFactory(f.Data.Database.ConnectionString, clock: f.Clock);
+        using var owner = await Client(factory, f, CaptureFixture.Session);
+        using var response = await owner.GetAsync(Root + "/sites?at=2026-09-25T01:00:00Z&page=1&pageSize=100");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl!.NoStore);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var row = Assert.Single(body.GetProperty("items").EnumerateArray());
+        Assert.Equal(CaptureFixture.Site.SiteId, row.GetProperty("site").GetProperty("siteId").GetGuid());
+        Assert.Equal(new[] { "label", "site" }, row.EnumerateObject().Select(x => x.Name).Order());
+        using var boundary = await owner.GetAsync(Root + "/sites?at=2026-09-25T12:00:00Z&page=1&pageSize=100");
+        Assert.Equal(HttpStatusCode.OK, boundary.StatusCode);
+        var next = await boundary.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(Guid.Parse("00000000-0000-0000-0000-000000000052"), Assert.Single(next.GetProperty("items").EnumerateArray()).GetProperty("site").GetProperty("siteId").GetGuid());
+        using var forged = await owner.GetAsync(Root + "/sites?at=2026-09-25T01:00:00Z&employeeId=" + CorrectionApprovalTests.Head);
+        Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
+        using var anonymous = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(Root + "/sites?at=2026-09-25T01:00:00Z")).StatusCode);
+    }
+
     private static SaveCorrection Input() => new(null, new(2026, 9, 25), null,
         new(new(2026, 9, 25), DateTimeOffset.Parse("2026-09-25T01:00:00Z"), null,
             new(CaptureFixture.Site.WorkspaceId, CaptureFixture.Site.ProjectId!.Value, CaptureFixture.Site.SiteId!.Value), null, "ลืมลงเวลา"));

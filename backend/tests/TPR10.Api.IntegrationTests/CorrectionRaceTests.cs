@@ -17,6 +17,32 @@ namespace TPR10.Api.IntegrationTests;
 public sealed class CorrectionRaceTests(PostgresFixture postgres)
 {
     [Fact]
+    public async Task Approval_cannot_reopen_a_day_with_an_immutable_live_checkout()
+    {
+        await using var f = await Fixture(); var entry = await f.CheckIn();
+        await CorrectionRoutingTests.MoveClock(f.Capture, f.Capture.Clock.GetUtcNow().AddHours(1)); await f.RefreshAsync();
+        var checkout = await f.Record(EvidenceAction.CheckOut, await f.Capture.Metadata(EvidenceAction.CheckOut));
+        Assert.Equal(201, checkout.Status);
+        await using var db = f.Capture.Data.Database.CreateContext();
+        var original = JsonSerializer.Serialize(await db.Set<AttendanceEvent>().AsNoTracking().OrderBy(x => x.Id).ToArrayAsync());
+        CorrectionView draft;
+        await using (var scope = await f.Capture.ScopeAsync())
+        {
+            var site = new CorrectionSite(CaptureFixture.Site.WorkspaceId, CaptureFixture.Site.ProjectId!.Value, CaptureFixture.Site.SiteId!.Value);
+            var result = await ActivatorUtilities.CreateInstance<CorrectionDraftService>(scope.ServiceProvider).CreateAsync(
+                new(entry.DayId, entry.WorkDate, 2, new(entry.WorkDate, entry.OccurredAtUtc, null, site, null, "ขอเปิดรอบเดิม")), Guid.NewGuid(), default);
+            Assert.Equal(201, result.Status); draft = result.Value!;
+        }
+        var pending = await Submit(f.Capture, draft);
+        pending = (await Decide(f.Capture, pending, "supervisor-approve")).Value!;
+        Assert.Equal(409, (await Decide(f.Capture, pending, "hr-approve")).Status);
+        Assert.Equal(checkout.Value!.OccurredAtUtc, (await db.Set<AttendanceDay>().SingleAsync()).EffectiveOutUtc);
+        Assert.Empty(await db.Set<AttendanceAdjustment>().ToArrayAsync());
+        Assert.Equal(original, JsonSerializer.Serialize(await db.Set<AttendanceEvent>().AsNoTracking().OrderBy(x => x.Id).ToArrayAsync()));
+        Assert.Equal(200, (await Decide(f.Capture, pending, "return", HrSession)).Status);
+    }
+
+    [Fact]
     public async Task Correction_only_open_day_accepts_real_checkout_without_fake_checkin()
     {
         await using var f = await Fixture(); var v = await Pending(f.Capture);

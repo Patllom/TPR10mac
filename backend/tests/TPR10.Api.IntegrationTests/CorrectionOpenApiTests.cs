@@ -15,7 +15,7 @@ public sealed class CorrectionOpenApiTests
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost:4443") });
         using var doc = JsonDocument.Parse(await client.GetStringAsync("/api/openapi/v1.json"));
         var paths = doc.RootElement.GetProperty("paths");
-        foreach (var (suffix, method) in new[] { ("", "get"), ("", "post"), ("/{id}", "get"), ("/approvals", "get"),
+        foreach (var (suffix, method) in new[] { ("", "get"), ("", "post"), ("/{id}", "get"), ("/approvals", "get"), ("/sites", "get"),
             ("/{id}/revisions", "post"), ("/{id}/submit", "post"), ("/{id}/supervisor-approve", "post"),
             ("/{id}/hr-approve", "post"), ("/{id}/return", "post"), ("/{id}/reroute", "post") })
         {
@@ -24,6 +24,8 @@ public sealed class CorrectionOpenApiTests
             foreach (var status in new[] { "200", "400", "401", "403", "404", "409", "429", "503" })
                 Assert.True(op.GetProperty("responses").TryGetProperty(status, out _), suffix + status);
             Assert.Contains("readBasis", op.GetProperty("description").GetString());
+            if (suffix == "/sites") Assert.Contains(op.GetProperty("parameters").EnumerateArray(), p => p.GetProperty("name").GetString() == "at" && p.GetProperty("required").GetBoolean());
+            if (suffix == "/approvals") Assert.Contains(op.GetProperty("parameters").EnumerateArray().Single(p => p.GetProperty("name").GetString() == "stage").GetProperty("schema").GetProperty("enum").EnumerateArray(), v => v.GetString() == "routing");
             Assert.Equal("no-store", op.GetProperty("responses").GetProperty("200").GetProperty("headers").GetProperty("Cache-Control").GetProperty("description").GetString());
             if (method == "post")
             {
