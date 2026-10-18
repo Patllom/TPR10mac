@@ -32,6 +32,7 @@ internal static class CorrectionModelConfiguration
         var revision = model.Entity<CorrectionRevision>();
         revision.HasKey(x => new { x.RequestId, x.Revision });
         revision.HasOne<CorrectionRequest>().WithMany().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
+        revision.HasOne<AttendanceDay>().WithMany().HasForeignKey(x => x.RecoveryDayId).OnDelete(DeleteBehavior.Restrict);
         revision.HasOne<Site>().WithMany().HasForeignKey(x => new { x.InWorkspaceId, x.InProjectId, x.InSiteId })
             .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         revision.HasOne<Site>().WithMany().HasForeignKey(x => new { x.OutWorkspaceId, x.OutProjectId, x.OutSiteId })
@@ -39,6 +40,7 @@ internal static class CorrectionModelConfiguration
         revision.Property(x => x.Reason).HasMaxLength(2000);
         revision.ToTable("correction_revisions", t =>
         {
+            t.HasCheckConstraint("ck_correction_recovery_baseline", "recovery_day_id IS NULL OR baseline_day_version IS NOT NULL");
             t.HasCheckConstraint("ck_correction_revision", "revision>=1 AND (baseline_day_version IS NULL OR baseline_day_version>=1)");
             t.HasCheckConstraint("ck_correction_proposal_time", "isfinite(work_date) AND isfinite(in_utc) AND isfinite(created_at_utc) AND work_date=(in_utc AT TIME ZONE 'Asia/Bangkok')::date AND in_utc<=created_at_utc AND (out_utc IS NULL OR (isfinite(out_utc) AND out_utc>in_utc AND out_utc<=created_at_utc))");
             t.HasCheckConstraint("ck_correction_proposal_site", "(out_utc IS NULL AND out_workspace_id IS NULL AND out_project_id IS NULL AND out_site_id IS NULL) OR (out_utc IS NOT NULL AND out_workspace_id IS NOT NULL AND out_project_id IS NOT NULL AND out_site_id IS NOT NULL)");

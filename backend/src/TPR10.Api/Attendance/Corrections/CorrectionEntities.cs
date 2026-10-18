@@ -21,6 +21,7 @@ public sealed class CorrectionRevision
 {
     public Guid RequestId { get; set; }
     public int Revision { get; set; }
+    public Guid? RecoveryDayId { get; set; }
     public long? BaselineDayVersion { get; set; }
     public DateOnly WorkDate { get; set; }
     public DateTimeOffset InUtc { get; set; }

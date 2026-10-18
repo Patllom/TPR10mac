@@ -334,11 +334,17 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("reason");
 
+                    b.Property<Guid?>("RecoveryDayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recovery_day_id");
+
                     b.Property<DateOnly>("WorkDate")
                         .HasColumnType("date")
                         .HasColumnName("work_date");
 
                     b.HasKey("RequestId", "Revision");
+
+                    b.HasIndex("RecoveryDayId");
 
                     b.HasIndex("InWorkspaceId", "InProjectId", "InSiteId");
 
@@ -351,6 +357,8 @@ namespace TPR10.Api.Data.Migrations
                             t.HasCheckConstraint("ck_correction_proposal_time", "isfinite(work_date) AND isfinite(in_utc) AND isfinite(created_at_utc) AND work_date=(in_utc AT TIME ZONE 'Asia/Bangkok')::date AND in_utc<=created_at_utc AND (out_utc IS NULL OR (isfinite(out_utc) AND out_utc>in_utc AND out_utc<=created_at_utc))");
 
                             t.HasCheckConstraint("ck_correction_reason", "length(btrim(reason)) BETWEEN 1 AND 2000 AND reason=btrim(reason)");
+
+                            t.HasCheckConstraint("ck_correction_recovery_baseline", "recovery_day_id IS NULL OR baseline_day_version IS NOT NULL");
 
                             t.HasCheckConstraint("ck_correction_revision", "revision>=1 AND (baseline_day_version IS NULL OR baseline_day_version>=1)");
                         });
@@ -2881,6 +2889,11 @@ namespace TPR10.Api.Data.Migrations
 
             modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionRevision", b =>
                 {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceDay", null)
+                        .WithMany()
+                        .HasForeignKey("RecoveryDayId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TPR10.Api.Attendance.Corrections.CorrectionRequest", null)
                         .WithMany()
                         .HasForeignKey("RequestId")

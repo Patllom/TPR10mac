@@ -22,17 +22,18 @@ public sealed class CorrectionAdjustmentWriter(Tpr10DbContext db, TimeProvider c
         var history = new CorrectionSiteHistory(db);
         if (await history.ValidateAsync(request.EmployeeId, CorrectionApproval.Proposal(proposal), ct) is { } invalid) return invalid;
         if (!await history.Memberships(request.EmployeeId, proposal.InUtc).AnyAsync(x => x.Id == request.MembershipId, ct)) return 409;
-        var day = request.DayId is { } dayId ? await db.Set<AttendanceDay>().SingleOrDefaultAsync(x => x.Id == dayId, ct) : null;
-        if (request.DayId is not null && (day is null || day.EmployeeId != request.EmployeeId
+        var targetDayId = request.DayId ?? proposal.RecoveryDayId;
+        var day = targetDayId is { } dayId ? await db.Set<AttendanceDay>().SingleOrDefaultAsync(x => x.Id == dayId, ct) : null;
+        if (targetDayId is not null && (day is null || day.EmployeeId != request.EmployeeId
             || day.Version != proposal.BaselineDayVersion || day.MembershipId != request.MembershipId
             || day.WorkspaceId != request.WorkspaceId || day.DepartmentId != request.DepartmentId
-            || day.SnapshotAtUtc != request.SnapshotAtUtc)) return 409;
+            || (request.DayId is not null ? day.SnapshotAtUtc != request.SnapshotAtUtc : day.WorkDate != request.OriginalWorkDate))) return 409;
         if (day is null && proposal.BaselineDayVersion is not null) return 409;
         if (await new CorrectionTargetGuard(db, clock).ValidateAsync(request.EmployeeId, request.Id,
             request.OriginalWorkDate, proposal.WorkDate, false, ct) is { } targetError) return targetError;
         if (proposal.OutUtc is null && day is not null && await db.Set<AttendanceEvent>()
             .AnyAsync(x => x.DayId == day.Id && x.Action == EvidenceAction.CheckOut, ct)) return 409;
-        if (await db.Set<AttendanceDay>().AnyAsync(x => x.EmployeeId == request.EmployeeId && x.Id != request.DayId
+        if (await db.Set<AttendanceDay>().AnyAsync(x => x.EmployeeId == request.EmployeeId && x.Id != targetDayId
             && (x.WorkDate == proposal.WorkDate || (proposal.OutUtc == null && x.EffectiveOutUtc == null)), ct)) return 409;
         var adjustment = new AttendanceAdjustment
         {

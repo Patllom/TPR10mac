@@ -108,8 +108,16 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
     private async Task<CorrectionComparison> CompareAsync(CorrectionRequest request, long? baseline, CancellationToken ct)
     {
         // Called only after request authorization, never as a general attendance read endpoint.
-        var reference = request.DayId ?? await db.Set<AttendanceAdjustment>().AsNoTracking()
+        var recovery = await db.Set<CorrectionRevision>().AsNoTracking()
+            .Where(x => x.RequestId == request.Id && x.Revision == request.CurrentRevision).Select(x => x.RecoveryDayId).SingleAsync(ct);
+        var reference = request.DayId ?? recovery ?? await db.Set<AttendanceAdjustment>().AsNoTracking()
             .Where(x => x.RequestId == request.Id && x.Revision == request.CurrentRevision).Select(x => (Guid?)x.DayId).SingleOrDefaultAsync(ct);
+        // Offer an explicit current baseline for a new revision; do not silently bind or approve it.
+        if (reference is null && request.State is CorrectionState.Draft or CorrectionState.Returned)
+            reference = await db.Set<AttendanceDay>().AsNoTracking()
+                .Where(x => x.EmployeeId == request.EmployeeId && x.WorkDate == request.OriginalWorkDate
+                    && x.MembershipId == request.MembershipId && x.WorkspaceId == request.WorkspaceId && x.DepartmentId == request.DepartmentId)
+                .Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct);
         if (reference is not { } id) return new(null, baseline is null, null, null);
         var day = await db.Set<AttendanceDay>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.EmployeeId == request.EmployeeId, ct)
             ?? throw new AttendanceReadDeniedException(404);

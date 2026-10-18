@@ -48,7 +48,10 @@ public sealed class CorrectionDraftService(Tpr10DbContext db, ScopeAccess access
                 if (row is null) return Failure(404);
                 if (row.Version != command.ExpectedVersion || row.CurrentRevision != command.Revision) return Failure(409);
                 if (row.State is not (CorrectionState.Draft or CorrectionState.Returned)) return Failure(409);
-                if (row.OriginalWorkDate != input.OriginalWorkDate || row.DayId != input.DayId) return Failure(409);
+                var previous = await db.Set<CorrectionRevision>().AsNoTracking()
+                    .SingleAsync(x => x.RequestId == row.Id && x.Revision == row.CurrentRevision, ct);
+                var boundDay = row.DayId ?? previous.RecoveryDayId;
+                if (row.OriginalWorkDate != input.OriginalWorkDate || (boundDay is not null && boundDay != input.DayId)) return Failure(409);
                 if (now >= row.DeadlineUtc)
                 {
                     row.State = CorrectionState.Expired; row.Version++;
@@ -100,6 +103,7 @@ public sealed class CorrectionDraftService(Tpr10DbContext db, ScopeAccess access
             {
                 RequestId = row.Id,
                 Revision = row.CurrentRevision + 1,
+                RecoveryDayId = row.DayId is null ? input.DayId : null,
                 BaselineDayVersion = input.ExpectedDayVersion,
                 WorkDate = proposal.WorkDate,
                 InUtc = proposal.InUtc,
