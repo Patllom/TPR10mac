@@ -3,12 +3,14 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TPR10.Api.Attendance.Access;
+using TPR10.Api.Attendance.Corrections;
 using TPR10.Api.Attendance.Evidence;
 using TPR10.Api.Attendance.Recording;
 using TPR10.Api.Auditing;
 using TPR10.Api.Correlation;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Sessions;
+using TPR10.Api.Identity.Authorization;
 using TPR10.Api.Organization;
 using TPR10.Api.Scopes;
 
@@ -29,6 +31,8 @@ public sealed class AttendanceJsonResult(Func<AttendanceDeliveryServices, Cancel
         var connectionOptions = new NpgsqlConnectionStringBuilder(original.Database.GetConnectionString()) { Pooling = false, Timeout = 5, CommandTimeout = 5 };
         await using var connection = new NpgsqlConnection(connectionOptions.ConnectionString);
         var delivering = false;
+        IResult Problem(int status) => http.Request.Path.StartsWithSegments("/api/v1/attendance/corrections")
+            ? CorrectionEndpoints.Problem(status) : RecordingEndpoints.Problem(status);
         try
         {
             await connection.OpenAsync(ct);
@@ -36,12 +40,16 @@ public sealed class AttendanceJsonResult(Func<AttendanceDeliveryServices, Cancel
             await using var db = new Tpr10DbContext(new DbContextOptionsBuilder<Tpr10DbContext>(options).UseNpgsql(connection).Options);
             var delivery = new AttendanceDeliveryServices(db, services);
             var result = await read(delivery, ct);
-            if (result.Value is null) { await RecordingEndpoints.Result(result, http).ExecuteAsync(http).WaitAsync(ct); return; }
+            if (result.Value is null)
+            {
+                await (http.Request.Path.StartsWithSegments("/api/v1/attendance/corrections")
+                ? Problem(result.Status) : RecordingEndpoints.Result(result, http)).ExecuteAsync(http).WaitAsync(ct); return;
+            }
             var bytes = JsonSerializer.SerializeToUtf8Bytes(result.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             if (bytes.Length > 1024 * 1024) throw new IOException("history-response-too-large");
             // Serialization is bounded and rechecked before the first byte is written.
             if (await delivery.RevalidateAsync(result.Value, ct) is { } denied)
-            { await RecordingEndpoints.Problem(denied).ExecuteAsync(http).WaitAsync(ct); return; }
+            { await Problem(denied).ExecuteAsync(http).WaitAsync(ct); return; }
             ct.ThrowIfCancellationRequested();
             http.Response.Headers.CacheControl = "no-store"; http.Response.Headers.XContentTypeOptions = "nosniff";
             http.Response.StatusCode = result.Status; http.Response.ContentType = "application/json; charset=utf-8"; http.Response.ContentLength = bytes.Length;
@@ -53,7 +61,7 @@ public sealed class AttendanceJsonResult(Func<AttendanceDeliveryServices, Cancel
         catch (Exception error) when (ScopeOperation.IsDatabaseFault(error) || error is IOException or OperationCanceledException or TimeoutException)
         {
             if (delivering || http.Response.HasStarted || ct.IsCancellationRequested) http.Abort();
-            else { http.Response.Clear(); await RecordingEndpoints.Problem(503).ExecuteAsync(http).WaitAsync(ct); }
+            else { http.Response.Clear(); await Problem(503).ExecuteAsync(http).WaitAsync(ct); }
         }
         // Dispose closes the non-pooled physical connection, releasing its session lock even on abort.
     }
@@ -66,6 +74,13 @@ public sealed class AttendanceDeliveryServices
     private readonly AttendanceAccess access;
     private readonly AttendanceHistory history;
     private readonly CaptureOperationStore operations;
+    private readonly CorrectionQueries corrections;
+    private readonly CorrectionDraftService drafts;
+    private readonly CorrectionSubmission submission;
+    private readonly CorrectionApproval approval;
+    private Func<CancellationToken, Task<CorrectionResult<CorrectionView>>>? committedCommand;
+    private string? correctionAudience;
+    private int correctionPage, correctionSize;
     private AttendanceAudience? audience;
     public AttendanceDeliveryServices(Tpr10DbContext db, IServiceProvider services)
     {
@@ -77,8 +92,40 @@ public sealed class AttendanceDeliveryServices
             services.GetRequiredService<IDataProtectionProvider>(), audit, clock);
         var challenges = new CaptureChallengeService(db, identity, current, access, audit, clock);
         operations = new CaptureOperationStore(db, identity, current, challenges, clock);
+        corrections = new CorrectionQueries(db, identity, access, new AttendanceRouteResolver(db, identity, clock),
+            new PermissionMutationGuard(db, current, new PermissionContext(), clock), audit, clock);
+        drafts = new(db, identity, access, audit, clock);
+        submission = new(db, identity, access, new PermissionMutationGuard(db, current, new PermissionContext(), clock),
+            new AttendanceRouteResolver(db, identity, clock), audit, clock);
+        approval = new(db, identity, new AttendanceRouteResolver(db, identity, clock), audit, clock);
+    }
+    public async Task<RecordingResult<object>> MutateCorrectionAsync(Guid? id, string action, SaveCorrection? input, CorrectionCommand command, CancellationToken ct)
+    {
+        Func<CancellationToken, Task<CorrectionResult<CorrectionView>>> execute = action switch
+        {
+            "create" => token => drafts.CreateAsync(input!, command.CommandId, token),
+            "save" => token => drafts.SaveAsync(id!.Value, input!, command, token),
+            "submit" => token => submission.SubmitAsync(id!.Value, command, token),
+            "reroute" => token => submission.RerouteAsync(id!.Value, command, token),
+            "supervisor-approve" or "hr-approve" or "return" => token => approval.DecideAsync(id!.Value, command, action, token),
+            _ => throw new InvalidOperationException("unknown-correction-command")
+        };
+        var result = await execute(ct); db.ChangeTracker.Clear();
+        if (result.Value is null) return Box(result);
+        // Revalidation is installed only after a durable receipt exists. The same command re-reads
+        // that receipt after checking current grants; it never runs a second business mutation.
+        committedCommand = execute;
+        return new(new CorrectionAcknowledgment(result.Value.Id, command.CommandId), result.Status, null, null);
     }
     public async Task<RecordingResult<object>> CurrentAsync(CancellationToken ct) => Box(await history.CurrentAsync(ct));
+    public async Task<RecordingResult<object>> CorrectionSitesAsync(DateTimeOffset at, int page, int size, CancellationToken ct) =>
+        Box(await corrections.SitesAsync(at, page, size, ct));
+    public async Task<RecordingResult<object>> CorrectionAsync(Guid id, CancellationToken ct) => Box(await corrections.GetAsync(id, ct));
+    public async Task<RecordingResult<object>> CorrectionsAsync(string requested, int page, int size, CancellationToken ct)
+    {
+        correctionAudience = requested; correctionPage = page; correctionSize = size;
+        return Box(await corrections.ListAsync(requested, page, size, ct));
+    }
     public async Task<RecordingResult<object>> DayAsync(Guid id, CancellationToken ct) => Box(await history.GetAsync(id, ct));
     public async Task<RecordingResult<object>> ListAsync(AttendanceAudience requested, AttendanceListQuery query, CancellationToken ct)
     { audience = requested; return Box(await history.ListAsync(requested, query, ct)); }
@@ -90,9 +137,16 @@ public sealed class AttendanceDeliveryServices
     }
     internal async Task<int?> RevalidateAsync(object value, CancellationToken ct)
     {
+        if (value is CorrectionAcknowledgment ack && committedCommand is { } recheck)
+        {
+            var result = await recheck(ct); db.ChangeTracker.Clear();
+            return result.Value is null ? result.Status : result.Value.Id != ack.Id ? 409 : null;
+        }
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var validation = await identity.ValidateSessionAsync(audience is AttendanceAudience.Team or AttendanceAudience.Hr, ct);
         if (validation.Status is { } status) return status;
+        if (value is CorrectionPage or CorrectionView or CorrectionSitePage)
+            return await corrections.RevalidateAsync(value, correctionAudience, correctionPage, correctionSize, ct);
         AttendanceDayView[] days = value switch { AttendancePage p => p.Items, AttendanceDayView day => [day], CurrentAttendanceView { OpenDay: { } day } => [day], _ => [] };
         foreach (var day in days)
         {
@@ -100,9 +154,12 @@ public sealed class AttendanceDeliveryServices
             if (row is null) return 404;
             var decision = await access.ReadAsync(new(row.MembershipId, row.EmployeeId, row.WorkspaceId, row.DepartmentId, row.SnapshotAtUtc), ct);
             if (decision.Status is { } denied) return denied;
-            if (!decision.CanRead || decision.Basis != day.ReadBasis || decision.CanReadPhoto != (day.In.Photo is not null)) return 404;
+            if (!decision.CanRead || decision.Basis != day.ReadBasis
+                || day.In is { } entered && decision.CanReadPhoto != (entered.Photo is not null)
+                || day.Out is { } exited && decision.CanReadPhoto != (exited.Photo is not null)) return 404;
         }
         return null;
     }
     private static RecordingResult<object> Box<T>(RecordingResult<T> result) => new(result.Value, result.Status, result.Code, result.RetryAfterSeconds);
+    private static RecordingResult<object> Box<T>(CorrectionResult<T> result) => new(result.Value, result.Status, result.Problem, null);
 }

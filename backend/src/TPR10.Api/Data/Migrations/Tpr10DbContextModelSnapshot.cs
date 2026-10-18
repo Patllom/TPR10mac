@@ -22,6 +22,389 @@ namespace TPR10.Api.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.AttendanceAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AfterInUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("after_in_utc");
+
+                    b.Property<DateTimeOffset?>("AfterOutUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("after_out_utc");
+
+                    b.Property<long>("AfterVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("after_version");
+
+                    b.Property<DateOnly>("AfterWorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("after_work_date");
+
+                    b.Property<DateTimeOffset>("AppliedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at_utc");
+
+                    b.Property<DateTimeOffset?>("BeforeInUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("before_in_utc");
+
+                    b.Property<DateTimeOffset?>("BeforeOutUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("before_out_utc");
+
+                    b.Property<long?>("BeforeVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("before_version");
+
+                    b.Property<DateOnly?>("BeforeWorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("before_work_date");
+
+                    b.Property<Guid>("DayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("day_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
+                    b.Property<long>("WrittenTransactionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("written_transaction_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DayId", "AfterVersion")
+                        .IsUnique();
+
+                    b.HasIndex("RequestId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("attendance_adjustments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_adjustment_time", "isfinite(after_work_date) AND isfinite(after_in_utc) AND isfinite(applied_at_utc) AND (after_out_utc IS NULL OR (isfinite(after_out_utc) AND after_out_utc>after_in_utc))");
+
+                            t.HasCheckConstraint("ck_adjustment_version", "(before_version IS NULL AND before_work_date IS NULL AND before_in_utc IS NULL AND before_out_utc IS NULL AND after_version=1) OR (before_version IS NOT NULL AND before_version>=1 AND before_work_date IS NOT NULL AND before_in_utc IS NOT NULL AND after_version=before_version+1)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionApprovalAction", b =>
+                {
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Step")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("step");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("outcome");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("RequestId", "Revision", "Step");
+
+                    b.HasIndex("ActorId");
+
+                    b.ToTable("correction_approval_actions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_correction_approval", "step IN ('Supervisor','Hr') AND outcome IN ('Approved','Returned') AND isfinite(occurred_at_utc)");
+
+                            t.HasCheckConstraint("ck_correction_return_reason", "outcome<>'Returned' OR (reason IS NOT NULL AND length(btrim(reason)) BETWEEN 1 AND 2000 AND reason=btrim(reason))");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionCommandReceipt", b =>
+                {
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("command_id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("action");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("PayloadSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_sha256");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result_json");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.HasKey("ActorId", "CommandId");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("correction_command_receipts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_correction_receipt", "command_id<>'00000000-0000-0000-0000-000000000000'::uuid AND payload_sha256 ~ '^[a-f0-9]{64}$' AND status IN (200,201) AND isfinite(created_at_utc) AND length(action)>0 AND jsonb_typeof(result_json)='object' AND octet_length(result_json::text)<=65536");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CurrentRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("current_revision");
+
+                    b.Property<Guid?>("DayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("day_id");
+
+                    b.Property<DateTimeOffset>("DeadlineAnchorUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deadline_anchor_utc");
+
+                    b.Property<DateTimeOffset>("DeadlineUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deadline_utc");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("department_id");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employee_id");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("membership_id");
+
+                    b.Property<DateOnly>("OriginalWorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("original_work_date");
+
+                    b.Property<DateTimeOffset>("SnapshotAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("snapshot_at_utc");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Draft")
+                        .HasColumnName("state");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DayId", "EmployeeId");
+
+                    b.HasIndex("EmployeeId", "OriginalWorkDate")
+                        .IsUnique()
+                        .HasFilter("state NOT IN ('Approved','Expired')");
+
+                    b.HasIndex("MembershipId", "EmployeeId", "WorkspaceId", "DepartmentId");
+
+                    b.ToTable("correction_requests", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_correction_deadline", "isfinite(original_work_date) AND isfinite(snapshot_at_utc) AND isfinite(deadline_anchor_utc) AND isfinite(deadline_utc) AND deadline_anchor_utc=((original_work_date+8)::timestamp AT TIME ZONE 'Asia/Bangkok')");
+
+                            t.HasCheckConstraint("ck_correction_state", "state IN ('Draft','PendingSupervisor','PendingHr','Returned','Approved','Expired')");
+
+                            t.HasCheckConstraint("ck_correction_version", "version>=1 AND current_revision>=0");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionRevision", b =>
+                {
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
+                    b.Property<long?>("BaselineDayVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("baseline_day_version");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("InProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("in_project_id");
+
+                    b.Property<Guid>("InSiteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("in_site_id");
+
+                    b.Property<DateTimeOffset>("InUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("in_utc");
+
+                    b.Property<Guid>("InWorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("in_workspace_id");
+
+                    b.Property<Guid?>("OutProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("out_project_id");
+
+                    b.Property<Guid?>("OutSiteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("out_site_id");
+
+                    b.Property<DateTimeOffset?>("OutUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("out_utc");
+
+                    b.Property<Guid?>("OutWorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("out_workspace_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid?>("RecoveryDayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recovery_day_id");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("work_date");
+
+                    b.HasKey("RequestId", "Revision");
+
+                    b.HasIndex("RecoveryDayId");
+
+                    b.HasIndex("InWorkspaceId", "InProjectId", "InSiteId");
+
+                    b.HasIndex("OutWorkspaceId", "OutProjectId", "OutSiteId");
+
+                    b.ToTable("correction_revisions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_correction_proposal_site", "(out_utc IS NULL AND out_workspace_id IS NULL AND out_project_id IS NULL AND out_site_id IS NULL) OR (out_utc IS NOT NULL AND out_workspace_id IS NOT NULL AND out_project_id IS NOT NULL AND out_site_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_correction_proposal_time", "isfinite(work_date) AND isfinite(in_utc) AND isfinite(created_at_utc) AND work_date=(in_utc AT TIME ZONE 'Asia/Bangkok')::date AND in_utc<=created_at_utc AND (out_utc IS NULL OR (isfinite(out_utc) AND out_utc>in_utc AND out_utc<=created_at_utc))");
+
+                            t.HasCheckConstraint("ck_correction_reason", "length(btrim(reason)) BETWEEN 1 AND 2000 AND reason=btrim(reason)");
+
+                            t.HasCheckConstraint("ck_correction_recovery_baseline", "recovery_day_id IS NULL OR baseline_day_version IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_correction_revision", "revision>=1 AND (baseline_day_version IS NULL OR baseline_day_version>=1)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionRouteSnapshot", b =>
+                {
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.PrimitiveCollection<Guid[]>("HrCandidateIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("hr_candidate_ids");
+
+                    b.Property<long>("MembershipVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("membership_version");
+
+                    b.Property<long>("ReportingVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reporting_version");
+
+                    b.Property<Guid>("SupervisorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("supervisor_id");
+
+                    b.HasKey("RequestId", "Revision");
+
+                    b.HasIndex("SupervisorId");
+
+                    b.ToTable("correction_route_snapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_correction_route", "membership_version>=1 AND reporting_version>=1 AND cardinality(hr_candidate_ids)>0 AND isfinite(created_at_utc)");
+                        });
+                });
+
             modelBuilder.Entity("TPR10.Api.Attendance.Directory.EmployeeMembership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -569,6 +952,12 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("workspace_id");
 
+                    b.Property<long>("WrittenTransactionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("written_transaction_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EmployeeId")
@@ -582,7 +971,7 @@ namespace TPR10.Api.Data.Migrations
 
                     b.ToTable("attendance_days", null, t =>
                         {
-                            t.HasCheckConstraint("ck_attendance_day_date", "work_date=(snapshot_at_utc AT TIME ZONE 'Asia/Bangkok')::date");
+                            t.HasCheckConstraint("ck_attendance_day_date", "work_date=(effective_in_utc AT TIME ZONE 'Asia/Bangkok')::date");
 
                             t.HasCheckConstraint("ck_attendance_day_time", "isfinite(work_date) AND isfinite(snapshot_at_utc) AND isfinite(effective_in_utc) AND (effective_out_utc IS NULL OR (isfinite(effective_out_utc) AND effective_out_utc>effective_in_utc))");
 
@@ -656,6 +1045,12 @@ namespace TPR10.Api.Data.Migrations
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid")
                         .HasColumnName("workspace_id");
+
+                    b.Property<long>("WrittenTransactionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("written_transaction_id");
 
                     b.HasKey("Id");
 
@@ -2429,6 +2824,109 @@ namespace TPR10.Api.Data.Migrations
 
                             t.HasCheckConstraint("ck_scope_record_restricted_note", "restricted_note IS NULL OR restricted_note !~ '[[:cntrl:]]'");
                         });
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.AttendanceAdjustment", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceDay", null)
+                        .WithMany()
+                        .HasForeignKey("DayId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Corrections.CorrectionRevision", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId", "Revision")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionApprovalAction", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Corrections.CorrectionRouteSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId", "Revision")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionCommandReceipt", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Corrections.CorrectionRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionRequest", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceDay", null)
+                        .WithMany()
+                        .HasForeignKey("DayId", "EmployeeId")
+                        .HasPrincipalKey("Id", "EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TPR10.Api.Attendance.Directory.EmployeeMembership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId", "EmployeeId", "WorkspaceId", "DepartmentId")
+                        .HasPrincipalKey("Id", "UserId", "WorkspaceId", "DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionRevision", b =>
+                {
+                    b.HasOne("TPR10.Api.Attendance.Recording.AttendanceDay", null)
+                        .WithMany()
+                        .HasForeignKey("RecoveryDayId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TPR10.Api.Attendance.Corrections.CorrectionRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Organization.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("InWorkspaceId", "InProjectId", "InSiteId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Organization.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("OutWorkspaceId", "OutProjectId", "OutSiteId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("TPR10.Api.Attendance.Corrections.CorrectionRouteSnapshot", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("SupervisorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.Attendance.Corrections.CorrectionRevision", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId", "Revision")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TPR10.Api.Attendance.Directory.EmployeeMembership", b =>

@@ -37,6 +37,19 @@ test('Thai date labels use work date while retaining separate entry/exit sites',
   assert.throws(() => attendanceDayLabel('not-a-date'));
 });
 
+test('ประวัติจากคำร้องไม่มีหลักฐานปลอมและคงเวลาเดิมแยกจากเวลาที่แก้', () => {
+  const { parseAttendancePage } = load();
+  const adjustment = { requestId: id, revision: 1, appliedAtUtc: '2026-09-26T02:00:00Z', beforeInUtc: null, beforeOutUtc: null, afterInUtc: day.effectiveInUtc, afterOutUtc: day.effectiveOutUtc };
+  const corrected = { ...day, in: null, out: null, effectiveInSite: event.site, effectiveOutSite: event.site, adjustments: [adjustment] };
+  const row = parseAttendancePage({ items: [corrected], nextCursor: null }, 'Mine').items[0];
+  assert.equal(row.in, null); assert.equal(row.out, null); assert.equal(row.adjustments[0].requestId, id);
+  assert.equal(JSON.stringify(row).includes('latitude'), false);
+  const live = parseAttendancePage({ items: [{ ...corrected, in: day.in }], nextCursor: null }, 'Mine').items[0];
+  assert.equal(live.in.occurredAtUtc, event.occurredAtUtc);
+  for (const invalid of [{ ...corrected, adjustments: [] }, { ...corrected, effectiveInSite: null }, { ...corrected, effectiveOutUtc: '2026-09-24T01:00:00Z' }, { ...corrected, adjustments: [{ ...adjustment, requestId: 'invalid' }] }])
+    assert.throws(() => parseAttendancePage({ items: [invalid], nextCursor: null }, 'Mine'));
+});
+
 test('accepts backend DateTimeOffset serialization and all nonempty Guid forms', () => {
   const { parseAttendancePage } = load();
   const backendId = '00000000-0000-0000-0000-000000000031';

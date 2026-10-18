@@ -15,6 +15,11 @@ public sealed class AttendanceOpenApiTransformer
         operation.Extensions!["x-tpr10-scope"] = new JsonNodeExtension(JsonValue.Create(metadata.Domain));
         operation.Extensions["x-tpr10-permissions"] = new JsonNodeExtension(new JsonArray(metadata.Capability == "" ? [] : [(JsonNode?)JsonValue.Create(metadata.Capability)]));
         operation.Extensions["x-tpr10-mfa-required"] = new JsonNodeExtension(JsonValue.Create(metadata.RequireMfa));
+        if (metadata.Domain == "attendance-corrections")
+        {
+            await Corrections.CorrectionOpenApi.TransformAsync(operation, context, ct);
+            return;
+        }
         if (metadata.Domain is "attendance-recording" or "attendance-history")
         {
             await RecordingAsync(operation, context, metadata, ct);

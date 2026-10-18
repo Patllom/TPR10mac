@@ -13,5 +13,12 @@ public sealed record AttendancePhotoView(Guid EvidenceId);
 public sealed record AttendanceEventView(Guid Id, DateTimeOffset OccurredAtUtc, ScopeKey Site, GpsSample Gps,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AttendancePhotoView? Photo);
 public sealed record AttendanceDayView(Guid Id, DateOnly WorkDate, long Version, Guid EmployeeId,
-    AttendanceEventView In, AttendanceEventView? Out, AttendanceReadBasis ReadBasis,
-    DateTimeOffset EffectiveInUtc, DateTimeOffset? EffectiveOutUtc);
+    AttendanceEventView? In, AttendanceEventView? Out, AttendanceReadBasis ReadBasis,
+    DateTimeOffset EffectiveInUtc, DateTimeOffset? EffectiveOutUtc)
+{
+    public ScopeKey? EffectiveInSite { get; init; }
+    public ScopeKey? EffectiveOutSite { get; init; }
+    public AttendanceAdjustmentView[] Adjustments { get; init; } = [];
+}
+public sealed record AttendanceAdjustmentView(Guid RequestId, int Revision, DateTimeOffset AppliedAtUtc,
+    DateTimeOffset? BeforeInUtc, DateTimeOffset? BeforeOutUtc, DateTimeOffset AfterInUtc, DateTimeOffset? AfterOutUtc);

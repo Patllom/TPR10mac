@@ -19,6 +19,10 @@ public static class AttendanceRegistration
         services.AddScoped<AttendanceRecorder>();
         services.AddScoped<Access.AttendanceReadScope>();
         services.AddScoped<History.AttendanceHistory>();
+        services.AddScoped<Corrections.CorrectionDraftService>();
+        services.AddScoped<Corrections.CorrectionSubmission>();
+        services.AddScoped<Corrections.CorrectionApproval>();
+        services.AddScoped<Corrections.CorrectionQueries>();
         services.AddOptions<StorageOptions>().BindConfiguration("AttendanceStorage");
         services.AddSingleton<StorageRuntime>();
         services.AddScoped<StorageRegistry>();
