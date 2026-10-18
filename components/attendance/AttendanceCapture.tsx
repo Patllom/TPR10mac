@@ -36,6 +36,6 @@ export default function AttendanceCapture() {
     {live.phase === 'submitting' && <p role="status">กำลังส่ง กรุณารอ ไม่ต้องกดซ้ำ…</p>}
     {live.phase === 'uncertain' && <p role="status">ยังไม่ทราบผล ห้ามเริ่มรายการใหม่จนกว่าจะตรวจผลคำขอเดิม</p>}
     {live.phase === 'success' && live.receipt && <div role="status"><p>ลงเวลาสำเร็จ: {thaiTime(live.receipt.occurredAtUtc)} · วันทำงาน {live.receipt.workDate}</p><button className="underline" onClick={() => { setContinuous(false); void live.reload(); }}>โหลดสถานะล่าสุด</button></div>}
-    <p>หากลืมลงเวลา ต้องยื่นคำร้องผ่านหัวหน้าและ HR ใน Module 6D (ยังไม่เปิดใช้งาน) ไม่สามารถแก้เวลาย้อนหลังจากหน้านี้ และต้องปิดรอบเดิมก่อนเริ่มรอบใหม่</p>
+    <p>หากลืมลงเวลา ให้ไปเมนูคำร้องแก้ไขเวลาผ่านหัวหน้าและ HR ไม่สามารถแก้เวลาย้อนหลังจากหน้านี้ และต้องปิดรอบเดิมก่อนเริ่มรอบใหม่</p>
   </div>;
 }

@@ -15,7 +15,13 @@ public sealed record CorrectionView(Guid Id, Guid EmployeeId, DateOnly OriginalW
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CorrectionHistoryView? History { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CorrectionComparison? Comparison { get; init; }
 }
+public sealed record CorrectionTimePair(DateTimeOffset? InUtc, DateTimeOffset? OutUtc);
+public sealed record CorrectionEffective(long Version, DateOnly WorkDate, DateTimeOffset InUtc, DateTimeOffset? OutUtc,
+    CorrectionSite? InSite, CorrectionSite? OutSite);
+public sealed record CorrectionComparison(Guid? DayId, bool BaselineMatches, CorrectionTimePair? Original, CorrectionEffective? Current);
 public sealed record CorrectionPage(CorrectionView[] Items, int Total, int PageNumber, int PageSize);
 public sealed record CorrectionRevisionView(int Revision, long? BaselineDayVersion, CorrectionProposal Proposal, DateTimeOffset CreatedAtUtc);
 public sealed record CorrectionRouteView(int Revision, Guid SupervisorId, Guid[] HrCandidateIds, DateTimeOffset CreatedAtUtc);

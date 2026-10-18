@@ -51,19 +51,30 @@ function history(value: unknown): boolean {
     && (h.reroutes as unknown[]).every(v => { const r = row(v, ['revision', 'actorId', 'reason', 'occurredAtUtc']); return positive(r.revision) && correctionId(r.actorId) && text(r.reason) && utc(r.occurredAtUtc); });
 }
 export function parseCorrection(value: unknown): CorrectionView {
-  const r = row(value, ['id', 'employeeId', 'originalWorkDate', 'version', 'state', 'deadlineUtc', 'currentRevision', 'proposal', 'baselineDayVersion', 'actions', 'readBasis'], ['history']);
+  const r = row(value, ['id', 'employeeId', 'originalWorkDate', 'version', 'state', 'deadlineUtc', 'currentRevision', 'proposal', 'baselineDayVersion', 'actions', 'readBasis'], ['history', 'comparison']);
   if (!correctionId(r.id) || !correctionId(r.employeeId) || !day(r.originalWorkDate) || !positive(r.version) || ![0, 1, 2, 3, 4, 5].includes(r.state as number)
     || !utc(r.deadlineUtc) || !positive(r.currentRevision) || !proposal(r.proposal) || !nullable(r.baselineDayVersion, positive)
     || !Array.isArray(r.actions) || !r.actions.every(x => correctionActions.includes(x)) || new Set(r.actions).size !== r.actions.length
     || !['Own', 'Supervisor', 'Hr', 'WorkflowSupervisor', 'WorkflowHr'].includes(r.readBasis as string)
-    || Object.hasOwn(r, 'history') && !history(r.history)) return invalid();
+    || Object.hasOwn(r, 'history') && !history(r.history)
+    || Object.hasOwn(r, 'comparison') && !comparison(r.comparison)) return invalid();
   return r as CorrectionView;
 }
 export function parseCorrectionPage(value: unknown): CorrectionPage {
   const r = row(value, ['items', 'total', 'pageNumber', 'pageSize']);
   if (!Array.isArray(r.items) || !Number.isSafeInteger(r.total) || (r.total as number) < 0 || !positive(r.pageNumber) || !positive(r.pageSize) || r.pageSize > 100 || r.items.length > r.pageSize || (r.total as number) < r.items.length) return invalid();
-  r.items.forEach(v => { if (Object.hasOwn(parseCorrection(v), 'history')) invalid(); });
+  r.items.forEach(v => { const item = parseCorrection(v); if (Object.hasOwn(item, 'history') || Object.hasOwn(item, 'comparison')) invalid(); });
   return r as CorrectionPage;
+}
+function comparison(value: unknown): boolean {
+  const c = row(value, ['dayId', 'baselineMatches', 'original', 'current']);
+  if (!nullable(c.dayId, correctionId) || typeof c.baselineMatches !== 'boolean') return false;
+  if (c.original !== null) { const o = row(c.original, ['inUtc', 'outUtc']); if (!nullable(o.inUtc, utc) || !nullable(o.outUtc, utc)) return false; }
+  if (c.current !== null) {
+    const t = row(c.current, ['version', 'workDate', 'inUtc', 'outUtc', 'inSite', 'outSite']);
+    if (!positive(t.version) || !day(t.workDate) || !utc(t.inUtc) || !nullable(t.outUtc, utc) || !nullable(t.inSite, site) || !nullable(t.outSite, site)) return false;
+  }
+  return (c.dayId === null) === (c.current === null);
 }
 export function parseCorrectionAck(value: unknown): CorrectionAcknowledgment {
   const r = row(value, ['id', 'commandId']); if (!correctionId(r.id) || !correctionId(r.commandId)) return invalid(); return r as CorrectionAcknowledgment;

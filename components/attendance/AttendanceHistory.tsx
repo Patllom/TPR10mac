@@ -38,6 +38,7 @@ export default function AttendanceHistory({ audience }: { audience: HistoryAudie
     <p>{audience === 'Mine' ? 'ประวัติของฉัน' : audience === 'Team' ? 'ประวัติลูกทีมตามสายบังคับบัญชา · ดูพิกัดได้' : 'ประวัติหน่วยงานที่ HR ได้รับมอบหมาย · ดูรูปและพิกัดได้'}</p>
     <nav aria-label="เลือกประวัติลงเวลา" className="flex flex-wrap gap-4 underline">
       <a href="/portal/attendance#history">ประวัติของฉัน</a>
+      <a href="/portal/attendance/corrections">คำร้องแก้ไขเวลา</a>
       {history.canReadTeam && <a href="/portal/attendance/team">ประวัติลูกทีม</a>}
       {history.canReadHr && <a href="/portal/attendance/hr">ประวัติสำหรับ HR</a>}
     </nav>
@@ -64,6 +65,7 @@ export default function AttendanceHistory({ audience }: { audience: HistoryAudie
         {day.effectiveOutUtc && bangkokDate(day.effectiveInUtc) !== bangkokDate(day.effectiveOutUtc) && <p>ทำงานข้ามวัน</p>}
         <div className="grid min-w-0 gap-4 sm:grid-cols-2"><EventDetail event={day.in} label="เข้า" audience={audience} /><EventDetail event={day.out} label="ออก" audience={audience} /></div>
         <p className="text-sm">เวลาที่ใช้คำนวณ: เข้า {thaiTime(day.effectiveInUtc)} · ออก {day.effectiveOutUtc ? thaiTime(day.effectiveOutUtc) : 'ยังไม่มี'}</p>
+        {audience === 'Mine' && <a className="underline" href={`/portal/attendance/corrections?day=${day.id}`}>ยื่นคำร้องสำหรับวันนี้</a>}
         {!!day.adjustments?.length && <div className="space-y-2 text-sm"><p>มีการแก้ไขเวลาที่อนุมัติแล้ว · หลักฐานถ่ายสดด้านบนยังเป็นข้อมูลเดิม</p>
           <p className="break-all">สถานที่ตามเวลาที่ใช้คำนวณ: เข้า {day.effectiveInSite?.siteId} · ออก {day.effectiveOutSite?.siteId ?? 'ยังไม่มี'}</p>
           <ul>{day.adjustments.map(a => <li key={`${a.requestId}-${a.revision}`} className="break-all">คำร้อง {a.requestId} ฉบับ {a.revision} · อนุมัติ {thaiTime(a.appliedAtUtc)}</li>)}</ul>

@@ -11,6 +11,26 @@ const input = { dayId:null, originalWorkDate:'2026-09-25', expectedDayVersion:nu
 const view = { id, employeeId:id, originalWorkDate:'2026-09-25', version:2, state:0,
   deadlineUtc:'2026-10-02T17:00:00Z', currentRevision:1, proposal, baselineDayVersion:null, actions:['save','submit'], readBasis:'Own' };
 function client() { assert.ok(existsSync('lib/attendance/correction-client.ts'), 'correction client missing'); return loadTs('lib/attendance/correction-client.ts'); }
+test('detail comparison accepts bounded time/site data but rejects evidence and list disclosure', () => {
+  const p = loadTs('lib/attendance/correction-view.ts');
+  const comparison = { dayId:id, baselineMatches:true, original:{inUtc:proposal.inUtc,outUtc:null}, current:{version:2,workDate:proposal.workDate,inUtc:proposal.inUtc,outUtc:null,inSite:proposal.inSite,outSite:null} };
+  assert.deepEqual(p.parseCorrection({...view,comparison}).comparison,comparison);
+  assert.throws(()=>p.parseCorrection({...view,comparison:{...comparison,photo:'/private'}}));
+  assert.throws(()=>p.parseCorrection({...view,comparison:{...comparison,current:{...comparison.current,gps:{latitude:13}}}}));
+  assert.throws(()=>p.parseCorrectionPage({items:[{...view,comparison}],total:1,pageNumber:1,pageSize:20}));
+});
+test('identity fence runs after CSRF and before POST including explicit retry', async () => {
+  const c = client(), old = global.fetch; const calls = [];
+  global.fetch = async url => { calls.push(url); return Response.json(url.endsWith('/csrf') ? {token:'csrf'} : view); };
+  const fence = async () => { calls.push('identity-fence'); throw new Error('account changed'); };
+  try {
+    await assert.rejects(() => c.sendCorrection('submit', id, command, undefined, fence), /account changed/);
+    assert.deepEqual(calls, ['/api/v1/auth/csrf', 'identity-fence']);
+    calls.length = 0;
+    await assert.rejects(() => c.retryCorrection('submit', id, command, undefined, fence), /account changed/);
+    assert.deepEqual(calls, [`/api/v1/attendance/corrections/${id}`, '/api/v1/auth/csrf', 'identity-fence']);
+  } finally { global.fetch = old; }
+});
 test('all correction commands use exact routes, one POST and bounded private transport', async () => {
   const c = client(); const old = global.fetch; const calls=[];
   global.fetch=async(url, options)=>{calls.push([url,options]); return Response.json(url.endsWith('/csrf') ? {token:'csrf'} : {id,commandId:key});};
@@ -49,7 +69,7 @@ test('explicit retry reads current revision first and blocks stale or inaccessib
   global.fetch=async(url,options)=>{calls.push([url,options]);return Response.json(url.endsWith('/csrf')?{token:'csrf'}:options?.method==='POST'?{id,commandId:key}:current);};
   try {
     await c.retryCorrection('submit',id,command); assert.deepEqual(calls.map(x=>x[0]),[`/api/v1/attendance/corrections/${id}`,'/api/v1/auth/csrf',`/api/v1/attendance/corrections/${id}/submit`]);
-    calls.length=0; current={...view,version:3}; await assert.rejects(()=>c.retryCorrection('submit',id,command)); assert.equal(calls.length,1);
+    calls.length=0; current={...view,version:3}; await assert.rejects(()=>c.retryCorrection('submit',id,command), e => e.status === 409); assert.equal(calls.length,1);
     calls.length=0; global.fetch=async(url)=>{calls.push(url);return new Response(null,{status:404});};
     assert.equal((await c.retryCorrection('submit',id,command)).status,404); assert.equal(calls.length,1);
   }finally{global.fetch=old;}

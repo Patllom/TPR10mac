@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-module-6-attendance-design.md` โดยเฉพาะ R08–R12, §11–16; สัญญาส่งต่อ `docs/architecture/module-6c-exit-gate.md`
 
-สถานะ: **Tasks 1–6 ผ่านการตรวจรับแล้ว** (18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Tasks7–8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่ใช่ระบบคำร้องพร้อมใช้งานผ่านหน้าจอ
+สถานะ: **Tasks 1–7 ผ่านการตรวจรับทางเทคนิคแล้ว; เหลือ Task8 รับงานรวม** (18ตุลาคม2026 เวลาไทย) รวมPR6C #4 ตามการยืนยันผู้ใช้แล้วที่ `dc07cba` และเริ่มสาขา `codex/module-6d-corrections` จากฐานนี้; Task8 ยังไม่เริ่ม งาน6Dยังไม่push/merge และยังไม่อนุมัติ Production
 
 ## Global Constraints
 
@@ -203,15 +203,40 @@ Correction-only dayไม่มีรูป/GPS ต้องแสดงว่�
 
 ## Task 7: หน้าคำร้องและคิวหัวหน้า/HR
 
+### ขอบเขตที่ผู้ใช้ยืนยันเพิ่ม (18 ตุลาคม 2026)
+
+- ผู้อนุมัติที่กำลังรับผิดชอบคำร้องอ่านวัน เวลา สถานที่ และรุ่นข้อมูลของรายการที่คำร้องอ้างถึงได้ เพื่อเปรียบเทียบก่อนตัดสินใจ ไม่เพิ่มสิทธิ์ภาพ/GPS หรือประวัติอื่น และไม่ทำให้มีสิทธิ์อ่านต่อเมื่อพ้นขั้นของตน
+- เพิ่ม `comparison` เฉพาะรายละเอียดคำร้อง ภายใต้การตรวจสิทธิ์และตรวจซ้ำก่อนส่งผลเดิม ไม่เพิ่ม endpoint ประวัติทั่วไป รายการคิวไม่ส่งข้อมูลเปรียบเทียบ
+- `original` คือเวลาเหตุการณ์ถ่ายสดเดิม ไม่ใช่ baseline ทุกฉบับ; `current` คือเวลาที่มีผลปัจจุบันพร้อมรุ่นและสถานที่ ใช้ `baselineMatches` ตรวจรุ่น ถ้าไม่ตรงต้องแจ้งให้ทบทวน ไม่อ้างว่าเป็นค่าก่อนยื่น วันที่มาจากคำร้องที่อนุมัติแล้วอ้างผ่าน adjustment โดยไม่สร้างหลักฐานย้อนหลัง
+- คงการตอบ mutation เฉพาะ acknowledgment และกลับรายการ ไม่เพิ่มสิทธิ์อ่านหลังอนุมัติ ตรวจบัญชีหลังอ่าน body และอีกครั้งหลังรับ CSRF ก่อนส่ง POST รวมกรณีลองคำสั่งเดิม
+- เทสต์หน้าจอใช้ข้อมูลคำร้องสังเคราะห์ร่วมกับ HTTPS/Next/session จริง ส่วนสิทธิ์และ transaction ทดสอบกับ API/PostgreSQL จริง ไม่อ้างว่าแทนการตรวจมือถือจริงหรือ NAS จริง
+
+### วิธีใช้งานหน้าคำร้อง
+
+1. พนักงานเข้า Portal → **คำร้องแก้ไขเวลา** หรือเลือก **ยื่นคำร้องสำหรับวันนี้** จากประวัติลงเวลา กรณีเลือกจากประวัติ ระบบใช้เลขรายการและรุ่นข้อมูลจริง ไม่สร้างวันใหม่แทน
+2. กด **สร้างคำร้อง** ระบุเวลาไทย สถานที่และเหตุผล แล้ว **บันทึกร่าง** เปิดคำร้องเพื่อตรวจข้อมูลและกด **ส่งให้หัวหน้า** การบันทึกร่างอย่างเดียวไม่ใช่การส่ง และไม่ต่ออายุวันครบกำหนด
+3. หัวหน้า/HR เข้า **คิวพิจารณาคำร้อง** เลือกขั้นของตน ตรวจรหัสพนักงานและเวลาเปรียบเทียบ แล้วอนุมัติหรือส่งกลับพร้อมเหตุผล ผู้อนุมัติไม่มีช่องแก้เวลาแทนพนักงาน
+4. คำร้องที่ส่งกลับให้พนักงานเปิดแก้และบันทึกฉบับใหม่ก่อนส่งอีกครั้ง เริ่มขั้นหัวหน้าใหม่เสมอ เมื่อข้อมูลเปลี่ยนระหว่างพิจารณา ให้โหลดและทบทวน ไม่เขียนทับรุ่นเก่า
+5. หากไม่ทราบผลการส่ง ให้ตรวจสถานะก่อนเริ่มเรื่องใหม่ ปุ่มลองคำสั่งเดิมจะตรวจ GET ก่อน ใช้รหัสและข้อมูลเดิม และหยุดเมื่อรุ่นหรือสิทธิ์เปลี่ยน ไม่ส่งซ้ำอัตโนมัติ
+
+รายการสถานที่ใหม่มาจาก Site ที่ได้รับมอบหมายปัจจุบัน และคงสถานที่จากรายการ/คำร้องเดิมให้เลือกได้ การตรวจสิทธิ์ ณ เวลาที่ย้อนหลังเป็นหน้าที่ API ไม่ใช้การเลือกในหน้าจอเป็นหลักฐานสิทธิ์ ไม่มีรูปหรือ GPS ที่สร้างย้อนหลังในคำร้อง
+
 **Files:** สร้าง `app/portal/attendance/corrections/page.tsx`, `app/portal/attendance/approvals/page.tsx`, `components/attendance/CorrectionPortal.tsx`, `components/attendance/ApprovalPortal.tsx`; แก้เมนูPortalและhistory6C; สร้าง `tests/e2e/attendance-corrections.spec.ts`; เพิ่มspecในallowlist `infra/nginx/https-smoke-fixture.mjs`
 
 **Interfaces:** ใช้types/clientจากTask6; UIแสดงbefore/proposed/effective/revision/deadline/actionhistoryและฐานสิทธิ์ ป้าย “เวลาที่อนุมัติแก้ไข”; approvalปุ่มไม่ให้แก้proposalแทนพนักงาน; returnบังคับเหตุผล
 
-- [ ] REDbrowser: สร้าง/ส่ง/ส่งกลับ/แก้/ส่งใหม่/สองขั้น, conflictให้โหลดใหม่ไม่overwrite, expiredread-only, clocktimezoneไทย, missingbothไม่มีรูปปลอม, keyboard390pxไม่ล้น
-- [ ] รัน HTTPSfixtureport4000 specใหม่คาดFAILเพราะหน้า/flowยังไม่มี
-- [ ] implementหน้าไทย protected, cancel+clear DOMเมื่อaccount/visibilityเปลี่ยน ตรวจidentityก่อนแสดงlate result ห้ามเก็บreason/privatepayloadในlocalStorage; ไม่ซ่อน503ด้วยlogout
-- [ ] GREENdev4000 แล้วproduction-build4001 พร้อม latebody/read/approve accountchange, revoke, multi-tabduplicate, successresponseหายตรวจGETก่อนretry ไม่มีtimeout relaxation
-- [ ] commit `feat(attendance): add correction requests and approval inbox`
+- [x] REDbrowser: สร้าง/ส่ง/ส่งกลับ/แก้/ส่งใหม่/สองขั้น, conflictให้โหลดใหม่ไม่overwrite, expiredread-only, clocktimezoneไทย, missingbothไม่มีรูปปลอม, keyboard390pxไม่ล้น
+- [x] รัน HTTPSfixtureport4000 specใหม่คาดFAILเพราะหน้า/flowยังไม่มี
+- [x] implementหน้าไทย protected, cancel+clear DOMเมื่อaccount/visibilityเปลี่ยน ตรวจidentityก่อนแสดงlate result ห้ามเก็บreason/privatepayloadในlocalStorage; ไม่ซ่อน503ด้วยlogout
+- [x] GREENdev4000 แล้วproduction-build4001 พร้อม latebody/read/approve accountchange, revoke, multi-tabduplicate, successresponseหายตรวจGETก่อนretry ไม่มีtimeout relaxation
+- [x] commit `feat(attendance): add correction requests and approval inbox`
+
+### ผลตรวจ Task7
+
+- Backend ครบ 1,658/1,658 กรณี ผ่านโดยแบ่งตามคลาสเป็น 4 ชุดแยกฐานข้อมูล (415/415/414/414) ตรวจรายการจาก `dotnet test backend/TPR10.sln --no-build --list-tests` ครบ ไม่มีการข้ามกรณีทดสอบ
+- Node 72/72, HTTPS หน้าคำร้อง dev4000 และ production-build4001 อย่างละ 15/15, regression ประวัติ 11/11 ผ่าน รวม Build, Lint, ตรวจรูปแบบ backend และ `git diff --check`
+- รอบ backend เดิมพบ 403 ระหว่างเตรียมบัญชีทดสอบ 2 กรณีใน `EvidenceRevocationTests` และยุติรอบนั้นหลังพบบันทึกเครื่อง Sleep ระหว่างรัน การทดลองนาฬิกาจำลองช้ากว่าเวลาจริง 11 นาทีทำให้คุกกี้หมดอายุและเกิด CSRF403 ซ้ำได้ จึงตรวจครบใหม่ขณะป้องกัน Idle Sleep ชั่วคราว ไม่แก้ระบบล็อกอินหรือขยายอายุคุกกี้ และนำโค้ดวินิจฉัยชั่วคราวออกแล้ว
+- ผู้เขียนตรวจโค้ดแล้ว แต่การตรวจทั้งสาขาโดยผู้ตรวจอิสระยังอยู่ Task8; มือถือจริงและ NAS จริงยังพักตามคำสั่ง ไม่ถือว่าพร้อม Production
 
 ## Task 8: รับงานรวมและส่งต่อ
 
@@ -231,4 +256,4 @@ R08–R12: Tasks1–4,6–7; R14–R15: Tasks3,5–7; R01–R07/R13: regression�
 
 ข้อเสนอในแผนที่ต้องยืนยันพร้อมอนุมัติ: reason1–2000, JSON64KiB, pagination1–100, การจัดrouteใหม่ผ่านdirectory-manageพร้อมscope/MFA, การใช้Adjustmentสำหรับcorrection-onlyแทนการปลอมlive event และการปฏิเสธเปลี่ยนวันเมื่อhistoricalmembershipไม่ตรงsnapshotเดิม ไม่เพิ่มadmin bypassเพื่อแก้ข้อขัดแย้งเหล่านี้
 
-ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–4 ผ่านแล้ว; ขั้นถัดไปคือTask5 เมื่อผู้ใช้ให้ดำเนินการต่อ
+ใช้Native/TDDและwhole-branchreviewตามวิธีเดิม งานแต่ละTaskพึ่งschema/contractของTaskก่อนหน้า ไม่เปิดimplementerหลายคนแก้sharedschemaพร้อมกัน Tasks1–7 ผ่านแล้ว; ขั้นถัดไปคือTask8 รวม independent whole-branch review

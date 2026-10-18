@@ -8,6 +8,7 @@ export type CorrectionCommand = { commandId: string; expectedVersion: number; re
 export type CreateCorrection = { commandId: string; input: SaveCorrection };
 export type ReviseCorrection = { input: SaveCorrection; command: CorrectionCommand };
 export type CorrectionAcknowledgment = { id: string; commandId: string };
+export type CorrectionComparison = { dayId: string | null; baselineMatches: boolean; original: { inUtc: string | null; outUtc: string | null } | null; current: { version: number; workDate: string; inUtc: string; outUtc: string | null; inSite: CorrectionSite | null; outSite: CorrectionSite | null } | null };
 export type CorrectionHistory = {
   revisions: { revision: number; baselineDayVersion: number | null; proposal: CorrectionProposal; createdAtUtc: string }[];
   routes: { revision: number; supervisorId: string; hrCandidateIds: string[]; createdAtUtc: string }[];
@@ -18,5 +19,6 @@ export type CorrectionView = {
   id: string; employeeId: string; originalWorkDate: string; version: number; state: CorrectionState; deadlineUtc: string;
   currentRevision: number; proposal: CorrectionProposal; baselineDayVersion: number | null; actions: CorrectionAction[];
   readBasis: 'Own' | 'Supervisor' | 'Hr' | 'WorkflowSupervisor' | 'WorkflowHr'; history?: CorrectionHistory;
+  comparison?: CorrectionComparison;
 };
 export type CorrectionPage = { items: CorrectionView[]; total: number; pageNumber: number; pageSize: number };

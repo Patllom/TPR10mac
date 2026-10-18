@@ -11,6 +11,7 @@ internal static class CorrectionOpenApi
     {
         var path = context.Description.RelativePath ?? "";
         var post = context.Description.HttpMethod == "POST";
+        operation.Description += "\nรายละเอียดส่ง comparison เฉพาะวัน/เวลา/Site/version ของรายการที่คำร้องอ้างอิง ภายใต้สิทธิ์อ่านคำร้องปัจจุบัน; list ไม่ส่ง comparison. ผู้มีสิทธิ์ workflow อ่านได้ระหว่างต้องตัดสินเท่านั้น ไม่เพิ่มสิทธิ์ประวัติทั่วไป ภาพ หรือ GPS. original คือเวลาจากเหตุการณ์เดิม current คือ effective ปัจจุบัน baselineMatches ใช้เทียบรุ่น ห้ามอ้าง current ว่าเป็น baseline เมื่อรุ่นไม่ตรง; วันจากคำร้องที่อนุมัติแล้วอ้าง adjustment โดยไม่สร้างเหตุการณ์ปลอม.";
         operation.Description += "\nคำร้องแก้ไขเวลา: API ตรวจ session/current grants และ MFA สำหรับหัวหน้า/HR; Admin ไม่มี bypass. readBasis ระบุ Own/Supervisor/Hr/WorkflowSupervisor/WorkflowHr; ไม่มีภาพ GPS หรือ storage locator ในคำร้อง; list ไม่ส่ง history, detail ส่งประวัติตามสิทธิ์. state เป็นเลข 0 Draft, 1 PendingSupervisor, 2 PendingHr, 3 Returned, 4 Approved, 5 Expired. mutation ตอบเฉพาะ id และ commandId ไม่ส่ง proposal/history และไม่เพิ่มสิทธิ์อ่านหลังอนุมัติ ให้แสดงผลสำเร็จแล้วกลับคิว. identity delivery lock จำกัด5วินาที ตรวจ current authorization ก่อนส่ง byte แรก. ใช้ commandId เดิมและ payload เดิมเมื่อผู้ใช้ส่งซ้ำโดยชัดแจ้ง ตรวจ GET/revision ก่อน retry; ห้าม retry อัตโนมัติ. หากสิทธิ์อ่านสิ้นสุดให้กลับคิว ห้ามสรุปว่า rollback จาก404/503. 503 ไม่ logout. no-store.";
         if (post)
         {

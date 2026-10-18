@@ -2,6 +2,8 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Attendance.Access;
 using TPR10.Api.Attendance.Directory;
+using TPR10.Api.Attendance.Evidence;
+using TPR10.Api.Attendance.Recording;
 using TPR10.Api.Auditing;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Authorization;
@@ -47,6 +49,7 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
         if (session.Status is { } denied) throw new AttendanceReadDeniedException(denied);
         var row = await ValidRequests().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new AttendanceReadDeniedException(404);
         var view = await ViewAsync(row, session.ActorId, ct);
+        view = view with { Comparison = await CompareAsync(row, view.BaselineDayVersion, ct) };
         if (!history) return view;
         var revisions = await db.Set<CorrectionRevision>().AsNoTracking().Where(x => x.RequestId == id).OrderBy(x => x.Revision).ToArrayAsync(ct);
         var routes = await db.Set<CorrectionRouteSnapshot>().AsNoTracking().Where(x => x.RequestId == id).OrderBy(x => x.Revision)
@@ -66,6 +69,29 @@ public sealed class CorrectionQueries(Tpr10DbContext db, ScopeAccess identity, I
             History = new(revisions.Select(x => new CorrectionRevisionView(x.Revision, x.BaselineDayVersion,
             CorrectionApproval.Proposal(x), x.CreatedAtUtc)).ToArray(), routes, approvals, reroutes)
         };
+    }
+
+    private async Task<CorrectionComparison> CompareAsync(CorrectionRequest request, long? baseline, CancellationToken ct)
+    {
+        // Called only after request authorization, never as a general attendance read endpoint.
+        var reference = request.DayId ?? await db.Set<AttendanceAdjustment>().AsNoTracking()
+            .Where(x => x.RequestId == request.Id && x.Revision == request.CurrentRevision).Select(x => (Guid?)x.DayId).SingleOrDefaultAsync(ct);
+        if (reference is not { } id) return new(null, baseline is null, null, null);
+        var day = await db.Set<AttendanceDay>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.EmployeeId == request.EmployeeId, ct)
+            ?? throw new AttendanceReadDeniedException(404);
+        var events = await db.Set<AttendanceEvent>().AsNoTracking().Where(x => x.DayId == id).ToArrayAsync(ct);
+        var entered = events.SingleOrDefault(x => x.Action == EvidenceAction.CheckIn);
+        var exited = events.SingleOrDefault(x => x.Action == EvidenceAction.CheckOut);
+        var last = await db.Set<AttendanceAdjustment>().AsNoTracking().Where(x => x.DayId == id).OrderByDescending(x => x.AfterVersion).FirstOrDefaultAsync(ct);
+        var revision = last is null ? null : await db.Set<CorrectionRevision>().AsNoTracking()
+            .SingleAsync(x => x.RequestId == last.RequestId && x.Revision == last.Revision, ct);
+        CorrectionSite? input = revision is null ? entered is null ? null : new(entered.WorkspaceId, entered.ProjectId, entered.SiteId)
+            : new(revision.InWorkspaceId, revision.InProjectId, revision.InSiteId);
+        CorrectionSite? output = day.EffectiveOutUtc is null ? null : revision is null || day.Version > last!.AfterVersion
+            ? exited is null ? null : new(exited.WorkspaceId, exited.ProjectId, exited.SiteId)
+            : new(revision.OutWorkspaceId!.Value, revision.OutProjectId!.Value, revision.OutSiteId!.Value);
+        return new(id, baseline == day.Version, entered is null && exited is null ? null : new(entered?.OccurredAtUtc, exited?.OccurredAtUtc),
+            new(day.Version, day.WorkDate, day.EffectiveInUtc, day.EffectiveOutUtc, input, output));
     }
 
     private async Task<CorrectionView> ViewAsync(CorrectionRequest row, Guid actor, CancellationToken ct)
