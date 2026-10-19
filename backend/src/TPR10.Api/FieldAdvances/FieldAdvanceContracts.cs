@@ -1,0 +1,21 @@
+namespace TPR10.Api.FieldAdvances;
+
+public sealed record FinanceScope(Guid WorkspaceId, Guid? ProjectId);
+public sealed record FinanceDecision(bool Allowed, string Code);
+public sealed record ApprovalBand(int Order, string LevelCode, decimal UpperInclusive);
+public sealed record CategoryRule(Guid Id, string Name, bool Active, string? Unit,
+    decimal? StandardRate, string[] EvidenceTypes);
+public sealed record PolicyContent(int ClearingDays, ApprovalBand[] Bands, CategoryRule[] Categories);
+public sealed record PolicySnapshot(Guid CompanyVersionId, Guid? ProjectVersionId,
+    PolicyContent Content, string ContentHash);
+public sealed record CommandMeta(Guid CommandId, long ExpectedVersion, string Reason);
+public sealed record FinanceResult<T>(int Status, string Code, T? Value);
+public sealed record PolicyView(Guid Id, FinanceScope Scope, string State, long Version,
+    Guid? BaseCompanyVersionId, PolicyContent Content, string ContentHash);
+// RecipientId is an account. A later server resolver must obtain its explicit person identity.
+public sealed record GrantSpec(Guid RecipientId, FinanceScope Scope, string[] Capabilities,
+    string[] DelegableCapabilities, decimal? ApprovalLimit,
+    DateTimeOffset StartsAt, DateTimeOffset? EndsAt);
+public sealed record GrantView(Guid Id, string State, long Version, GrantSpec Spec);
+public sealed record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
+    Guid[] ApproverPersonIds, Guid[] CheckerPersonIds, Guid[] PayerPersonIds);
