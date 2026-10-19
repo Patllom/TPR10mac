@@ -118,7 +118,7 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 - Full run แรกหลังแก้พบเทสต์เดิมสองกรณีเลือก migration ตามลำดับซึ่งเปลี่ยนเมื่อเพิ่ม migration ใหม่: แก้เฉพาะชื่อเป้าหมายใน CorrectionRaceTests ไม่ลด assertions; ผู้ตรวจอีกคนตรวจส่วนแก้ผ่าน
 - Full run สุดท้าย backend **1,726/1,726**, ไม่มี fail/skip, exit0, **43.1539 นาที**; Node **74/74**; frontend/backend Build, Lint, Format และ diff check ผ่าน
 - ตรวจ hash ไฟล์ส่งมอบทั้ง 12 ไฟล์ตรงกับชุดที่ผ่านรีวิว ไม่แก้ฐานข้อมูลจริง ไม่ทดสอบมือถือจริง/NAS จริง และไม่ใช้ผล browser จำลองอ้างแทน
-- ขั้นต่อไปคือ Task 2 กฎหมวด อัตรา และตัวประเมินระดับวงเงิน รอคำสั่งเริ่มจากผู้ใช้
+- ผู้ใช้อนุมัติเริ่ม Task 2 แล้ว ผลและสถานะอยู่ในหัวข้อถัดไป
 
 ### Task 2: กฎหมวด อัตรา และตัวประเมินระดับวงเงิน
 
@@ -126,12 +126,24 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** `PolicyValidation.Validate(PolicyContent content): string[]`; `ApprovalLevelEvaluator.Evaluate(decimal total, PolicySnapshot snapshot): FinanceResult<string[]>` ใช้ records Task1
 
-- [ ] เขียนเทสต์ข้อมูลจำลอง bands `1000.00 / 5000.00`: ยอด `1000.00` ได้หัวหน้า+PM+ระดับแรก, `1000.01` ได้ทุกระดับถึงระดับสอง, `5000.01` คืนไม่รองรับ; ยอด0/ติดลบ/เกินสองตำแหน่งถูกปฏิเสธ
-- [ ] เขียนเทสต์อัตรามาตรฐานขาดหน่วย/ติดลบ, หมวดไม่มีหลักฐาน, IDหมวดซ้ำ, จำนวนวันไม่เป็นบวก และ bandไม่เรียงเพิ่มต้องไม่ผ่าน; ใช้หมวดเริ่มต้นห้าชื่อตาม spec โดยไม่มีอัตราธุรกิจสมมติเปิดใช้
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRulesTests` ให้แดง
-- [ ] ทำ validator และ evaluator: ช่วงเป็น `(ขอบก่อนหน้า, UpperInclusive]`; order ต่อเนื่อง; คืนหัวหน้าและPMเสมอแล้วสะสมระดับบริหาร ห้ามใช้ float หรือฝัง threshold จริง
-- [ ] รันเขียว พร้อม assert ว่า evaluator ไม่สร้างคำขอ/แก้ฐานข้อมูล ตัวอย่าง `Assert.Equal(new[]{"supervisor","project-manager","L1","L2"}, result.Value);`
-- [ ] ตรวจและ commit: `feat: validate field advance policy rules`
+- [x] เขียนเทสต์ข้อมูลจำลอง bands `1000.00 / 5000.00`: ยอด `1000.00` ได้หัวหน้า+PM+ระดับแรก, `1000.01` ได้ทุกระดับถึงระดับสอง, `5000.01` คืนไม่รองรับ; ยอด0/ติดลบ/เกินสองตำแหน่งถูกปฏิเสธ
+- [x] เขียนเทสต์อัตรามาตรฐานขาดหน่วย/ติดลบ, หมวดไม่มีหลักฐาน, IDหมวดซ้ำ, จำนวนวันไม่เป็นบวก และ bandไม่เรียงเพิ่มต้องไม่ผ่าน; ใช้หมวดเริ่มต้นห้าชื่อตาม spec โดยไม่มีอัตราธุรกิจสมมติเปิดใช้
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRulesTests` ให้แดง
+- [x] ทำ validator และ evaluator: ช่วงเป็น `(ขอบก่อนหน้า, UpperInclusive]`; order ต่อเนื่อง; คืนหัวหน้าและPMเสมอแล้วสะสมระดับบริหาร ห้ามใช้ float หรือฝัง threshold จริง
+- [x] รันเขียว พร้อม assert ว่า evaluator ไม่สร้างคำขอ/แก้ฐานข้อมูล ตัวอย่าง `Assert.Equal(new[]{"supervisor","project-manager","L1","L2"}, result.Value);`
+- [x] ตรวจและ commit: `feat: validate field advance policy rules`
+
+**ผลส่งมอบ Task 2 — commit `19027af`, 20 ตุลาคม 2026 (เวลาไทย):**
+
+- เพิ่มตัวตรวจหมวด/อัตรา/หลักฐาน/วันเคลียร์ และตัวประเมินลำดับอนุมัติ ใช้ records เดิม ไม่มี DB/API/UI หรือการตั้งค่าธุรกิจเปิดใช้
+- TDD: behavioral RED 109 กรณี และ RED ข้อจำกัด schema เพิ่ม 14 กรณี ก่อนแก้ให้ focused GREEN 132/132; regression schema เดิม 43/43
+- ผู้ลงมือ Feynman และผู้ตรวจอิสระ Galileo แยกกัน; ตรวจสเปกและคุณภาพผ่าน ไม่มีข้อพบค้าง ตรึง hash ของสามไฟล์ก่อนรันชุดรวม
+- ชุด backend ทั้งหมด **1,858/1,858 ผ่าน**, 0 fail/skip, exit 0, ใช้เวลา 42.9047 นาที; Node **74/74 ผ่าน**, 0 fail/skip
+- `dotnet build backend/TPR10.sln --no-restore` ผ่าน 0 warnings/errors; `dotnet format backend/TPR10.sln --verify-no-changes --no-restore`, `npm run build` และ `npm run lint` ผ่าน exit 0
+- คำสั่งชุดรวม: `dotnet test backend/TPR10.sln --no-build --no-restore --logger 'console;verbosity=normal'`; ทดสอบด้วยฐานทิ้งได้ ไม่แก้ข้อมูลจริง ตรวจ hash สามไฟล์ตรงกับชุดรีวิวหลังเทสต์จบ
+- ข้อจำกัด: hash ตรวจรูปแบบตาม schema ไม่ใช่การยืนยันเนื้อหา; การเลือก snapshot และตรวจสิทธิ์เป็นงานถัดไป ไม่ทำคำขอเงินจริงหรือทดสอบ UI 7A ที่ยังไม่มีใน Task นี้
+- พักมือถือจริง/NAS จริงตามเดิม ไม่ใช้ผลจำลองแทน; ไม่เริ่ม Task 3 และไม่ push/PR/merge
+- ไม่รัน Playwright ใน Task 2 ซึ่งเพิ่มเฉพาะ pure rules ไม่มี route/UI; การตรวจเบราว์เซอร์และเกณฑ์ส่งมอบทั้งโมดูลยังอยู่ Task 8–10 ไม่อ้างว่า Module 7A เสร็จ
 
 ### Task 3: ประเมินสิทธิ์ปัจจุบันและปิดช่องทางข้ามข้อห้าม
 
