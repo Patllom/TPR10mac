@@ -1,0 +1,277 @@
+# Module 7A — แผนพัฒนากติกาและสิทธิ์เงินทดรองออกสนาม (Implementation Plan)
+
+> **สำหรับผู้ดำเนินงาน:** ใช้ `superpowers:subagent-driven-development` (แนะนำ) หรือ `superpowers:executing-plans` เพื่อดำเนินงานทีละ Task รายการ `- [ ]` ใช้ติดตามผลจริง ห้ามข้ามขั้นทดสอบหรือเริ่มก่อนผู้ใช้อนุมัติแผนและเลือกวิธีดำเนินงาน
+
+**เป้าหมาย:** ส่งมอบหน้าจอและบริการกติกาแบบมีฉบับ พร้อมการมอบหมายสิทธิ์สามคนและการตรวจสิทธิ์ที่ 7B–7D ใช้ร่วมกันได้
+
+**สถาปัตยกรรม:** เพิ่มพื้นที่ `FieldAdvances` ใน API เดิม แยกข้อมูล กฎคำนวณ การตรวจสิทธิ์ การมอบหมาย และการอนุมัติกติกา ใช้บัญชี/MFA โครงการ session และ audit เดิม แต่ไม่ใช้สิทธิ์ admin หรือ workflow ลงเวลาแทนสิทธิ์การเงิน ฝั่งเว็บใช้ Next.js และตัวเรียก API/session เดิม โดยทุกกฎสำคัญตรวจที่เซิร์ฟเวอร์
+
+**เทคโนโลยี:** .NET 10, EF Core 10, PostgreSQL, xUnit/Testcontainers; Next.js 15, React 19, TypeScript, Node test runner, Playwright และ ESLint ตามเวอร์ชันที่ล็อกใน repository ไม่เพิ่มไลบรารีโดยไม่มีเหตุผล
+
+**เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
+
+**สถานะแผน:** ผู้ใช้อนุมัติแผนและเลือกแยกผู้ลงมือ/ผู้ตรวจทุก Task แล้ว เริ่มเฉพาะ Task 1 ตามคำสั่งล่าสุด Task 2–10 ยังไม่เริ่ม
+
+## ข้อจำกัดร่วมทุก Task
+
+- ผู้แก้กติกากับผู้อนุมัติต่างคน รวมผู้ร่วมแก้ฉบับนั้นทั้งหมด
+- ผู้เสนอ ผู้อนุมัติ และผู้รับสิทธิ์ต้องเป็นสามคนต่างกัน
+- เพิ่มสิทธิ์ไม่ล้างข้อห้ามจากประวัติคำขอ; admin และสมาชิกทีมไม่มีสิทธิ์การเงินอัตโนมัติ
+- โครงการเฉพาะตรึงฉบับบริษัทฐานจนอนุมัติรับฉบับใหม่; คำขอส่งแล้วไม่เปลี่ยนย้อนหลัง
+- จำนวนเงินเป็นบาทและสตางค์ ใช้ decimal; จำนวนวันเคลียร์เป็นวันปฏิทินและเริ่มวันถัดจากวันจบงาน
+- ไม่ตั้งยอดวงเงิน อัตราจริง หรือจำนวนวันจริงให้บริษัทเอง ตัวเลขในเทสต์เป็นข้อมูลจำลองเท่านั้น
+- ไม่ทำคำขอ จ่าย เคลียร์ คืนเงินจริง หรือระบบเบิกคืนใน7A ไม่ขยาย Module4/5
+- พักมือถือจริงและ NAS จริง ไม่แสดงว่าทดสอบผ่าน; เทสต์เบราว์เซอร์จำลองไม่แทนมือถือจริง
+- ข้อความผู้ใช้และเอกสารภาษาไทย; Dev 4000, Production 4001, HTTPS preview 4443 ไม่เปลี่ยนพอร์ต
+- ไม่เก็บ secrets ลง Git/log/report และไม่ใช้ฐานข้อมูลผู้ใช้จริงในเทสต์
+- ทุก Task ใช้ TDD และตรวจ diff ก่อน commit; ก่อนแจ้งพัฒนาเสร็จต้องผ่าน Test, Build, Lint และ Code Review ทั้งชุด
+
+## จุดเน้นตรวจทานความเสี่ยง (Review Focus)
+
+1. ถอนสิทธิ์พร้อมอนุมัติ: ต้องไม่มีการอนุมัติด้วยสิทธิ์ที่ถูกถอนก่อนธุรกรรมเริ่มมีผล — Task3/4/10
+2. ให้สิทธิ์ทางอ้อมผ่าน role/scope/account API: ต้องไม่กลายเป็นสิทธิ์การเงินโดยข้ามสามคน — Task3
+3. คนเดียวใช้หลายบัญชี/หลายบทบาท: การแยกหน้าที่ต้องยึดตัวตนบุคคลที่เชื่อถือได้ ไม่เชื่อรหัสที่ client ส่ง — Task1/3/5
+4. การรับบริษัทฉบับใหม่และกลับไปใช้บริษัททั้งหมด: ต้องผ่านอนุมัติ ไม่มีค่าปนข้ามฉบับ — Task6/7
+5. กดซ้ำหลังเครือข่ายขาด หรือยอดอยู่ตรงขอบ: ไม่สร้างผลซ้ำ ไม่เลือกระดับผิด — Task2/4/6/10
+
+## ฐานโค้ดและการเตรียมก่อนลงมือ
+
+ตรวจอ้างอิง `origin/main` ที่ `d657c16408ae52cb1ba43d991a438ea5c0daf895` ไม่ใช้ main ใน checkout นี้ซึ่งยังอยู่ `b8b9c0f...` เป็นฐานพัฒนาโดยไม่ตรวจ เอกสารเดิมมีการแก้ค้างอยู่ ห้าม reset/clean/pull ทับ
+
+- [ ] เมื่อแผนอนุมัติ ใช้ skill `using-git-worktrees` ตรวจ worktree ที่มีอยู่ก่อน เลือกหรือสร้าง checkout แยกบน main ที่ตรวจแล้ว ใช้ branch `codex/module-7a-policy-permissions` หากยังไม่มี
+- [ ] นำเฉพาะ spec และแผนฉบับนี้เข้า checkout เป้าหมายโดยไม่แก้ dirty docs เดิม ตรวจ diff ก่อน commit เอกสาร
+- [ ] ตรวจ SDK, Node, Docker/Testcontainers, PostgreSQL fixture และ HTTPS ที่เชื่อถือได้ ห้ามปิดตรวจ certificate เพื่อให้เทสต์ผ่าน
+- [ ] รัน baseline ตามชุดคำสั่งท้ายเอกสารก่อนเปลี่ยนโค้ด บันทึก failure เดิมแยกจากผลของ7A หากฐานเปลี่ยนให้ตรวจ path/signature ใหม่ก่อนทำงาน
+
+คำสั่งในแผนรันจาก root ของ checkout ที่ใช้พัฒนา ไม่ใช่สั่งให้รันในรอบจัดทำแผนนี้
+
+## แผนที่ไฟล์และสัญญาร่วม
+
+ใช้ชื่อย่อต่อไปนี้เฉพาะเพื่อให้อ่านแผนง่าย ต้องขยายเป็น path จริงเมื่อแก้ไฟล์:
+
+- `FA` = `backend/src/TPR10.Api/FieldAdvances`
+- `IT` = `backend/tests/TPR10.Api.IntegrationTests`
+- `WEB` = `app/portal/field-advances/settings`
+
+| พื้นที่ | ไฟล์ใหม่และหน้าที่ |
+|---|---|
+| ข้อมูล | `FA/Data/PolicyEntities.cs`, `GrantEntities.cs`, `FieldAdvanceModelConfiguration.cs` — ฉบับ เนื้อหา ผลตรวจ สิทธิ์ และประวัติคำสั่ง |
+| สัญญา | `FA/FieldAdvanceContracts.cs` — ชนิดข้อมูลร่วม; `FieldAdvanceRegistration.cs` — DI |
+| กฎ | `FA/Policies/PolicyValidation.cs`, `ApprovalLevelEvaluator.cs`, `PolicyResolver.cs`, `PolicyService.cs` |
+| สิทธิ์ | `FA/Access/FinanceCapabilities.cs`, `FinanceAccess.cs`, `SeparationRules.cs`, `FinancePersonResolver.cs` |
+| มอบหมาย | `FA/Grants/GrantService.cs`, `GrantLifecycle.cs`, `FinanceBootstrapCommand.cs` |
+| HTTP | `FA/Policies/PolicyEndpoints.cs`, `FA/Grants/GrantEndpoints.cs`, `FA/FieldAdvanceOpenApiTransformer.cs` |
+| เว็บ | `lib/field-advances/policy-types.ts`, `policy-client.ts`, `policy-view.ts`, `grant-client.ts` |
+| เทสต์ | `IT/FieldAdvanceFixture.cs` และชุด `FieldAdvance*Tests.cs`; `tests/field-advance-*.test.mjs`; `tests/e2e/field-advance-*.spec.ts` |
+
+ไฟล์เดิมที่จะเชื่อม: `Data/Tpr10DbContext.cs`, `Program.cs`, `Organization/EffectiveRolePolicy.cs`, `Organization/OrganizationService.cs`, `Scopes/Assignments/AssignmentService.cs`, `Identity/Accounts/RoleAdministration.cs`, `Identity/Accounts/AccountProvisioning.cs` ใต้ API; เว็บเชื่อม `app/portal/page.tsx` และใช้ `lib/auth/session-fetch.ts` เดิม
+
+### สัญญาที่ต้องสร้างใน Task1
+
+```csharp
+record FinanceScope(Guid WorkspaceId, Guid? ProjectId);
+record FinanceDecision(bool Allowed, string Code);
+record ApprovalBand(int Order, string LevelCode, decimal UpperInclusive);
+record CategoryRule(Guid Id, string Name, bool Active, string? Unit,
+    decimal? StandardRate, string[] EvidenceTypes);
+record PolicyContent(int ClearingDays, ApprovalBand[] Bands, CategoryRule[] Categories);
+record PolicySnapshot(Guid CompanyVersionId, Guid? ProjectVersionId,
+    PolicyContent Content, string ContentHash);
+record CommandMeta(Guid CommandId, long ExpectedVersion, string Reason);
+record FinanceResult<T>(int Status, string Code, T? Value);
+record PolicyView(Guid Id, FinanceScope Scope, string State, long Version,
+    Guid? BaseCompanyVersionId, PolicyContent Content, string ContentHash);
+record GrantSpec(Guid RecipientId, FinanceScope Scope, string[] Capabilities,
+    string[] DelegableCapabilities, decimal? ApprovalLimit,
+    DateTimeOffset StartsAt, DateTimeOffset? EndsAt);
+record GrantView(Guid Id, string State, long Version, GrantSpec Spec);
+record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
+    Guid[] ApproverPersonIds, Guid[] CheckerPersonIds, Guid[] PayerPersonIds);
+```
+
+`RecipientId` เป็นบัญชีที่ resolve เป็นบุคคลฝั่ง server; `Guid` ใน RequestParticipation เป็นตัวตนบุคคล ไม่ใช่บทบาท ชนิดส่วนนี้ใช้เป็นบริบททดสอบก่อนมีคำขอจริง ห้ามเปิด API ให้ client อ้างประวัติมาอนุญาตตัวเอง
+
+ผลผิดพลาดร่วม: 400 ข้อมูลไม่ถูกต้อง, 403 ไม่มีสิทธิ์, 404 ไม่พบในขอบเขต, 409 ฉบับหรือสถานะขัดแย้ง, 503 ระบบที่จำเป็นไม่พร้อม ข้อความไทยไม่เผยข้อมูลต่างโครงการ
+
+## วงจรตรวจและ commit ประจำ Task
+
+ทุก Task ด้านล่างต้องผ่านขั้นแดง → เขียว → ทบทวน โดย test แดงต้องเป็นเหตุจากพฤติกรรมที่ยังไม่มี ไม่ใช่ Docker/ฐานข้อมูลเสีย หลังแก้ให้รันชุดของ Task และเทสต์ส่วนที่กระทบ รัน Build/Lint ก่อน checkpoint commit ใช้ `git add` เฉพาะไฟล์ Task และตรวจ `git diff --cached --check` ไม่ใช้ `git add .` ทับงานผู้อื่น Commit เป็นจุดย่อย ไม่ใช่การรับรอง Module7A เสร็จ
+
+### Task 1: ข้อมูลฉบับกติกาและสิทธิ์ที่รักษาประวัติ
+
+**ไฟล์:** สร้างไฟล์กลุ่มข้อมูล/สัญญาตามแผนที่; เพิ่ม `IT/FieldAdvanceSchemaTests.cs`, `FieldAdvanceFixture.cs`; แก้ `backend/src/TPR10.Api/Data/Tpr10DbContext.cs`; migration `AddFieldAdvancePolicyFoundation` ใต้ `backend/src/TPR10.Api/Data/Migrations` พร้อม snapshot ที่ EF สร้าง (timestamp ให้เครื่องมือสร้างจริง)
+
+**สัญญา:** สร้าง records ด้านบน; `FieldAdvanceModelConfiguration.Configure(ModelBuilder model): void` และ `FieldAdvanceFixture.CreateAsync(PostgresFixture postgres): Task<FieldAdvanceFixture>` สำหรับฐานข้อมูลแยกตามแนว IdentityDatabase เดิม
+
+- [ ] เขียน `FieldAdvanceSchemaTests` ให้พิสูจน์ FK ขอบเขต, ห้ามลบฉบับถูกอ้าง, unique ฉบับ active ต่อ scope, contributor history, command id ซ้ำ และการคืนฐานจาก migration
+- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceSchemaTests` ต้องแดงเพราะ schema ยังไม่มี
+- [ ] สร้าง entities: policy revision/contributor/review, active pointer, grant proposal/review/assignment, command receipt และ bootstrap receipt; ใช้ FK restrict, version bigint, เวลา UTC, เงิน numeric(18,2) ไม่ cascade ลบประวัติ
+- [ ] กำหนดแหล่งตัวตนจาก directory เดิม: resolve บัญชีไปบุคคลที่ใช้งานได้ในบริษัท หากไม่มีหรือกำกวมให้ปฏิเสธ ไม่สร้าง mapping จาก client และไม่ถือ role ID เป็นบุคคล ตรวจโครงสร้าง EmployeeMembership ก่อนกำหนด mapping จริงใน fixture
+- [ ] สร้าง migration ด้วย `dotnet ef migrations add AddFieldAdvancePolicyFoundation --project backend/src/TPR10.Api --output-dir Data/Migrations`; รันเทสต์ซ้ำเขียว และพิสูจน์ไม่มี active policy/financial grant ถูก seed ให้ admin
+- [ ] ตรวจและ commit: `feat: add field advance policy data foundation`
+
+### Task 2: กฎหมวด อัตรา และตัวประเมินระดับวงเงิน
+
+**ไฟล์:** `FA/Policies/PolicyValidation.cs`, `ApprovalLevelEvaluator.cs`; `IT/FieldAdvanceRulesTests.cs`
+
+**สัญญา:** `PolicyValidation.Validate(PolicyContent content): string[]`; `ApprovalLevelEvaluator.Evaluate(decimal total, PolicySnapshot snapshot): FinanceResult<string[]>` ใช้ records Task1
+
+- [ ] เขียนเทสต์ข้อมูลจำลอง bands `1000.00 / 5000.00`: ยอด `1000.00` ได้หัวหน้า+PM+ระดับแรก, `1000.01` ได้ทุกระดับถึงระดับสอง, `5000.01` คืนไม่รองรับ; ยอด0/ติดลบ/เกินสองตำแหน่งถูกปฏิเสธ
+- [ ] เขียนเทสต์อัตรามาตรฐานขาดหน่วย/ติดลบ, หมวดไม่มีหลักฐาน, IDหมวดซ้ำ, จำนวนวันไม่เป็นบวก และ bandไม่เรียงเพิ่มต้องไม่ผ่าน; ใช้หมวดเริ่มต้นห้าชื่อตาม spec โดยไม่มีอัตราธุรกิจสมมติเปิดใช้
+- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRulesTests` ให้แดง
+- [ ] ทำ validator และ evaluator: ช่วงเป็น `(ขอบก่อนหน้า, UpperInclusive]`; order ต่อเนื่อง; คืนหัวหน้าและPMเสมอแล้วสะสมระดับบริหาร ห้ามใช้ float หรือฝัง threshold จริง
+- [ ] รันเขียว พร้อม assert ว่า evaluator ไม่สร้างคำขอ/แก้ฐานข้อมูล ตัวอย่าง `Assert.Equal(new[]{"supervisor","project-manager","L1","L2"}, result.Value);`
+- [ ] ตรวจและ commit: `feat: validate field advance policy rules`
+
+### Task 3: ประเมินสิทธิ์ปัจจุบันและปิดช่องทางข้ามข้อห้าม
+
+**ไฟล์:** กลุ่ม `FA/Access` ทั้งสี่ไฟล์; `IT/FieldAdvanceAccessTests.cs`, `FieldAdvanceBypassTests.cs`; แก้ `Organization/EffectiveRolePolicy.cs`, `Scopes/Assignments/AssignmentService.cs`, `Identity/Accounts/RoleAdministration.cs`, `Identity/Accounts/AccountProvisioning.cs` ตามจุดให้สิทธิ์ที่ตรวจพบ
+
+**สัญญา:** `FinancePersonResolver.ResolveAsync(Guid userId, Guid workspaceId, CancellationToken ct): Task<Guid?>`; `FinanceAccess.CheckAsync(Guid actorId, FinanceScope scope, string capability, CancellationToken ct): Task<FinanceDecision>`; `SeparationRules.Check(Guid personId, string action, RequestParticipation participation): FinanceDecision`
+
+- [ ] เขียน tests admin/PM/teamไม่มี grant → denied; grantคนละproject → denied; ผู้ถูกระงับหรือ MFAไม่ครบ → denied; `SeparationRules.Check(owner,"payment.record",history).Allowed` ต้อง false
+- [ ] เพิ่มชุด pairwise owner/delegate/approver/checker/payer และกรณีเปลี่ยน role/ถอนแล้วให้ใหม่ไม่ล้าง history; บัญชีที่resolveเป็นpersonเดียวกันยังถูกห้าม
+- [ ] รัน filter `FullyQualifiedName~FieldAdvanceAccessTests|FullyQualifiedName~FieldAdvanceBypassTests` ให้แดง
+- [ ] ทำ capability catalog แยก `policy.edit.company`, `policy.edit.project`, `policy.review`, `grant.propose`, `grant.review`, `grant.revoke`, `request.approve`, `finance.check`, `payment.record`, `report.read`; ใช้ grant7A ที่อนุมัติแล้วเท่านั้นเป็นแหล่งอนุญาต ไม่ให้ generic role เปลี่ยนมาเป็น grant โดยอัตโนมัติ
+- [ ] เพิ่มการตรวจ MFA/session และ scoped lifecycle; บังคับว่าการมอบหมายระดับบริษัทไม่หมายถึงขยายสิทธิ์อ่านการเงินทุกโครงการ ใช้ขอบเขตของ capability โดยตรง
+- [ ] รันเทสต์เขียว รวม RoleAuthorizationTests, AssignmentApiTests และ ScopedMfaTests; ตรวจทุก endpoint เก่าที่เพิ่ม role/scope ไม่เป็นทางลัด
+- [ ] ตรวจและ commit: `feat: enforce field advance access boundaries`
+
+### Task 4: เสนอและอนุมัติสิทธิ์สามคน พร้อมการถอนและหมดอายุ
+
+**ไฟล์:** `FA/Grants/GrantService.cs`, `GrantLifecycle.cs`, `GrantEndpoints.cs`; `IT/FieldAdvanceGrantTests.cs`, `FieldAdvanceGrantRaceTests.cs`; เชื่อม `Organization/OrganizationService.cs` เพื่อถอนตามโครงการปิดใช้
+
+**สัญญา:** `GrantService.ProposeAsync(Guid actorId, GrantSpec spec, CommandMeta meta, CancellationToken ct): Task<FinanceResult<GrantView>>`; `ReviewAsync(Guid actorId, Guid proposalId, string decision, CommandMeta meta, CancellationToken ct): Task<FinanceResult<GrantView>>`; `GrantLifecycle.RevokeAsync(Guid actorId, Guid grantId, CommandMeta meta, CancellationToken ct): Task<FinanceResult<GrantView>>`
+
+- [ ] เขียนเทสต์สามคนต่างกันสำเร็จ; คู่ใดซ้ำต้อง403และไม่มี grant; อำนาจมอบหมายไม่ครอบคลุม capability/scope/วงเงินต้อง403; สิทธิ์เริ่มอนาคตยังใช้ไม่ได้และตรงหมดอายุใช้ไม่ได้
+- [ ] เพิ่ม tests reviewส่งกลับ/ปฏิเสธต้องมีเหตุผล; ขยายโครงการ/วงเงิน/เวลาเป็นข้อเสนอใหม่; คืนสิทธิ์ไม่แก้แถว revoked ให้ active; โครงการเปิดใหม่ไม่ฟื้นสิทธิ์
+- [ ] รัน filter `FullyQualifiedName~FieldAdvanceGrant` ให้แดง
+- [ ] ทำ service ด้วย transaction, current identity lock ตามรูปแบบเดิม และ command receipt ผูก actor+scope+payload hash: ส่ง commandเดิมเนื้อหาเดิมคืนผลเดิม ส่งIDเดิมเนื้อหาใหม่409; ระหว่างเปลี่ยนสถานะและ auditต้อง atomic
+- [ ] ตรวจต้นทาง delegable capabilities ของผู้เสนอและผู้ตรวจทั้งเวลาส่งและอนุมัติ; สิทธิ์ grant.propose/review ไม่ทำให้มอบทุก capability ได้; ไม่มีผู้ตรวจให้ค้างไม่ autoapprove
+- [ ] รันเทสต์ race ถอนสิทธิ์กับ review และ audit failure rollback ให้เขียว: ผลสุดท้ายต้องไม่เหลือ grantจากผลอนุมัติที่ใช้สิทธิ์ไม่ถูกต้อง
+- [ ] ตรวจและ commit: `feat: add three-person finance grant workflow`
+
+### Task 5: ตั้งต้นผู้บริหารสิทธิ์โดยไม่ให้ admin อัตโนมัติ
+
+**ไฟล์:** `FA/Grants/FinanceBootstrapCommand.cs`; เชื่อม `backend/src/TPR10.Api/Program.cs`; `IT/FieldAdvanceBootstrapTests.cs`; สร้าง `docs/runbooks/module-7a-policy-permissions.md`
+
+**สัญญา:** `FinanceBootstrapCommand.RunAsync(string[] args): Task<int>` เป็น local operator command ไม่ใช่ HTTP endpoint และไม่รันระหว่าง startเว็บปกติ
+
+- [ ] เขียน tests ฐานใหม่ไม่มี grant; รายชื่อรับ/ผู้รับรอง/ผู้ตรวจขาดหรือคนไม่ตรงข้อกำหนดปฏิเสธ; รันซ้ำหลังตั้งต้นแล้วปฏิเสธแม้ภายหลัง revokeทั้งหมด; failauditไม่ทิ้งgrantครึ่งชุด
+- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceBootstrapTests` ให้แดง
+- [ ] รับ manifest ผ่าน stdin มีบัญชีจริง/บุคคล/บริษัท, อำนาจมอบหมาย, ผู้รับรอง, ผู้ตรวจอิสระ และเลขอ้างอิงหลักฐานภายนอก ตรวจ user active/MFA enrollmentและตัวตนต่างกันตามข้อกำหนด; ไม่มี defaultadmin; บันทึก receiptถาวรครั้งเดียวต่อบริษัท
+- [ ] ระบุใน runbook ว่ารหัสผู้รับรองในmanifestไม่ใช่ลายเซ็นดิจิทัล ผู้ปฏิบัติการต้องตรวจเอกสารบริษัทจริงและผู้ตรวจอิสระก่อนรัน การควบคุมผู้เข้าถึงเครื่อง/DBอยู่นอกแอป; ไม่อ้างว่าการกรอกชื่อเป็นการรับรองที่ตรวจด้วยคริปโต
+- [ ] รันเขียวบนDBทิ้งได้เท่านั้น ห้ามตั้งต้นสิทธิ์บนข้อมูลจริงระหว่างพัฒนา; บันทึกการกู้คืนกรณีผู้บริหารสิทธิ์หายว่าไม่เปิดbootstrapซ้ำอัตโนมัติ ต้องกระบวนการบริษัทอนุมัติแยก
+- [ ] ตรวจและ commit: `feat: add controlled finance permission bootstrap`
+
+### Task 6: วงจรฉบับกติกาและการเปิดใช้แบบ atomic
+
+**ไฟล์:** `FA/Policies/PolicyService.cs`, `PolicyEndpoints.cs`; `FA/FieldAdvanceRegistration.cs`, `FieldAdvanceOpenApiTransformer.cs`; `IT/FieldAdvancePolicyTests.cs`, `FieldAdvancePolicyRaceTests.cs`, `FieldAdvanceOpenApiTests.cs`; เชื่อม `Program.cs`
+
+**สัญญา:** `CreateDraftAsync(Guid actorId, FinanceScope scope, Guid? baseCompanyVersionId, PolicyContent content, CommandMeta meta, CancellationToken ct): Task<FinanceResult<PolicyView>>`; `UpdateDraftAsync(Guid actorId, Guid id, PolicyContent content, CommandMeta meta, CancellationToken ct): Task<FinanceResult<PolicyView>>`; `SubmitAsync(Guid actorId, Guid id, CommandMeta meta, CancellationToken ct)` และ `ReviewAsync(Guid actorId, Guid id, string decision, CommandMeta meta, CancellationToken ct)` คืน `Task<FinanceResult<PolicyView>>` ทั้งคู่
+
+- [ ] เขียน tests สร้าง/แก้/ส่ง/อนุมัติ, contributorคนใดอนุมัติไม่ได้, pendingแก้ตรงไม่ได้, returnedแก้แล้วต้องส่งใหม่, rejectedไม่reuseapproval, activeimmutable
+- [ ] เพิ่ม tests โครงการอ่อน/เข้มกว่าบริษัทได้แต่ผู้ตรวจต้องมีสิทธิ์บริษัท; เปลี่ยนกลับ inheritผ่านreview; เปิดสองdraftพร้อมกันต้องมีactiveเดียวและตรวจ expected active revision
+- [ ] รัน filter `FullyQualifiedName~FieldAdvancePolicy|FullyQualifiedName~FieldAdvanceOpenApi` ให้แดง
+- [ ] ทำ endpointsใต้ `/api/v1/field-advances` สำหรับ `policies`, `policies/{id}`, `policies/{id}/submit`, `policies/{id}/review`, `grants`, `grants/{id}/review`, `grants/{id}/revoke` โดย POST/PUTมีCSRF, MFA, no-storeและขอบเขตตรวจจากserver; ไม่มี DELETEประวัติ
+- [ ] ผูก reviewกับhash/versionที่ผู้ตรวจเห็น เก็บcontributorข้ามการส่งกลับและrevisionsที่แก้จากฉบับเดิม เปิดใช้/retireฉบับก่อน/audit/receiptในธุรกรรมเดียว พร้อมใช้ผล Task2/3
+- [ ] รันเขียวรวม tests faultก่อนcommit/ระหว่างaudit และ staleversion409; OpenAPIไม่เปิดprobes production
+- [ ] ตรวจและ commit: `feat: add versioned finance policy approval`
+
+### Task 7: เลือกฉบับกติกา ประเมินตัวอย่าง และ API อ่านที่ไม่รั่วข้อมูล
+
+**ไฟล์:** `FA/Policies/PolicyResolver.cs`, `PolicyReadService.cs`; เพิ่ม routesใน `PolicyEndpoints.cs`; `IT/FieldAdvanceResolverTests.cs`, `FieldAdvanceReadTests.cs`
+
+**สัญญา:** `PolicyResolver.ResolveAsync(FinanceScope scope, DateTimeOffset asOf, CancellationToken ct): Task<FinanceResult<PolicySnapshot>>`; `PolicyReadService.ListAsync(Guid actorId, FinanceScope scope, int page, int pageSize, CancellationToken ct): Task<FinanceResult<PolicyView[]>>`; `PreviewAsync(Guid actorId, FinanceScope scope, decimal total, CancellationToken ct): Task<FinanceResult<string[]>>`
+
+- [ ] เขียน tests inheritได้บริษัทล่าสุด, overrideยังใช้baseเก่าและรายงานต้องทบทวน, rebaseหลังreviewจึงใช้ใหม่, กลับinheritต้องreview, ไม่มีกติกาคืน409ไม่สร้างค่าเอง
+- [ ] เขียน tests snapshotก่อน/หลังเปลี่ยนกติกา: `Assert.Equal(oldHash, savedSnapshot.ContentHash); Assert.NotEqual(oldHash,newSnapshot.ContentHash);` เก็บชุดsnapshotเป็นข้อมูลimmutable ไม่คืน EF trackedobjectให้แก้
+- [ ] รัน filter `FullyQualifiedName~FieldAdvanceResolver|FullyQualifiedName~FieldAdvanceRead` ให้แดง
+- [ ] ทำ GET policy/history/review queue ภายใต้scopeที่ตรวจ และ POST `policies/preview` เป็นread-onlyด้านธุรกิจ; filterก่อนนับ/แบ่งหน้า ห้ามเผยชื่อโครงการหรือจำนวนรายการต่างscope; snapshotมีIDบริษัท/โครงการ/hashและเนื้อหาที่คำนวณแล้ว
+- [ ] รันเขียวเพิ่ม unauthorized list/details/preview/history, pagingผิด, directIDต่างบริษัท และยืนยันpreviewไม่มีwriteธุรกิจ; freezeกติกาไม่freezeสิทธิ์
+- [ ] ตรวจและ commit: `feat: resolve and preview effective finance policies`
+
+### Task 8: หน้าจอกติกาบริษัท โครงการ หมวด และการตรวจฉบับ
+
+**ไฟล์:** `lib/field-advances/policy-types.ts`, `policy-client.ts`, `policy-view.ts`; สร้าง `WEB/page.tsx`, `WEB/company/page.tsx`, `WEB/projects/[projectId]/page.tsx`, `WEB/categories/page.tsx`, `WEB/reviews/page.tsx`, `WEB/PolicyEditor.tsx`; เชื่อม `app/portal/page.tsx`; `tests/field-advance-policy.test.mjs`, `tests/e2e/field-advance-policy.spec.ts`
+
+**สัญญา:** TS typesตรงrecords Task1; `loadPolicies(scope: FinanceScope): Promise<PolicyView[]>`, `savePolicy(id: string | null, scope: FinanceScope, content: PolicyContent, meta: CommandMeta): Promise<PolicyView>`, `reviewPolicy(id: string, decision: 'approve'|'return'|'reject', meta: CommandMeta): Promise<PolicyView>`; clientใช้session-fetchเดิม ไม่เก็บtokenใหม่ในlocalStorage
+
+- [ ] เขียนNode testsจากแนว `tests/helpers/load-ts.mjs`: mappingสถานะ/ที่มา, decimalเป็นstringบนwireไม่ผ่าน JS float, 409บังคับโหลดใหม่, 403ไม่โชว์ข้อมูลเก่า
+- [ ] เขียนPlaywrightแยกบัญชีeditor/reviewer: draft→submit→compare→approve; editorเห็นปุ่มไม่พอแต่เรียกAPIก็403; overrideแสดงbaseเก่า+ต้องทบทวน; categoryปิดไม่ลบhistory
+- [ ] รัน `node --test tests/field-advance-policy.test.mjs` และ `npx playwright test tests/e2e/field-advance-policy.spec.ts` ให้แดงบนfixtureทิ้งได้
+- [ ] ทำหน้าจอไทยครบตามspec แสดงฉบับ/ที่มา/diff/reason/error/empty/loading และpreviewวงเงิน แยก standardrate readonlyจากquantity ไม่ทำฟอร์มคำขอเงินจริง
+- [ ] รันเขียว; ตรวจkeyboard labels และlayoutจอแคบในเบราว์เซอร์จำลอง โดยระบุชัดว่าไม่ใช่ทดสอบมือถือจริง
+- [ ] ตรวจและ commit: `feat: add finance policy management screens`
+
+### Task 9: หน้าจอมอบหมายสิทธิ์ งานรอตรวจ และประวัติ
+
+**ไฟล์:** `lib/field-advances/grant-client.ts`; `WEB/grants/page.tsx`, `WEB/history/page.tsx`, `WEB/GrantEditor.tsx`; รวมqueueสิทธิ์ใน `WEB/reviews/page.tsx`; `tests/field-advance-grant.test.mjs`, `tests/e2e/field-advance-grant.spec.ts`; เพิ่ม `backend/tests/TPR10.E2E.Fixture/FieldAdvanceSeed.cs` และเชื่อมfixture `Program.cs`
+
+**สัญญา:** `proposeGrant(spec: GrantSpec, meta: CommandMeta): Promise<GrantView>`; `reviewGrant(id: string, decision: 'approve'|'return'|'reject', meta: CommandMeta): Promise<GrantView>`; `revokeGrant(id: string, meta: CommandMeta): Promise<GrantView>` — ข้อมูลบุคคลที่เลือกมาจากAPIที่กรองscope ไม่โหลดผู้ใช้ทั้งระบบลงbrowser
+
+- [ ] เขียนNode testsช่วงเวลา/สถานะ/เหตุผล และmappingข้อผิดพลาดโดยไม่แสดงpayloadต่างscope
+- [ ] เขียนE2Eใช้สามบัญชีและผู้รับจริง: เสนอ→ตรวจ→เริ่มใช้, ผู้รับreviewตัวเองไม่ได้, ถอนแล้วsessionเดิมทำต่อไม่ได้, ไม่มีautoapproveเมื่อผู้ตรวจไม่พอ
+- [ ] รัน `node --test tests/field-advance-grant.test.mjs` และ `npx playwright test tests/e2e/field-advance-grant.spec.ts` ให้แดง
+- [ ] ทำUIระบุcapabilities/ขอบเขต/เวลา/ผู้เกี่ยวข้อง แสดงdiffก่อนต่ออายุหรือเพิ่มอำนาจ; ทำhistoryตามสิทธิ์; fixtureใช้เฉพาะTesting ไม่เพิ่มบัญชีจริงหรือเปิดbootstrapในproduction
+- [ ] รันเขียวรวม scenarioเปลี่ยนroleแล้วข้อมูลไม่มีสิทธิ์ต้องหายจากหน้าจอและAPI; ตารางประวัติไม่รวมยอดคำขอหรือหลักฐานการเงินจริง
+- [ ] ตรวจและ commit: `feat: add finance permission workflow screens`
+
+### Task 10: ตรวจรวม ความเสียหายจำลอง และเตรียมส่งมอบ7A
+
+**ไฟล์:** `IT/FieldAdvanceDeliveryTests.cs`, `FieldAdvanceAtomicityTests.cs`; `docs/runbooks/module-7a-policy-permissions.md`; สร้าง `docs/reports/2026-10-19-module-7a-verification.md` โดยเขียนเวลารันจริงในเนื้อหา ไม่อ้างวันที่ชื่อไฟล์เป็นวันทดสอบ
+
+**สัญญา:** ใช้บริการTask1–9โดยไม่เพิ่มendpointธุรกิจใหม่ ส่งมอบรายงานคำสั่ง/exit code/จำนวนผ่าน-ไม่ผ่าน/commit/ข้อจำกัด และรายการตรวจเกณฑ์ A01–A12
+
+- [ ] เพิ่ม testsโจมตีทางAPIเดิม/aliasperson, parallelapprove/revoke, replaycommandข้ามscope, faultaudit, company/project inactive→activeไม่ฟื้นสิทธิ์ และsnapshotยังอ่านย้อนหลังได้โดยไม่คงสิทธิ์เก่า
+- [ ] รัน filter `FullyQualifiedName~FieldAdvanceDelivery|FullyQualifiedName~FieldAdvanceAtomicity` ก่อนแก้ หากพบช่องโหว่ให้เก็บเทสต์แดงแล้วแก้เฉพาะเจ้าของโค้ด ไม่ลดassertionเพื่อผ่าน
+- [ ] รันชุดตรวจทั้งหมดด้านล่างและบันทึกผลจริง ไม่ใช้จำนวนเทสต์จากModule6เป็นหลักฐานใหม่
+- [ ] ทำCode Reviewทั้งbranchกับspec A01–A12: แก้ข้อพบ เพิ่มregressionและรันชุดที่กระทบซ้ำ; ไม่มีประเด็นความถูกต้อง/สิทธิ์ค้างที่ยังไม่ตัดสิน
+- [ ] ตรวจ migration บนฐานทิ้งได้: applyจากฐานเดิม, backup/restore และ downgradeเมื่อไม่มีข้อมูล7A; หากมีประวัติแล้ว downgradeต้องหยุดอย่างปลอดภัย ไม่ลบประวัติการเงินเพื่อย้อนรุ่น
+- [ ] เติมrunbookตั้งต้น/เปลี่ยนฉบับ/revoke/เหตุขัดข้อง/ข้อจำกัดinfra และรายงานว่า realmobile/NAS deferred, requestเงินจริง7B–7Dยังไม่ส่งมอบ
+- [ ] ตรวจและ commit: `test: verify field advance policy delivery`; หยุดให้ผู้ใช้ตรวจผล ไม่ push/เปิดPR/mergeจนได้รับคำสั่ง
+
+## ชุดคำสั่งตรวจจริงก่อนแจ้งพัฒนาเสร็จ
+
+ใช้ฐานทดสอบจากTestcontainersตาม `IT/PostgresFixture.cs` และE2E fixtureที่แยกจากข้อมูลจริง; เริ่มAPI/เว็บ/HTTPSตามrunbookเดิมและยืนยัน environmentก่อนรัน ไม่ใส่secretsในคำสั่งหรือเอกสาร
+
+```sh
+dotnet test backend/tests/TPR10.Api.IntegrationTests
+dotnet build backend/src/TPR10.Api
+dotnet format backend/src/TPR10.Api --verify-no-changes
+npm test
+npm run build
+npm run lint
+npx playwright test
+git diff --check
+```
+
+คาดหวัง: ทุกคำสั่ง exit0 และไม่มีtestsที่ข้ามด้วยเหตุไม่ได้เตรียมระบบโดยไม่รายงาน Playwrightใช้Firefox/HTTPSจริงตามconfigและไม่ปิดTLSตรวจสอบ รันชุด7AและregressionบนDev4000 แล้วบนProduction build4001ผ่านproxy4443ทีละชุด บันทึกโหมดแยกกัน; `npm run build`อย่างเดียวไม่แทนการทดสอบproduction
+
+หาก environmentไม่พร้อม ให้รายงานว่า “ยังตรวจไม่ครบ” ไม่แจ้งว่างานพัฒนาเสร็จ Test/Build/Lintไม่ต้องรันเพื่ออ้างผลในรอบเขียนแผน เพราะยังไม่มีโค้ด7A
+
+## การครอบคลุมเอกสารและผลทบทวนแผน
+
+| เกณฑ์จากspec | Taskเจ้าของ |
+|---|---|
+| A01 ฉบับและผู้ร่วมแก้ | 1,6,8 |
+| A02 วงเงินและระดับ | 2,7 |
+| A03 override/snapshot | 6,7,8 |
+| A04 หมวดอัตราหลักฐาน | 2,6,8 |
+| A05 สามคนต่างกัน | 1,3,4,5,9 |
+| A06 ปิดทางลัด | 3,4,10 |
+| A07 ข้อมูลข้ามscope/admin | 3,7,8,9 |
+| A08 อายุและประวัติข้อห้าม | 3,4,9,10 |
+| A09 คำสั่งซ้ำและฉบับชน | 4,6,8,10 |
+| A10 atomic rollback | 1,4,5,6,10 |
+| A11 หน้าจอไทย | 8,9 |
+| A12 regressionระบบเดิม | 3,10 |
+
+แผนตรวจชื่อสัญญาระหว่างTasks ขอบเขตและจุดเสี่ยงทั้งห้ากลุ่มแล้ว จุดตั้งค่าเฉพาะบริษัทไม่ถูกแทนด้วยตัวเลขสมมติ รายละเอียดการปัดเศษจำนวน×อัตราของรายการคำขอยังเป็นขอบเขต7Bตามspec ไม่ทำเครื่องคำนวณค่าใช้จ่ายเพิ่มใน7A
+
+## วิธีดำเนินงานให้ผู้ใช้เลือกหลังตรวจแผน
+
+1. **แยกผู้ลงมือและผู้ตรวจราย Task (แนะนำ):** ใช้ subagentใหม่ทำแต่ละTask และผู้ตรวจใหม่ตรวจทุกTaskก่อนต่อ แล้วตรวจรวมbranch เหมาะกับสิทธิ์และข้อมูลการเงิน แต่ใช้ทรัพยากรมากกว่า
+2. **ดำเนินงานในแชตนี้:** ผู้ช่วยหลักทำทีละTaskและให้ผู้ตรวจอิสระตรวจbranchตอนท้าย ใช้ทรัพยากรน้อยกว่า แต่ไม่มีผู้ตรวจอิสระคั่นทุกTask
+
+ทั้งสองวิธีต้องได้รับอนุมัติแผนก่อนเริ่ม และทำ TDD/Code Review/Test/Build/Lint ตามเกณฑ์เดียวกัน
