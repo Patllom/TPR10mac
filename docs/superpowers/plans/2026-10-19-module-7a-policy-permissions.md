@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** ผู้ใช้อนุมัติแผนและเลือกแยกผู้ลงมือ/ผู้ตรวจทุก Task แล้ว เริ่มเฉพาะ Task 1 ตามคำสั่งล่าสุด Task 2–10 ยังไม่เริ่ม
+**สถานะแผน:** Task 1 เสร็จและผ่านผู้ตรวจอิสระแล้ว 19 ตุลาคม 2569; Task 2–10 ยังไม่เริ่ม ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -103,12 +103,22 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** สร้าง records ด้านบน; `FieldAdvanceModelConfiguration.Configure(ModelBuilder model): void` และ `FieldAdvanceFixture.CreateAsync(PostgresFixture postgres): Task<FieldAdvanceFixture>` สำหรับฐานข้อมูลแยกตามแนว IdentityDatabase เดิม
 
-- [ ] เขียน `FieldAdvanceSchemaTests` ให้พิสูจน์ FK ขอบเขต, ห้ามลบฉบับถูกอ้าง, unique ฉบับ active ต่อ scope, contributor history, command id ซ้ำ และการคืนฐานจาก migration
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceSchemaTests` ต้องแดงเพราะ schema ยังไม่มี
-- [ ] สร้าง entities: policy revision/contributor/review, active pointer, grant proposal/review/assignment, command receipt และ bootstrap receipt; ใช้ FK restrict, version bigint, เวลา UTC, เงิน numeric(18,2) ไม่ cascade ลบประวัติ
-- [ ] กำหนดแหล่งตัวตนจาก directory เดิม: resolve บัญชีไปบุคคลที่ใช้งานได้ในบริษัท หากไม่มีหรือกำกวมให้ปฏิเสธ ไม่สร้าง mapping จาก client และไม่ถือ role ID เป็นบุคคล ตรวจโครงสร้าง EmployeeMembership ก่อนกำหนด mapping จริงใน fixture
-- [ ] สร้าง migration ด้วย `dotnet ef migrations add AddFieldAdvancePolicyFoundation --project backend/src/TPR10.Api --output-dir Data/Migrations`; รันเทสต์ซ้ำเขียว และพิสูจน์ไม่มี active policy/financial grant ถูก seed ให้ admin
-- [ ] ตรวจและ commit: `feat: add field advance policy data foundation`
+- [x] เขียน `FieldAdvanceSchemaTests` ให้พิสูจน์ FK ขอบเขต, ห้ามลบฉบับถูกอ้าง, unique ฉบับ active ต่อ scope, contributor history, command id ซ้ำ และการคืนฐานจาก migration
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceSchemaTests` ต้องแดงเพราะ schema ยังไม่มี
+- [x] สร้าง entities: policy revision/contributor/review, active pointer, grant proposal/review/assignment, command receipt และ bootstrap receipt; ใช้ FK restrict, version bigint, เวลา UTC, เงิน numeric(18,2) ไม่ cascade ลบประวัติ
+- [x] ตรวจ directory เดิมและวาง schema ตัวตน: EmployeeMembership ไม่มีบุคคลอิสระ จึงเพิ่ม FinancePerson และการผูกบัญชีที่ระบุชัด/เก็บประวัติ ไม่อนุมานจาก role หรือ client; บริการ resolve สมาชิกที่ยังใช้งานและปฏิเสธข้อมูลขาด/กำกวมอยู่ Task3 และ governance อยู่ Task5 ตามคำตัดสินขอบเขต
+- [x] สร้าง migration ด้วย `dotnet ef migrations add AddFieldAdvancePolicyFoundation --project backend/src/TPR10.Api --output-dir Data/Migrations`; รันเทสต์ซ้ำเขียว และพิสูจน์ไม่มี active policy/financial grant ถูก seed ให้ admin
+- [x] ตรวจและ commit: `feat: add field advance policy data foundation`
+
+**ผลส่งมอบ Task 1 — commit `dcd222d`:**
+
+- โครงสร้างฉบับกติกา สิทธิ์ ประวัติ ตัวตน สัญญาข้อมูล และ migration `20261019142031_AddFieldAdvancePolicyFoundation`; ยังไม่มีหน้าจอ/API ใช้งานการเงิน
+- TDD: schema ขาดก่อนพัฒนา → เทสต์เขียว; เพิ่มเทสต์ rollback และการเขียนประวัติพร้อมกัน ผลเฉพาะ 43/43; รวม regression ที่เกี่ยวข้อง 58/58
+- ผู้ตรวจอิสระพบกรณี Repeatable Read ที่ล็อกอย่างเดียวกันข้อมูลซ้อนไม่ได้: พิสูจน์แดง แก้เป็น write conflict โดยไม่เปลี่ยน security_version และตรวจซ้ำผ่านทั้งสามระดับ transaction
+- Full run แรกหลังแก้พบเทสต์เดิมสองกรณีเลือก migration ตามลำดับซึ่งเปลี่ยนเมื่อเพิ่ม migration ใหม่: แก้เฉพาะชื่อเป้าหมายใน CorrectionRaceTests ไม่ลด assertions; ผู้ตรวจอีกคนตรวจส่วนแก้ผ่าน
+- Full run สุดท้าย backend **1,726/1,726**, ไม่มี fail/skip, exit0, **43.1539 นาที**; Node **74/74**; frontend/backend Build, Lint, Format และ diff check ผ่าน
+- ตรวจ hash ไฟล์ส่งมอบทั้ง 12 ไฟล์ตรงกับชุดที่ผ่านรีวิว ไม่แก้ฐานข้อมูลจริง ไม่ทดสอบมือถือจริง/NAS จริง และไม่ใช้ผล browser จำลองอ้างแทน
+- ขั้นต่อไปคือ Task 2 กฎหมวด อัตรา และตัวประเมินระดับวงเงิน รอคำสั่งเริ่มจากผู้ใช้
 
 ### Task 2: กฎหมวด อัตรา และตัวประเมินระดับวงเงิน
 
