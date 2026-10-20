@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Data;
+using TPR10.Api.FieldAdvances.Data;
+using TPR10.Api.Identity;
+using TPR10.Api.Identity.Data;
+using TPR10.Api.Identity.Sessions;
 
 namespace TPR10.Api.IntegrationTests;
 
@@ -33,6 +37,85 @@ internal sealed class FieldAdvanceFixture(IdentityDatabase database) : IAsyncDis
 
     internal IdentityDatabase Database { get; } = database;
     internal Tpr10DbContext CreateContext() => Database.CreateContext();
+    internal ManualTimeProvider Clock { get; init; } = new();
+
+    internal async Task<RequestSession> SessionAsync(Guid userId)
+    {
+        await using var db = CreateContext();
+        var now = Clock.GetUtcNow();
+        var session = new IdentitySession
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TokenHash = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32),
+            Stage = SessionStage.Active,
+            SecurityVersion = (await db.Set<IdentityUser>().SingleAsync(x => x.Id == userId)).SecurityVersion,
+            CreatedAtUtc = now,
+            LastSeenAtUtc = now,
+            ExpiresAtUtc = now.AddHours(1),
+            MfaVerifiedAtUtc = now
+        };
+        db.Add(session);
+        if (!await db.Set<MfaFactor>().AnyAsync(x => x.UserId == userId))
+            db.Add(new MfaFactor
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                ProtectedSecret = "test-only-unused",
+                CreatedAtUtc = now,
+                ConfirmedAtUtc = now
+            });
+        await db.SaveChangesAsync();
+        return new RequestSession { Entity = session };
+    }
+
+    // Explicit test-only approved records; this is not a production grant workflow.
+    internal async Task<Guid> ApprovedGrantAsync(string capability, Guid? projectId, string[]? delegable = null)
+    {
+        await using var db = CreateContext();
+        var now = Clock.GetUtcNow().AddMinutes(-1);
+        var proposal = new GrantProposal
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            ProjectId = projectId,
+            RecipientId = RecipientId,
+            RecipientPersonId = RecipientPersonId,
+            ProposedBy = AuthorId,
+            ProposedByPersonId = AuthorPersonId,
+            State = "Approved",
+            Capabilities = [capability],
+            DelegableCapabilities = delegable ?? [],
+            StartsAtUtc = now,
+            CreatedAtUtc = now,
+            Reason = "ข้อเสนอจำลอง"
+        };
+        var review = new GrantReview
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            ProposalId = proposal.Id,
+            ReviewerId = ReviewerId,
+            ReviewerPersonId = ReviewerPersonId,
+            Outcome = "Approved",
+            CreatedAtUtc = now,
+            Reason = "ผลตรวจจำลอง"
+        };
+        var assignment = new GrantAssignment
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            ProjectId = projectId,
+            ProposalId = proposal.Id,
+            ReviewId = review.Id,
+            CreatedBy = ReviewerId,
+            CreatedAtUtc = now,
+            Reason = "สิทธิ์จำลอง"
+        };
+        db.AddRange(proposal, review, assignment);
+        await db.SaveChangesAsync();
+        return assignment.Id;
+    }
 
     public static async Task<FieldAdvanceFixture> CreateAsync(PostgresFixture postgres)
     {
