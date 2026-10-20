@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** Task 1–3 เสร็จและผ่านผู้ตรวจอิสระแล้ว ณ 20 ตุลาคม 2569; Task 3 ผ่าน Test, Build, Lint ครบและ commit ในเครื่องแล้ว ยังไม่เริ่ม Task 4–10 ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
+**สถานะแผน:** Task 1–4 เสร็จและผ่านผู้ตรวจอิสระแล้ว ณ 20 ตุลาคม 2569; Task 4 ผ่าน Test, Build, Lint ครบและ commit ในเครื่องแล้ว ยังไม่เริ่ม Task 5–10 ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -181,13 +181,31 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** `GrantService.ProposeAsync(Guid actorId, GrantSpec spec, CommandMeta meta, CancellationToken ct): Task<FinanceResult<GrantView>>`; `ReviewAsync(Guid actorId, Guid proposalId, string decision, CommandMeta meta, CancellationToken ct): Task<FinanceResult<GrantView>>`; `GrantLifecycle.RevokeAsync(Guid actorId, Guid grantId, CommandMeta meta, CancellationToken ct): Task<FinanceResult<GrantView>>`
 
-- [ ] เขียนเทสต์สามคนต่างกันสำเร็จ; คู่ใดซ้ำต้อง403และไม่มี grant; อำนาจมอบหมายไม่ครอบคลุม capability/scope/วงเงินต้อง403; สิทธิ์เริ่มอนาคตยังใช้ไม่ได้และตรงหมดอายุใช้ไม่ได้
-- [ ] เพิ่ม tests reviewส่งกลับ/ปฏิเสธต้องมีเหตุผล; ขยายโครงการ/วงเงิน/เวลาเป็นข้อเสนอใหม่; คืนสิทธิ์ไม่แก้แถว revoked ให้ active; โครงการเปิดใหม่ไม่ฟื้นสิทธิ์
-- [ ] รัน filter `FullyQualifiedName~FieldAdvanceGrant` ให้แดง
-- [ ] ทำ service ด้วย transaction, current identity lock ตามรูปแบบเดิม และ command receipt ผูก actor+scope+payload hash: ส่ง commandเดิมเนื้อหาเดิมคืนผลเดิม ส่งIDเดิมเนื้อหาใหม่409; ระหว่างเปลี่ยนสถานะและ auditต้อง atomic
-- [ ] ตรวจต้นทาง delegable capabilities ของผู้เสนอและผู้ตรวจทั้งเวลาส่งและอนุมัติ; สิทธิ์ grant.propose/review ไม่ทำให้มอบทุก capability ได้; ไม่มีผู้ตรวจให้ค้างไม่ autoapprove
-- [ ] รันเทสต์ race ถอนสิทธิ์กับ review และ audit failure rollback ให้เขียว: ผลสุดท้ายต้องไม่เหลือ grantจากผลอนุมัติที่ใช้สิทธิ์ไม่ถูกต้อง
-- [ ] ตรวจและ commit: `feat: add three-person finance grant workflow`
+- [x] เขียนเทสต์สามคนต่างกันสำเร็จ; คู่ใดซ้ำต้อง403และไม่มี grant; อำนาจมอบหมายไม่ครอบคลุม capability/scope/วงเงินต้อง403; สิทธิ์เริ่มอนาคตยังใช้ไม่ได้และตรงหมดอายุใช้ไม่ได้
+- [x] เพิ่ม tests reviewส่งกลับ/ปฏิเสธต้องมีเหตุผล; ขยายโครงการ/วงเงิน/เวลาเป็นข้อเสนอใหม่; คืนสิทธิ์ไม่แก้แถว revoked ให้ active; โครงการเปิดใหม่ไม่ฟื้นสิทธิ์
+- [x] รัน filter `FullyQualifiedName~FieldAdvanceGrant` ให้แดง
+- [x] ทำ service ด้วย transaction, current identity lock ตามรูปแบบเดิม และ command receipt ผูก actor+scope+payload hash: ส่ง commandเดิมเนื้อหาเดิมคืนผลเดิม ส่งIDเดิมเนื้อหาใหม่409; ระหว่างเปลี่ยนสถานะและ auditต้อง atomic
+- [x] ตรวจต้นทาง delegable capabilities ของผู้เสนอและผู้ตรวจทั้งเวลาส่งและอนุมัติ; สิทธิ์ grant.propose/review ไม่ทำให้มอบทุก capability ได้; ไม่มีผู้ตรวจให้ค้างไม่ autoapprove
+- [x] รันเทสต์ race ถอนสิทธิ์กับ review และ audit failure rollback ให้เขียว: ผลสุดท้ายต้องไม่เหลือ grantจากผลอนุมัติที่ใช้สิทธิ์ไม่ถูกต้อง
+- [x] ตรวจและ commit: `feat: add three-person finance grant workflow`
+
+**ผลส่งมอบ Task 4 — 20 ตุลาคม 2569, commit `22471c5`:**
+
+- เพิ่ม `GrantService`, `GrantLifecycle`, `GrantEndpoints` และเทสต์สองไฟล์ รวม 5 ไฟล์; ไม่มี schema/migration ใหม่ ไม่เปิด route/DI ซึ่งอยู่ Task 6 และใช้ hook ถอนสิทธิ์เมื่อปิดบริษัท/โครงการของ Task 3 เดิมโดยไม่เพิ่ม audit ซ้ำ
+- ผู้ใช้ยืนยัน: ไม่ระบุวงเงินไม่ใช่ไม่จำกัด ไม่รวมวงเงินหลายสิทธิ์; อายุสิทธิ์ที่มอบไม่เกินอำนาจมอบหมายทั้งผู้เสนอและผู้ตรวจ; ผู้ถอนต้องมีสิทธิ์ถอนและอำนาจมอบหมายครอบคลุมประเภทสิทธิ์/วงเงินเป้าหมาย
+- รองรับเสนอ → อนุมัติ/ส่งกลับ/ปฏิเสธ, ถอนพร้อมรักษาประวัติ, ตรวจบุคคลสามคนต่างกัน, scope ตรงบริษัทและโครงการ, current session/MFA, ตรวจอำนาจซ้ำก่อนบันทึก และ receipt กันคำสั่งซ้ำใน transaction เดียวกับ audit
+- ผู้ลงมือ Planck และผู้ตรวจ Lagrange แยกกัน; ผู้ตรวจให้ผ่านข้อกำหนดและคุณภาพ ไม่มี Critical/Important
+- ข้อเสนอ Minor ส่งต่อ Task 10: เพิ่มกรณี replay หลัง session/capability ถูกถอน และ workflow สำเร็จใน company scope ที่ ProjectId=null; ผู้ตรวจพบว่าโค้ดปัจจุบันถูกต้อง เป็นข้อเสนอเพิ่ม coverage ไม่ใช่บั๊กที่พบ
+- TDD: behavioral RED ของบริการ 3 กรณีและ adapter 6 กรณี ก่อน implementation; focused สุดท้าย **80/80** ไม่มี fail/skip; impacted regression **508/508** ไม่มี fail/skip exit 0 ใช้เวลา 10m26s
+- ประวัติ failure: แก้ EF concurrency โดย attach entity ที่ version เดิมก่อนเปลี่ยน version; แก้ fixture เตรียม MFA ก่อน concurrent commands ไม่เปลี่ยน assertions หรือกฎ production เพื่อให้ผ่าน
+- Backend Build/Format ของผู้ลงมือผ่าน; Node รอบส่งมอบ **74/74**, frontend Build/Lint และ diff check ผ่าน exit 0
+- HTTPS/Firefox regression ผ่าน **50/50**: Next Production 4001 (identity 13, scopes 11, boundary 2) และ Dev 4000 (identity 13, scopes 11), API Testing บนฐานทิ้งได้ ไม่ปิดตรวจ TLS; Dev มี diagnostic `NS_BINDING_ABORTED` ระหว่าง navigation แต่ assertions ผ่าน ไม่ใช่การรับรองมือถือจริงหรือ production API deployment
+- Backend ทั้งชุด **2,026/2,026 ผ่าน ไม่มี fail/skip**, exit 0 ใช้เวลา **44.4000 นาที** ด้วย `dotnet test backend/TPR10.sln --no-build --no-restore --logger 'console;verbosity=normal'`; จำนวน focused/regression ด้านบนเป็นชุดย่อย ไม่บวกซ้ำกับยอดรวม
+- หลังชุดรวมจบ `dotnet build backend/TPR10.sln --no-restore` ผ่าน 0 warnings/errors; `dotnet format backend/TPR10.sln --verify-no-changes --no-restore` และ diff check ผ่าน exit 0; SHA-256 ทั้ง **5/5 ไฟล์** ตรงชุดที่ผู้ตรวจอ่านและที่รันทดสอบ ก่อน commit
+- Node `npm test` 74/74, `npm run build`, `npm run lint` ผ่านรอบส่งมอบ; ไม่ใช้ผลการรันจาก Task เก่าเป็นหลักฐานใหม่
+- ใช้ `ExpectedVersion=1` ตอนเสนอ; review ใช้ proposal version; revoke ใช้ assignment ID/version ส่วน GrantView จาก propose/review เป็น proposal ID — Task 6 ต้องเชื่อม target ให้ตรง
+- ส่งกลับเป็น Draft ตาม schema แต่ไม่เปิดการแก้ประวัติ approved/revoked; เสนอข้อมูลที่แก้เป็นข้อเสนอใหม่ได้ ยังไม่สร้าง workflow คำขอเงินจริง 7B–7D
+- ยังพักมือถือจริง/NAS จริง ไม่มี push/PR/merge และไม่เริ่ม Task 5
 
 ### Task 5: ตั้งต้นผู้บริหารสิทธิ์โดยไม่ให้ admin อัตโนมัติ
 
