@@ -25,6 +25,12 @@ using TPR10.Api.Attendance.Recording;
 using TPR10.Api.Attendance.History;
 using TPR10.Api.Attendance.Corrections;
 
+if (args.Any(x => x.StartsWith("--bootstrap-finance", StringComparison.Ordinal)))
+{
+    Environment.ExitCode = await TPR10.Api.FieldAdvances.Grants.FinanceBootstrapCommand.RunAsync(args);
+    return;
+}
+
 if (args.Any(x => x.StartsWith("--bootstrap-admin", StringComparison.Ordinal)))
 {
     Environment.ExitCode = await BootstrapCommand.RunAsync(args);
