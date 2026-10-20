@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** Task 1 เสร็จและผ่านผู้ตรวจอิสระแล้ว 19 ตุลาคม 2569; Task 2–10 ยังไม่เริ่ม ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
+**สถานะแผน:** Task 1–3 เสร็จและผ่านผู้ตรวจอิสระแล้ว ณ 20 ตุลาคม 2569; Task 3 ผ่าน Test, Build, Lint ครบและ commit ในเครื่องแล้ว ยังไม่เริ่ม Task 4–10 ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -151,13 +151,29 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** `FinancePersonResolver.ResolveAsync(Guid userId, Guid workspaceId, CancellationToken ct): Task<Guid?>`; `FinanceAccess.CheckAsync(Guid actorId, FinanceScope scope, string capability, CancellationToken ct): Task<FinanceDecision>`; `SeparationRules.Check(Guid personId, string action, RequestParticipation participation): FinanceDecision`
 
-- [ ] เขียน tests admin/PM/teamไม่มี grant → denied; grantคนละproject → denied; ผู้ถูกระงับหรือ MFAไม่ครบ → denied; `SeparationRules.Check(owner,"payment.record",history).Allowed` ต้อง false
-- [ ] เพิ่มชุด pairwise owner/delegate/approver/checker/payer และกรณีเปลี่ยน role/ถอนแล้วให้ใหม่ไม่ล้าง history; บัญชีที่resolveเป็นpersonเดียวกันยังถูกห้าม
-- [ ] รัน filter `FullyQualifiedName~FieldAdvanceAccessTests|FullyQualifiedName~FieldAdvanceBypassTests` ให้แดง
-- [ ] ทำ capability catalog แยก `policy.edit.company`, `policy.edit.project`, `policy.review`, `grant.propose`, `grant.review`, `grant.revoke`, `request.approve`, `finance.check`, `payment.record`, `report.read`; ใช้ grant7A ที่อนุมัติแล้วเท่านั้นเป็นแหล่งอนุญาต ไม่ให้ generic role เปลี่ยนมาเป็น grant โดยอัตโนมัติ
-- [ ] เพิ่มการตรวจ MFA/session และ scoped lifecycle; บังคับว่าการมอบหมายระดับบริษัทไม่หมายถึงขยายสิทธิ์อ่านการเงินทุกโครงการ ใช้ขอบเขตของ capability โดยตรง
-- [ ] รันเทสต์เขียว รวม RoleAuthorizationTests, AssignmentApiTests และ ScopedMfaTests; ตรวจทุก endpoint เก่าที่เพิ่ม role/scope ไม่เป็นทางลัด
-- [ ] ตรวจและ commit: `feat: enforce field advance access boundaries`
+- [x] เขียน tests admin/PM/teamไม่มี grant → denied; grantคนละproject → denied; ผู้ถูกระงับหรือ MFAไม่ครบ → denied; `SeparationRules.Check(owner,"payment.record",history).Allowed` ต้อง false
+- [x] เพิ่มชุด pairwise owner/delegate/approver/checker/payer และกรณีเปลี่ยน role/ถอนแล้วให้ใหม่ไม่ล้าง history; บัญชีที่resolveเป็นpersonเดียวกันยังถูกห้าม
+- [x] รัน filter `FullyQualifiedName~FieldAdvanceAccessTests|FullyQualifiedName~FieldAdvanceBypassTests` ให้แดง
+- [x] ทำ capability catalog แยก `policy.edit.company`, `policy.edit.project`, `policy.review`, `grant.propose`, `grant.review`, `grant.revoke`, `request.approve`, `finance.check`, `payment.record`, `report.read`; ใช้ grant7A ที่อนุมัติแล้วเท่านั้นเป็นแหล่งอนุญาต ไม่ให้ generic role เปลี่ยนมาเป็น grant โดยอัตโนมัติ
+- [x] เพิ่มการตรวจ MFA/session และ scoped lifecycle; บังคับว่าการมอบหมายระดับบริษัทไม่หมายถึงขยายสิทธิ์อ่านการเงินทุกโครงการ ใช้ขอบเขตของ capability โดยตรง
+- [x] รันเทสต์เขียว รวม RoleAuthorizationTests, AssignmentApiTests และ ScopedMfaTests; ตรวจทุก endpoint เก่าที่เพิ่ม role/scope ไม่เป็นทางลัด
+- [x] ตรวจและ commit: `feat: enforce field advance access boundaries`
+
+**ผลตรวจ Task 3 — 20 ตุลาคม 2569:**
+
+- ผู้ใช้ยืนยันสิทธิ์บริหารระดับบริษัทใช้กับโครงการได้เฉพาะที่ได้รับมอบหมายเป็นรายโครงการ ทุก capability จับคู่บริษัทและโครงการตรงกัน; grant บริษัทที่ไม่ระบุโครงการไม่เป็น wildcard และไม่เพิ่มสิทธิ์ดูข้อมูลการเงิน
+- เพิ่ม `FinanceCapabilities`, `FinancePersonResolver`, `FinanceAccess`, `SeparationRules` และเทสต์; แก้ `AssignmentLifecycle` ให้ถอนสิทธิ์การเงินพร้อมประวัติและ session เมื่อปิดบริษัทหรือโครงการ ไม่ฟื้นสิทธิ์เก่าเมื่อเปิดใหม่ และไม่ถอนทั้งโครงการจากการปิดเพียงไซต์
+- ตรวจเส้นทาง role/account/scope เดิมด้วย HTTP tests แล้ว ไม่มีการแปลง generic role เป็น finance grant จึงไม่แก้ไฟล์เดิมที่มี guard เพียงพอ
+- ผู้ลงมือ Meitner และผู้ตรวจอิสระ Beauvoir แยกกัน ผู้ตรวจให้ผ่านทั้งข้อกำหนดและคุณภาพโค้ด ไม่มี findings; ทบทวนไฟล์ implementation/tests 8 ไฟล์ที่ตรึง hash ไว้
+- TDD: หลังแก้ข้อมูล fixture แล้ว RED 64 → GREEN 64; เพิ่ม lifecycle tests พบ assertion ล้มเหลว 3 กรณีและแก้ implementation จน GREEN 87; เพิ่ม catalog regression แล้วชุดสุดท้ายเป็น Task 3 จำนวน 88 เทสต์ + regression 104 รวม **192 ผ่าน ไม่มีล้มเหลวหรือข้าม**
+- Backend ทั้งชุด **1,946/1,946 ผ่าน ไม่มีล้มเหลวหรือข้าม** exit 0 ใช้เวลา 43.4753 นาที รัน `dotnet test backend/TPR10.sln --no-build --no-restore --logger 'console;verbosity=normal'` หลังผ่านรีวิว; ผล 192 รายการข้างต้นเป็นชุดย่อย ไม่บวกซ้ำเป็นจำนวนเทสต์ทั้งหมด
+- ตรวจรอบสุดท้ายหลังชุดรวม: `dotnet build backend/TPR10.sln --no-restore` ผ่าน 0 warnings/errors, `dotnet format backend/TPR10.sln --verify-no-changes --no-restore` ผ่าน; `npm test` **74/74**, `npm run build`, `npm run lint` และ `git diff --check` ผ่าน exit 0 ตรวจ SHA-256 implementation/tests ทั้ง 8 ไฟล์ตรงกับชุดที่รีวิว
+- HTTPS/Firefox บนฐานทดสอบทิ้งได้: Production 4001 ผ่าน identity 13 + scopes 11 + boundary 2; Dev 4000 ผ่าน identity 13 + scopes 11 รวม **50/50 ตามโหมดที่กำหนด** โดยไม่ปิดตรวจ TLS ไม่ใช้ข้อมูลจริง และไม่ใช่มือถือจริง
+- Production ในชุดเบราว์เซอร์หมายถึง Next production build; API ใช้ environment `Testing` สำหรับ fixture ไม่ใช่หลักฐานทดสอบ API deployment จริง ส่วน API Production boundary ตรวจในชุด backend เดิม
+- ประวัติการตรวจผิดโหมด: นำ `scopes-boundary.spec.ts` ซึ่งระบุ Production ไปรันใน Dev ได้ 1 failed/1 passed เพราะ Dev เปิด technical UI ตาม `lib/scopes/server-scopes.ts:6` และแบบเดิม `docs/architecture/module-3-task-8.md` คาดไว้ ตรวจซ้ำหลัง Production build ได้ 2/2 ผ่านโดยไม่แก้ assertion หรือโค้ด ไม่มีการนับรอบ Dev ที่ผิดโหมดว่าเป็นผลผ่าน
+- log เบราว์เซอร์รอบแรกมีคำเตือนตัวแปรสีชนกัน และ Dev มี diagnostic `NS_BINDING_ABORTED` ระหว่าง navigation; เทสต์ในโหมดที่กำหนดผ่าน แต่ไม่ได้อ้างว่า log ทุกชุดว่างจากคำเตือน
+- ข้อผูกพันสำหรับ Task 4–7: caller ต้องถือ transaction และ identity lock `7241002` ตลอดรายการที่คุ้มครองสิทธิ์ ใช้ scope ของเป้าหมายจริง และส่งประวัติบุคคลจากเซิร์ฟเวอร์ให้ `SeparationRules` ไม่รับประวัติจาก client; Task 3 ยังไม่สร้าง endpoint/workflow การเงิน
+- Implementation commit `ddcf6809deb5923dbf3e24721527662f5d80c4a9` — `feat: enforce field advance access boundaries`; ไม่มี push/PR/merge ยังพักมือถือจริง/NAS จริง และรออนุมัติเริ่ม Task 4
 
 ### Task 4: เสนอและอนุมัติสิทธิ์สามคน พร้อมการถอนและหมดอายุ
 
