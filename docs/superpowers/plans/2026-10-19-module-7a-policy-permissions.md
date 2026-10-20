@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** Task 1–4 เสร็จและผ่านผู้ตรวจอิสระแล้ว ณ 20 ตุลาคม 2569; Task 4 ผ่าน Test, Build, Lint ครบและ commit ในเครื่องแล้ว ยังไม่เริ่ม Task 5–10 ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
+**สถานะแผน:** Task 1–5 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 21 ตุลาคม 2569; ขั้นถัดไป Task 6 ยังไม่เริ่ม ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -213,12 +213,25 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** `FinanceBootstrapCommand.RunAsync(string[] args): Task<int>` เป็น local operator command ไม่ใช่ HTTP endpoint และไม่รันระหว่าง startเว็บปกติ
 
-- [ ] เขียน tests ฐานใหม่ไม่มี grant; รายชื่อรับ/ผู้รับรอง/ผู้ตรวจขาดหรือคนไม่ตรงข้อกำหนดปฏิเสธ; รันซ้ำหลังตั้งต้นแล้วปฏิเสธแม้ภายหลัง revokeทั้งหมด; failauditไม่ทิ้งgrantครึ่งชุด
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceBootstrapTests` ให้แดง
-- [ ] รับ manifest ผ่าน stdin มีบัญชีจริง/บุคคล/บริษัท, อำนาจมอบหมาย, ผู้รับรอง, ผู้ตรวจอิสระ และเลขอ้างอิงหลักฐานภายนอก ตรวจ user active/MFA enrollmentและตัวตนต่างกันตามข้อกำหนด; ไม่มี defaultadmin; บันทึก receiptถาวรครั้งเดียวต่อบริษัท
-- [ ] ระบุใน runbook ว่ารหัสผู้รับรองในmanifestไม่ใช่ลายเซ็นดิจิทัล ผู้ปฏิบัติการต้องตรวจเอกสารบริษัทจริงและผู้ตรวจอิสระก่อนรัน การควบคุมผู้เข้าถึงเครื่อง/DBอยู่นอกแอป; ไม่อ้างว่าการกรอกชื่อเป็นการรับรองที่ตรวจด้วยคริปโต
-- [ ] รันเขียวบนDBทิ้งได้เท่านั้น ห้ามตั้งต้นสิทธิ์บนข้อมูลจริงระหว่างพัฒนา; บันทึกการกู้คืนกรณีผู้บริหารสิทธิ์หายว่าไม่เปิดbootstrapซ้ำอัตโนมัติ ต้องกระบวนการบริษัทอนุมัติแยก
-- [ ] ตรวจและ commit: `feat: add controlled finance permission bootstrap`
+- [x] เขียน tests ฐานใหม่ไม่มี grant; รายชื่อรับ/ผู้รับรอง/ผู้ตรวจขาดหรือคนไม่ตรงข้อกำหนดปฏิเสธ; รันซ้ำหลังตั้งต้นแล้วปฏิเสธแม้ภายหลัง revokeทั้งหมด; failauditไม่ทิ้งgrantครึ่งชุด
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceBootstrapTests` ให้แดง
+- [x] รับ manifest ผ่าน stdin มีบัญชีจริง/บุคคล/บริษัท, อำนาจมอบหมาย, ผู้รับรอง, ผู้ตรวจอิสระ และเลขอ้างอิงหลักฐานภายนอก ตรวจ user active/MFA enrollmentและตัวตนต่างกันตามข้อกำหนด; ไม่มี defaultadmin; บันทึก receiptถาวรครั้งเดียวต่อบริษัท
+- [x] ระบุใน runbook ว่ารหัสผู้รับรองในmanifestไม่ใช่ลายเซ็นดิจิทัล ผู้ปฏิบัติการต้องตรวจเอกสารบริษัทจริงและผู้ตรวจอิสระก่อนรัน การควบคุมผู้เข้าถึงเครื่อง/DBอยู่นอกแอป; ไม่อ้างว่าการกรอกชื่อเป็นการรับรองที่ตรวจด้วยคริปโต
+- [x] รันเขียวบนDBทิ้งได้เท่านั้น ห้ามตั้งต้นสิทธิ์บนข้อมูลจริงระหว่างพัฒนา; บันทึกการกู้คืนกรณีผู้บริหารสิทธิ์หายว่าไม่เปิดbootstrapซ้ำอัตโนมัติ ต้องกระบวนการบริษัทอนุมัติแยก
+- [x] ตรวจและ commit: `feat: add controlled finance permission bootstrap` — `901f6a6`
+
+#### ผลตรวจ Task 5 — 21 ตุลาคม 2569
+
+- ผู้ลงมือ Faraday แยกจากผู้ตรวจ Anscombe; ผู้ตรวจอนุมัติทั้งข้อกำหนดและคุณภาพ ไม่พบข้อแก้ไขจากชุด 4 ไฟล์
+- ยืนยันสามกติกาตาม spec §3.4: mapping ระบุชัด/ปฏิเสธขัดแย้ง, แยกผู้รับรอง–ผู้ตรวจ–ผู้รันออกจากกันและผู้รับทั้งหมด, สิทธิ์ใช้งานตั้งต้นเฉพาะบริหารสิทธิ์
+- TDD พิสูจน์ CLI stub คืนผลไม่ตรงที่คาดก่อน implementation; focused **76/76** และ impacted regression **178/178** ผ่าน ไม่มี fail/skip ใช้ executable และ PostgreSQL ทิ้งได้จริง
+- แยก fixture/setup failures ออกจาก RED; แก้ fixture ประวัติ immutable และ DbContext ต่อคำขอ ไม่ลด assertion หรือเปลี่ยน GrantService เดิมเพื่อให้ผ่าน
+- Format รอบแรกไม่ผ่าน whitespace สองไฟล์ใหม่ แก้เฉพาะช่องว่างและตรวจเนื้อหาตัด whitespace ตรงเดิม; Build/Format หลังแก้ผ่าน
+- เว็บรอบสุดท้าย Node **74/74**, Build และ Lint ผ่าน; HTTPS **50/50** ผ่าน (Next Production 26, Dev 24; API Testing บนฐานทิ้งได้) ไม่ปิดตรวจ TLS ไม่ทดแทนมือถือจริง; Dev มี diagnostic `NS_BINDING_ABORTED` ระหว่าง navigation แต่ assertions ผ่าน
+- Backend ทั้ง solution **2,102/2,102 ผ่าน ไม่มี fail/skip**, exit 0 ใช้เวลา **45.2692 นาที** จาก `dotnet test backend/TPR10.sln --no-build --no-restore --logger 'console;verbosity=normal'`; focused/regression เป็นชุดย่อย ไม่บวกซ้ำกับยอดรวม
+- รอบส่งมอบ `dotnet build backend/TPR10.sln --no-restore` ผ่าน 0 warnings/errors; `dotnet format backend/TPR10.sln --verify-no-changes --no-restore` และ `git diff --check` ผ่าน exit 0; SHA-256 ทั้ง **4/4 ไฟล์** ตรงกับชุดที่รีวิวและรันเทสต์ก่อน commit
+- บันทึกโค้ด เทสต์ และคู่มือใน local commit `901f6a6`; ไม่ใช้ผลจาก Task ก่อนเป็นหลักฐานของรอบนี้
+- ไม่รัน bootstrap บนข้อมูลจริง ไม่ push/PR/merge ไม่เริ่ม Task 6; มือถือจริงและ NAS จริงยังพักไว้
 
 ### Task 6: วงจรฉบับกติกาและการเปิดใช้แบบ atomic
 
