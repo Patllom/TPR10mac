@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** Task 1–7 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 21 ตุลาคม 2569; Task 8–10 ยังไม่เริ่ม ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
+**สถานะแผน:** Task 1–8 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 21 ตุลาคม 2569; Task 9–10 ยังไม่เริ่ม ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -294,16 +294,30 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 ### Task 8: หน้าจอกติกาบริษัท โครงการ หมวด และการตรวจฉบับ
 
+**ข้อยืนยันก่อนลงมือ (21 ตุลาคม 2569):** ผู้ใช้ยืนยันให้เพิ่มรายการขอบเขตการเงินเฉพาะโครงการ/ชื่อ/สิทธิ์ที่บัญชีปัจจุบันเข้าถึงได้จริง ไม่เปิดรายชื่อโครงการอื่นหรือทะเบียนสิทธิ์ ผู้แก้ไขและผู้ตรวจในขอบเขตโครงการอ่านเฉพาะรหัส/เนื้อหา/hash ของกติกาบริษัทฐานเดิมและฉบับล่าสุดเพื่อเทียบและจัดทำฉบับใหม่ได้ แต่ไม่เปิดประวัติบริษัททั้งหมดหรือค้นฉบับอื่นโดยอิสระ จำนวนเงินบน HTTP ของกติกาและเว็บใช้ข้อความเพื่อรักษาสตางค์ โดย API ยังคงรับตัวเลขจาก client เดิมผ่าน .NET decimal โดยตรง และไม่เปลี่ยน hash หลักฐานหรือใบรับคำสั่งภายในเดิม
+
+**ขอบเขตทดสอบ:** ย้ายเฉพาะ fixture กติกาแบบทิ้งได้จากส่วนเตรียม Task 9 มาใช้พิสูจน์หน้าจอ Task 8 ไม่ทำหน้าจอมอบหมายสิทธิ์หรือ bootstrap ฐานจริง ตัวแก้ไขกติกาแก้อัตรามาตรฐานได้ตามสิทธิ์และต้องผ่านอนุมัติ ส่วนการใช้จำนวน × อัตราในคำขอเงินจริงยังเป็นงานถัดไป
+
 **ไฟล์:** `lib/field-advances/policy-types.ts`, `policy-client.ts`, `policy-view.ts`; สร้าง `WEB/page.tsx`, `WEB/company/page.tsx`, `WEB/projects/[projectId]/page.tsx`, `WEB/categories/page.tsx`, `WEB/reviews/page.tsx`, `WEB/PolicyEditor.tsx`; เชื่อม `app/portal/page.tsx`; `tests/field-advance-policy.test.mjs`, `tests/e2e/field-advance-policy.spec.ts`
 
 **สัญญา:** TS typesตรงrecords Task1; `loadPolicies(scope: FinanceScope): Promise<PolicyView[]>`, `savePolicy(id: string | null, scope: FinanceScope, content: PolicyContent, meta: CommandMeta): Promise<PolicyView>`, `reviewPolicy(id: string, decision: 'approve'|'return'|'reject', meta: CommandMeta): Promise<PolicyView>`; clientใช้session-fetchเดิม ไม่เก็บtokenใหม่ในlocalStorage
 
-- [ ] เขียนNode testsจากแนว `tests/helpers/load-ts.mjs`: mappingสถานะ/ที่มา, decimalเป็นstringบนwireไม่ผ่าน JS float, 409บังคับโหลดใหม่, 403ไม่โชว์ข้อมูลเก่า
-- [ ] เขียนPlaywrightแยกบัญชีeditor/reviewer: draft→submit→compare→approve; editorเห็นปุ่มไม่พอแต่เรียกAPIก็403; overrideแสดงbaseเก่า+ต้องทบทวน; categoryปิดไม่ลบhistory
-- [ ] รัน `node --test tests/field-advance-policy.test.mjs` และ `npx playwright test tests/e2e/field-advance-policy.spec.ts` ให้แดงบนfixtureทิ้งได้
-- [ ] ทำหน้าจอไทยครบตามspec แสดงฉบับ/ที่มา/diff/reason/error/empty/loading และpreviewวงเงิน แยก standardrate readonlyจากquantity ไม่ทำฟอร์มคำขอเงินจริง
-- [ ] รันเขียว; ตรวจkeyboard labels และlayoutจอแคบในเบราว์เซอร์จำลอง โดยระบุชัดว่าไม่ใช่ทดสอบมือถือจริง
-- [ ] ตรวจและ commit: `feat: add finance policy management screens`
+- [x] เขียนNode testsจากแนว `tests/helpers/load-ts.mjs`: mappingสถานะ/ที่มา, decimalเป็นstringบนwireไม่ผ่าน JS float, 409บังคับโหลดใหม่, 403ไม่โชว์ข้อมูลเก่า
+- [x] เขียนPlaywrightแยกบัญชีeditor/reviewer: draft→submit→compare→approve; editorเห็นปุ่มไม่พอแต่เรียกAPIก็403; overrideแสดงbaseเก่า+ต้องทบทวน; categoryปิดไม่ลบhistory
+- [x] รันเทสต์ให้แดงก่อนพัฒนาบน fixture ทิ้งได้ตามบันทึก TDD และเพิ่ม RED สำหรับข้อพบจากรีวิวทั้งสองจุด
+- [x] ทำหน้าจอไทยครบตามspec แสดงฉบับ/ที่มา/diff/reason/error/empty/loading และpreviewวงเงิน ไม่ทำฟอร์มคำขอเงินจริง; ตัวแก้ไขกติกาแก้อัตราได้ตามสิทธิ์และต้องผ่านอนุมัติตามข้อยืนยันข้างต้น
+- [x] รันเขียว; ตรวจkeyboard labels และlayoutจอแคบในเบราว์เซอร์จำลอง โดยระบุชัดว่าไม่ใช่ทดสอบมือถือจริง
+- [x] ตรวจและ commit: `feat: add finance policy management screens` — `fb98728`
+
+**ผลตรวจ Task 8 — 21 ตุลาคม 2569**
+
+- แยก Linnaeus ผู้ลงมือและ Gibbs ผู้ตรวจ ใช้ TDD; แก้ Important สองจุดแล้วตรวจซ้ำผ่าน: การเทียบฉบับต้องใช้ฐานของฉบับร่างหลังเปลี่ยนฐาน/บันทึก และต้องล้างผล preview เดิมเมื่ออนุมัติกติกาใหม่ มี regression RED→GREEN ทั้งคู่ ไม่มี Critical/Important ค้างจากรีวิว Task นี้
+- Backend ทั้ง solution ผ่าน **2,218/2,218** ไม่มี fail/skip ใช้เวลา **50.2824 นาที**; focused 76 และ impacted 698 เป็นชุดย่อย ไม่บวกซ้ำ
+- เว็บ **92/92** ผ่าน; Build และ Lint ผ่านครบ Backend Build 0 warnings/errors, format verify และ diff check ผ่าน ตรวจ SHA-256 ตรงกับไฟล์ที่รีวิว **24/24**
+- HTTPS Task 8 ผ่าน **Dev 8/8 และ Production 8/8**; regression เดิมครอบคลุม **50 กรณี** จากรอบที่สำเร็จ (Production 26, Dev 24) ใช้ข้อมูลและ CA เฉพาะชุดทดสอบ ไม่เปลี่ยน trust store หรือข้อมูลจริง
+- ข้อจำกัดที่ยังติดตาม: regression login มี timeout ก่อนกรอกข้อมูลเพราะช่องยัง disabled ในบางรอบ รันซ้ำพร้อม diagnostics ผ่านโดยไม่เปลี่ยน assertion หรือเพิ่ม timeout แต่ยังพิสูจน์สาเหตุไม่ได้ จึงไม่อ้างว่าแก้ถาวร; คำเตือน NO_COLOR/FORCE_COLOR เก็บติดตามใน Task 10
+- หน้าจอและ API ใช้สิทธิ์การเงินปัจจุบัน/ขอบเขตจริง ไม่ให้ admin หรือสมาชิกทีมเข้าถึงอัตโนมัติ; จำนวนเงินบน wire เป็นข้อความ ไม่คำนวณผ่าน JS float
+- Commit เฉพาะในเครื่อง ยังไม่ push/PR/merge ไม่มี migration/bootstrap จริง พักมือถือจริงและ NAS จริง งานถัดไปคือ Task 9 เมื่อผู้ใช้สั่ง
 
 ### Task 9: หน้าจอมอบหมายสิทธิ์ งานรอตรวจ และประวัติ
 
