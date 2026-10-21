@@ -2427,6 +2427,19 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("reason");
 
+                    b.Property<string>("ReviewedContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("reviewed_content_hash");
+
+                    b.Property<string>("ReviewedContentJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("reviewed_content_json");
+
+                    b.Property<long?>("ReviewedVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reviewed_version");
+
                     b.Property<Guid>("ReviewerId")
                         .HasColumnType("uuid")
                         .HasColumnName("reviewer_id");
@@ -2452,6 +2465,8 @@ namespace TPR10.Api.Data.Migrations
                             t.HasCheckConstraint("ck_field_advance_policy_reviews_reason", "length(btrim(reason)) BETWEEN 1 AND 2000");
 
                             t.HasCheckConstraint("ck_field_advance_policy_reviews_time", "isfinite(created_at_utc)");
+
+                            t.HasCheckConstraint("ck_field_advance_review_evidence", "(reviewed_version IS NULL AND reviewed_content_hash IS NULL AND reviewed_content_json IS NULL) OR (reviewed_version IS NOT NULL AND reviewed_version>=1 AND reviewed_content_hash IS NOT NULL AND reviewed_content_hash ~ '^[a-f0-9]{64}$' AND reviewed_content_json IS NOT NULL AND jsonb_typeof(reviewed_content_json)='object')");
                         });
                 });
 
@@ -2496,6 +2511,19 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by_person_id");
 
+                    b.Property<Guid?>("ExpectedActiveRevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expected_active_revision_id");
+
+                    b.Property<long>("ExpectedActiveVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_active_version");
+
+                    b.Property<string>("Mode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("mode");
+
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uuid")
                         .HasColumnName("project_id");
@@ -2511,6 +2539,10 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("scope_project_id")
                         .HasComputedColumnSql("COALESCE(project_id,'00000000-0000-0000-0000-000000000000'::uuid)", true);
+
+                    b.Property<Guid?>("SourcePolicyRevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_policy_revision_id");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -2539,11 +2571,20 @@ namespace TPR10.Api.Data.Migrations
 
                     b.HasIndex("WorkspaceId", "CompanyScopeProjectId", "BaseCompanyVersionId");
 
+                    b.HasIndex("WorkspaceId", "ScopeProjectId", "ExpectedActiveRevisionId");
+
+                    b.HasIndex("WorkspaceId", "ScopeProjectId", "SourcePolicyRevisionId")
+                        .HasDatabaseName("IX_field_advance_policy_revisions_workspace_id_scope_project_~1");
+
                     b.ToTable("field_advance_policy_revisions", null, t =>
                         {
                             t.HasCheckConstraint("ck_field_advance_policy_base", "company_scope_project_id='00000000-0000-0000-0000-000000000000'::uuid AND ((project_id IS NULL AND base_company_version_id IS NULL) OR (project_id IS NOT NULL AND base_company_version_id IS NOT NULL))");
 
                             t.HasCheckConstraint("ck_field_advance_policy_content", "clearing_days>=0 AND content_hash ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_field_advance_policy_expected_active", "(expected_active_revision_id IS NULL AND expected_active_version=0) OR (expected_active_revision_id IS NOT NULL AND expected_active_version>=1)");
+
+                            t.HasCheckConstraint("ck_field_advance_policy_mode", "mode IS NULL OR (project_id IS NULL AND mode='Company') OR (project_id IS NOT NULL AND mode IN ('Override','Inherit'))");
 
                             t.HasCheckConstraint("ck_field_advance_policy_revisions_project", "project_id IS NULL OR project_id<>'00000000-0000-0000-0000-000000000000'::uuid");
 
@@ -2553,7 +2594,9 @@ namespace TPR10.Api.Data.Migrations
 
                             t.HasCheckConstraint("ck_field_advance_policy_revisions_version", "version>=1");
 
-                            t.HasCheckConstraint("ck_field_advance_policy_state", "state IN ('Draft','Pending','Approved','Active','Rejected','Retired')");
+                            t.HasCheckConstraint("ck_field_advance_policy_source", "source_policy_revision_id IS NULL OR source_policy_revision_id<>id");
+
+                            t.HasCheckConstraint("ck_field_advance_policy_state", "state IN ('Draft','Pending','Approved','Active','Rejected','Retired','Returned')");
                         });
                 });
 
@@ -4374,6 +4417,20 @@ namespace TPR10.Api.Data.Migrations
                         .HasForeignKey("WorkspaceId", "CompanyScopeProjectId", "BaseCompanyVersionId")
                         .HasPrincipalKey("WorkspaceId", "ScopeProjectId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.PolicyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ScopeProjectId", "ExpectedActiveRevisionId")
+                        .HasPrincipalKey("WorkspaceId", "ScopeProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_policy_expectedactiverevisionid");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.PolicyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ScopeProjectId", "SourcePolicyRevisionId")
+                        .HasPrincipalKey("WorkspaceId", "ScopeProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_policy_sourcepolicyrevisionid");
                 });
 
             modelBuilder.Entity("TPR10.Api.Identity.Data.ExternalIdentity", b =>

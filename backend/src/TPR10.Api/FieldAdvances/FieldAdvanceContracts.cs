@@ -8,10 +8,23 @@ public sealed record CategoryRule(Guid Id, string Name, bool Active, string? Uni
 public sealed record PolicyContent(int ClearingDays, ApprovalBand[] Bands, CategoryRule[] Categories);
 public sealed record PolicySnapshot(Guid CompanyVersionId, Guid? ProjectVersionId,
     PolicyContent Content, string ContentHash);
-public sealed record CommandMeta(Guid CommandId, long ExpectedVersion, string Reason);
+public sealed record CommandMeta(Guid CommandId, long ExpectedVersion, string Reason)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public PolicyCommandOptions? Policy { get; init; }
+}
+public sealed record PolicyCommandOptions(string Mode, Guid? SourcePolicyRevisionId = null,
+    Guid? BaseCompanyVersionId = null, Guid? ExpectedActiveRevisionId = null,
+    long ExpectedActiveVersion = 0, string? ExpectedContentHash = null);
 public sealed record FinanceResult<T>(int Status, string Code, T? Value);
 public sealed record PolicyView(Guid Id, FinanceScope Scope, string State, long Version,
-    Guid? BaseCompanyVersionId, PolicyContent Content, string ContentHash);
+    Guid? BaseCompanyVersionId, PolicyContent Content, string ContentHash)
+{
+    public string Mode { get; init; } = "Company";
+    public Guid? SourcePolicyRevisionId { get; init; }
+    public Guid? ExpectedActiveRevisionId { get; init; }
+    public long ExpectedActiveVersion { get; init; }
+}
 // RecipientId is an account. A later server resolver must obtain its explicit person identity.
 public sealed record GrantSpec(Guid RecipientId, FinanceScope Scope, string[] Capabilities,
     string[] DelegableCapabilities, decimal? ApprovalLimit,

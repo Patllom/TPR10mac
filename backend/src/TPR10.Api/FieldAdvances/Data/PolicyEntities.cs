@@ -32,6 +32,11 @@ public sealed class PolicyRevision
     public Guid WorkspaceId { get; set; }
     public Guid? ProjectId { get; set; }
     public Guid? BaseCompanyVersionId { get; set; }
+    // Null is retained for foundation-era rows whose lifecycle metadata was not recorded.
+    public string? Mode { get; set; }
+    public Guid? SourcePolicyRevisionId { get; set; }
+    public Guid? ExpectedActiveRevisionId { get; set; }
+    public long ExpectedActiveVersion { get; set; }
     public required string State { get; set; }
     public long Version { get; set; } = 1;
     public int ClearingDays { get; set; }
@@ -80,6 +85,10 @@ public sealed class PolicyReview
     public Guid ReviewerId { get; set; }
     public Guid ReviewerPersonId { get; set; }
     public required string Outcome { get; set; }
+    // Historical reviews remain explicitly unknown; never infer these from the current revision.
+    public long? ReviewedVersion { get; set; }
+    public string? ReviewedContentHash { get; set; }
+    public string? ReviewedContentJson { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public required string Reason { get; set; }
 }

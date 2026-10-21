@@ -24,6 +24,7 @@ using TPR10.Api.Attendance.Evidence;
 using TPR10.Api.Attendance.Recording;
 using TPR10.Api.Attendance.History;
 using TPR10.Api.Attendance.Corrections;
+using TPR10.Api.FieldAdvances;
 
 if (args.Any(x => x.StartsWith("--bootstrap-finance", StringComparison.Ordinal)))
 {
@@ -53,6 +54,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddIdentityFoundation();
 builder.Services.AddOrganizationScope();
 builder.Services.AddAttendance();
+builder.Services.AddFieldAdvances();
 builder.Services.AddPreAuthCsrf(builder.Configuration, builder.Environment);
 builder.Services.AddPasswordResetDelivery(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<CorrelationContext>();
@@ -114,6 +116,7 @@ app.MapAttendanceEvidence();
 app.MapAttendanceRecording();
 app.MapAttendanceHistory();
 app.MapAttendanceCorrections();
+app.MapFieldAdvances();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
 app.MapOpenApi("/api/openapi/{documentName}.json");

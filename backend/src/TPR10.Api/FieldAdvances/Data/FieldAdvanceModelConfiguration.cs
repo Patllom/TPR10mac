@@ -38,11 +38,20 @@ public static class FieldAdvanceModelConfiguration
         Person(revision, "CreatedByPersonId");
         revision.Property(x => x.State).HasMaxLength(30);
         revision.Property(x => x.ContentHash).HasMaxLength(64);
+        revision.Property(x => x.Mode).HasMaxLength(20);
+        foreach (var reference in new[] { "SourcePolicyRevisionId", "ExpectedActiveRevisionId" })
+            revision.HasOne<PolicyRevision>().WithMany()
+                .HasForeignKey("WorkspaceId", "ScopeProjectId", reference)
+                .HasPrincipalKey("WorkspaceId", "ScopeProjectId", "Id").OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_policy_" + reference.ToLowerInvariant());
         revision.ToTable(t =>
         {
             t.HasCheckConstraint("ck_field_advance_policy_base", $"company_scope_project_id={EmptyId} AND ((project_id IS NULL AND base_company_version_id IS NULL) OR (project_id IS NOT NULL AND base_company_version_id IS NOT NULL))");
             t.HasCheckConstraint("ck_field_advance_policy_content", "clearing_days>=0 AND content_hash ~ '^[a-f0-9]{64}$'");
-            t.HasCheckConstraint("ck_field_advance_policy_state", "state IN ('Draft','Pending','Approved','Active','Rejected','Retired')");
+            t.HasCheckConstraint("ck_field_advance_policy_state", "state IN ('Draft','Pending','Approved','Active','Rejected','Retired','Returned')");
+            t.HasCheckConstraint("ck_field_advance_policy_mode", "mode IS NULL OR (project_id IS NULL AND mode='Company') OR (project_id IS NOT NULL AND mode IN ('Override','Inherit'))");
+            t.HasCheckConstraint("ck_field_advance_policy_expected_active", "(expected_active_revision_id IS NULL AND expected_active_version=0) OR (expected_active_revision_id IS NOT NULL AND expected_active_version>=1)");
+            t.HasCheckConstraint("ck_field_advance_policy_source", "source_policy_revision_id IS NULL OR source_policy_revision_id<>id");
         });
 
         var band = model.Entity<PolicyApprovalBand>();
@@ -74,6 +83,10 @@ public static class FieldAdvanceModelConfiguration
         policyReview.HasOne<PolicyRevision>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.PolicyRevisionId })
             .HasPrincipalKey(x => new { x.WorkspaceId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         policyReview.Property(x => x.Outcome).HasMaxLength(30);
+        policyReview.Property(x => x.ReviewedContentHash).HasMaxLength(64);
+        policyReview.Property(x => x.ReviewedContentJson).HasColumnType("jsonb");
+        policyReview.ToTable(t => t.HasCheckConstraint("ck_field_advance_review_evidence",
+            "(reviewed_version IS NULL AND reviewed_content_hash IS NULL AND reviewed_content_json IS NULL) OR (reviewed_version IS NOT NULL AND reviewed_version>=1 AND reviewed_content_hash IS NOT NULL AND reviewed_content_hash ~ '^[a-f0-9]{64}$' AND reviewed_content_json IS NOT NULL AND jsonb_typeof(reviewed_content_json)='object')"));
 
         var active = Scoped<ActivePolicy>(model, "field_advance_active_policies");
         Accounts(active, "CreatedBy");
