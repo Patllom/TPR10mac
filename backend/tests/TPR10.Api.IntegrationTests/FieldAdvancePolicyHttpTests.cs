@@ -123,7 +123,7 @@ public sealed class FieldAdvancePolicyHttpTests(PostgresFixture postgres)
         Assert.False(await FieldAdvanceGrantTests.AllowedAsync(f));
     }
 
-    private static async Task<HttpClient> Client(ApiFactory factory, FieldAdvanceFixture f, Guid actor)
+    internal static async Task<HttpClient> Client(ApiFactory factory, FieldAdvanceFixture f, Guid actor)
     {
         var session = await f.SessionAsync(actor);
         var raw = RandomNumberGenerator.GetBytes(32);
@@ -135,7 +135,7 @@ public sealed class FieldAdvancePolicyHttpTests(PostgresFixture postgres)
         client.DefaultRequestHeaders.Add("Cookie", CsrfService.SessionCookieName + "=" + WebEncoders.Base64UrlEncode(raw));
         return client;
     }
-    private static async Task<HttpResponseMessage> Send(HttpClient client, HttpMethod method, string path, object body)
+    internal static async Task<HttpResponseMessage> Send(HttpClient client, HttpMethod method, string path, object body)
     {
         var token = await IdentityTestDriver.TokenAsync(client);
         using var request = IdentityTestDriver.Mutation(token, "/api/v1/field-advances/" + path);

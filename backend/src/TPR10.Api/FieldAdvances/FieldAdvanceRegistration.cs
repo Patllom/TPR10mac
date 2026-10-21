@@ -12,6 +12,8 @@ public static class FieldAdvanceRegistration
         services.AddScoped<FinancePersonResolver>();
         services.AddScoped<FinanceAccess>();
         services.AddScoped<PolicyService>();
+        services.AddScoped<PolicyResolver>();
+        services.AddScoped<PolicyReadService>();
         services.AddScoped<GrantService>();
         services.AddScoped<GrantLifecycle>();
         services.AddOpenApi(options => options.AddOperationTransformer<FieldAdvanceOpenApiTransformer>());
@@ -24,6 +26,12 @@ public static class FieldAdvanceRegistration
         var group = endpoints.MapGroup("/api/v1/field-advances").RequireAuthorization()
             .WithMetadata(new IdentityProblemTypes(409));
         group.MapPost("/policies", PolicyEndpoints.CreateAsync).Produces<PolicyView>(201);
+        group.MapGet("/policies", PolicyEndpoints.ListAsync).Produces<PolicyView[]>();
+        group.MapGet("/policies/{id}", PolicyEndpoints.DetailsAsync).Produces<PolicyView>();
+        group.MapGet("/policies/{id}/history", PolicyEndpoints.HistoryAsync).Produces<PolicyHistoryView[]>();
+        group.MapGet("/policies/review-queue", PolicyEndpoints.ReviewQueueAsync).Produces<PolicyView[]>();
+        group.MapGet("/policies/effective", PolicyEndpoints.EffectiveAsync).Produces<PolicySnapshot>();
+        group.MapPost("/policies/preview", PolicyEndpoints.PreviewAsync).Produces<string[]>();
         group.MapPut("/policies/{id}", PolicyEndpoints.UpdateAsync).Produces<PolicyView>();
         group.MapPost("/policies/{id}/submit", PolicyEndpoints.SubmitAsync).Produces<PolicyView>();
         group.MapPost("/policies/{id}/review", PolicyEndpoints.ReviewAsync).Produces<PolicyView>();

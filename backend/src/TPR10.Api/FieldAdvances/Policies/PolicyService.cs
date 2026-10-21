@@ -283,12 +283,11 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
         db.AddRange(content.Bands.Select(x => new PolicyApprovalBand { PolicyRevisionId = row.Id, Order = x.Order, LevelCode = x.LevelCode, UpperInclusive = x.UpperInclusive }));
         db.AddRange(content.Categories.Select(x => new PolicyCategoryRule { PolicyRevisionId = row.Id, Id = x.Id, Name = x.Name, Active = x.Active, Unit = x.Unit, StandardRate = x.StandardRate, EvidenceTypes = x.EvidenceTypes }));
     }
-    private async Task<PolicyContent> Content(PolicyRevision row, CancellationToken ct) => new(row.ClearingDays,
-        await db.Set<PolicyApprovalBand>().AsNoTracking().Where(x => x.PolicyRevisionId == row.Id).OrderBy(x => x.Order).Select(x => new ApprovalBand(x.Order, x.LevelCode, x.UpperInclusive)).ToArrayAsync(ct),
-        await db.Set<PolicyCategoryRule>().AsNoTracking().Where(x => x.PolicyRevisionId == row.Id).OrderBy(x => x.Id).Select(x => new CategoryRule(x.Id, x.Name, x.Active, x.Unit, x.StandardRate, x.EvidenceTypes)).ToArrayAsync(ct));
+    private Task<PolicyContent> Content(PolicyRevision row, CancellationToken ct) =>
+        PolicyReadData.Content(db, row, ct);
     // PostgreSQL numeric(18,2) adds trailing zeroes. Canonicalize scale without rounding values.
     private static decimal CanonicalMoney(decimal value) => decimal.Parse(value.ToString("G29", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
-    private static PolicyContent Copy(PolicyContent content) => new(content.ClearingDays,
+    internal static PolicyContent Copy(PolicyContent content) => new(content.ClearingDays,
         content.Bands.Select(x => x with { UpperInclusive = CanonicalMoney(x.UpperInclusive) }).ToArray(),
         content.Categories.OrderBy(x => x.Id).Select(x => x with
         { StandardRate = x.StandardRate is { } rate ? CanonicalMoney(rate) : null, EvidenceTypes = [.. x.EvidenceTypes.Order(StringComparer.Ordinal)] }).ToArray());
@@ -310,7 +309,7 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
         && row.SourcePolicyRevisionId == meta.Policy.SourcePolicyRevisionId
         && row.ExpectedActiveRevisionId == meta.Policy.ExpectedActiveRevisionId && row.ExpectedActiveVersion == meta.Policy.ExpectedActiveVersion;
     private static string Hash<T>(T value) => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
-    private static string ContentHash(FinanceScope scope, string mode, Guid? basis, PolicyContent content) => Hash(new { scope, mode, basis, content = Copy(content) });
+    internal static string ContentHash(FinanceScope scope, string mode, Guid? basis, PolicyContent content) => Hash(new { scope, mode, basis, content = Copy(content) });
     private static PolicyView View(PolicyRevision row, PolicyContent content) => new(row.Id, Scope(row), row.State, row.Version, row.BaseCompanyVersionId, content, row.ContentHash)
     { Mode = Mode(row), SourcePolicyRevisionId = row.SourcePolicyRevisionId, ExpectedActiveRevisionId = row.ExpectedActiveRevisionId, ExpectedActiveVersion = row.ExpectedActiveVersion };
     private static FinanceResult<PolicyView> Invalid() => new(400, "policy-invalid", null);

@@ -7,7 +7,11 @@ public sealed record CategoryRule(Guid Id, string Name, bool Active, string? Uni
     decimal? StandardRate, string[] EvidenceTypes);
 public sealed record PolicyContent(int ClearingDays, ApprovalBand[] Bands, CategoryRule[] Categories);
 public sealed record PolicySnapshot(Guid CompanyVersionId, Guid? ProjectVersionId,
-    PolicyContent Content, string ContentHash);
+    PolicyContent Content, string ContentHash)
+{
+    public FinanceScope? Scope { get; init; }
+    public bool RequiresReview { get; init; }
+}
 public sealed record CommandMeta(Guid CommandId, long ExpectedVersion, string Reason)
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -24,6 +28,16 @@ public sealed record PolicyView(Guid Id, FinanceScope Scope, string State, long 
     public Guid? SourcePolicyRevisionId { get; init; }
     public Guid? ExpectedActiveRevisionId { get; init; }
     public long ExpectedActiveVersion { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? ActiveRevisionId { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public long? ActiveVersion { get; init; }
+}
+public sealed record PolicyHistoryView(Guid Id, Guid PolicyRevisionId, string Outcome,
+    DateTimeOffset ReviewedAt, long? ReviewedVersion, string? ContentHash, PolicyContent? Content)
+{
+    public Guid ReviewerId { get; init; }
+    public string Reason { get; init; } = "";
 }
 // RecipientId is an account. A later server resolver must obtain its explicit person identity.
 public sealed record GrantSpec(Guid RecipientId, FinanceScope Scope, string[] Capabilities,
