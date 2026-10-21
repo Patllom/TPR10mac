@@ -14,6 +14,7 @@ public static class FieldAdvanceRegistration
         services.AddScoped<PolicyService>();
         services.AddScoped<PolicyResolver>();
         services.AddScoped<PolicyReadService>();
+        services.AddScoped<PolicyWorkspaceService>();
         services.AddScoped<GrantService>();
         services.AddScoped<GrantLifecycle>();
         services.AddOpenApi(options => options.AddOperationTransformer<FieldAdvanceOpenApiTransformer>());
@@ -25,16 +26,18 @@ public static class FieldAdvanceRegistration
         // Session middleware handles authentication/CSRF; services require current MFA and exact finance scope.
         var group = endpoints.MapGroup("/api/v1/field-advances").RequireAuthorization()
             .WithMetadata(new IdentityProblemTypes(409));
-        group.MapPost("/policies", PolicyEndpoints.CreateAsync).Produces<PolicyView>(201);
-        group.MapGet("/policies", PolicyEndpoints.ListAsync).Produces<PolicyView[]>();
-        group.MapGet("/policies/{id}", PolicyEndpoints.DetailsAsync).Produces<PolicyView>();
-        group.MapGet("/policies/{id}/history", PolicyEndpoints.HistoryAsync).Produces<PolicyHistoryView[]>();
-        group.MapGet("/policies/review-queue", PolicyEndpoints.ReviewQueueAsync).Produces<PolicyView[]>();
-        group.MapGet("/policies/effective", PolicyEndpoints.EffectiveAsync).Produces<PolicySnapshot>();
+        group.MapGet("/policies/scopes", PolicyEndpoints.ScopesAsync).Produces<PolicyScopeChoice[]>();
+        group.MapGet("/policies/company-context", PolicyEndpoints.CompanyContextAsync).Produces<PolicyCompanyContext>();
+        group.MapPost("/policies", PolicyEndpoints.CreateAsync).Produces<PolicyHttpView>(201);
+        group.MapGet("/policies", PolicyEndpoints.ListAsync).Produces<PolicyHttpView[]>();
+        group.MapGet("/policies/{id}", PolicyEndpoints.DetailsAsync).Produces<PolicyHttpView>();
+        group.MapGet("/policies/{id}/history", PolicyEndpoints.HistoryAsync).Produces<PolicyHttpHistory[]>();
+        group.MapGet("/policies/review-queue", PolicyEndpoints.ReviewQueueAsync).Produces<PolicyHttpView[]>();
+        group.MapGet("/policies/effective", PolicyEndpoints.EffectiveAsync).Produces<PolicyHttpSnapshot>();
         group.MapPost("/policies/preview", PolicyEndpoints.PreviewAsync).Produces<string[]>();
-        group.MapPut("/policies/{id}", PolicyEndpoints.UpdateAsync).Produces<PolicyView>();
-        group.MapPost("/policies/{id}/submit", PolicyEndpoints.SubmitAsync).Produces<PolicyView>();
-        group.MapPost("/policies/{id}/review", PolicyEndpoints.ReviewAsync).Produces<PolicyView>();
+        group.MapPut("/policies/{id}", PolicyEndpoints.UpdateAsync).Produces<PolicyHttpView>();
+        group.MapPost("/policies/{id}/submit", PolicyEndpoints.SubmitAsync).Produces<PolicyHttpView>();
+        group.MapPost("/policies/{id}/review", PolicyEndpoints.ReviewAsync).Produces<PolicyHttpView>();
         group.MapPost("/grants", GrantEndpoints.ProposeAsync).Produces<GrantView>(201);
         group.MapPost("/grants/{id}/review", GrantEndpoints.ReviewAsync).Produces<GrantView>();
         group.MapPost("/grants/{id}/revoke", GrantEndpoints.RevokeAsync).Produces<GrantView>();

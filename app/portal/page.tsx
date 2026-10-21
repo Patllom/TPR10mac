@@ -23,6 +23,7 @@ export default async function PortalPage() {
     <p className="my-5">เลือกพื้นที่ที่ได้รับมอบหมายเพื่อเริ่มทำงาน</p>
     <nav className="my-5 flex flex-col gap-4 underline" aria-label="เมนูระบบ">
       <a href="/portal/scopes">เลือกพื้นที่ทำงาน</a>
+      <a href="/portal/field-advances/settings">กติกาเงินทดรองออกสนาม</a>
       {canRecord && <a href="/portal/attendance">ลงเวลาเข้า–ออก</a>}
       <a href="/portal/attendance#history">ประวัติการลงเวลาของฉัน</a>
       <a href="/portal/attendance/corrections">คำร้องแก้ไขเวลา</a>

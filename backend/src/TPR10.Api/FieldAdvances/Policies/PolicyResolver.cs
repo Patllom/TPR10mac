@@ -8,6 +8,31 @@ namespace TPR10.Api.FieldAdvances.Policies;
 
 public sealed class PolicyResolver(Tpr10DbContext db, FinanceAccess access, RequestSession session, TimeProvider clock)
 {
+    public Task<FinanceResult<PolicyCompanyContext>> CompanyContextAsync(FinanceScope scope, Guid? policyId, CancellationToken ct)
+        => new PolicyReadGuard(db, access, session).Execute(session.Entity?.UserId ?? Guid.Empty, scope, false, async () =>
+        {
+            if (scope.ProjectId is null) return PolicyReadGuard.Invalid<PolicyCompanyContext>();
+            var company = await Timeline(new(scope.WorkspaceId, null), ct);
+            if (company is null || company.Length == 0) return PolicyReadGuard.Conflict<PolicyCompanyContext>();
+            Guid? basisId;
+            if (policyId is { } id)
+            {
+                var row = await db.Set<PolicyRevision>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.WorkspaceId == scope.WorkspaceId && x.ProjectId == scope.ProjectId, ct);
+                if (row is null) return PolicyReadGuard.Denied<PolicyCompanyContext>();
+                basisId = row.BaseCompanyVersionId;
+            }
+            else
+            {
+                var effective = await ResolveAuthorizedAsync(scope, clock.GetUtcNow(), ct);
+                if (effective.Status != 200) return new(effective.Status, effective.Code, null);
+                basisId = effective.Value!.CompanyVersionId;
+            }
+            var basis = company.SingleOrDefault(x => x.View.Id == basisId);
+            if (basis is null) return PolicyReadGuard.Conflict<PolicyCompanyContext>();
+            static PolicyCompanyRevision Minimal(Activation x) => new(x.View.Id, PolicyWireContent.From(x.View.Content), x.View.ContentHash);
+            return new(200, "ok", new(Minimal(basis), Minimal(company[^1])));
+        }, ct);
+
     public Task<FinanceResult<PolicySnapshot>> ResolveAsync(FinanceScope scope, DateTimeOffset asOf, CancellationToken ct)
         => new PolicyReadGuard(db, access, session).Execute(session.Entity?.UserId ?? Guid.Empty, scope, false,
             () => ResolveAuthorizedAsync(scope, asOf, ct), ct);
