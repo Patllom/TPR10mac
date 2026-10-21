@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** Task 1–6 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 21 ตุลาคม 2569; Task 7 ยังไม่เริ่ม ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
+**สถานะแผน:** Task 1–7 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 21 ตุลาคม 2569; Task 8–10 ยังไม่เริ่ม ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -269,12 +269,28 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** `PolicyResolver.ResolveAsync(FinanceScope scope, DateTimeOffset asOf, CancellationToken ct): Task<FinanceResult<PolicySnapshot>>`; `PolicyReadService.ListAsync(Guid actorId, FinanceScope scope, int page, int pageSize, CancellationToken ct): Task<FinanceResult<PolicyView[]>>`; `PreviewAsync(Guid actorId, FinanceScope scope, decimal total, CancellationToken ct): Task<FinanceResult<string[]>>`
 
-- [ ] เขียน tests inheritได้บริษัทล่าสุด, overrideยังใช้baseเก่าและรายงานต้องทบทวน, rebaseหลังreviewจึงใช้ใหม่, กลับinheritต้องreview, ไม่มีกติกาคืน409ไม่สร้างค่าเอง
-- [ ] เขียน tests snapshotก่อน/หลังเปลี่ยนกติกา: `Assert.Equal(oldHash, savedSnapshot.ContentHash); Assert.NotEqual(oldHash,newSnapshot.ContentHash);` เก็บชุดsnapshotเป็นข้อมูลimmutable ไม่คืน EF trackedobjectให้แก้
-- [ ] รัน filter `FullyQualifiedName~FieldAdvanceResolver|FullyQualifiedName~FieldAdvanceRead` ให้แดง
-- [ ] ทำ GET policy/history/review queue ภายใต้scopeที่ตรวจ และ POST `policies/preview` เป็นread-onlyด้านธุรกิจ; filterก่อนนับ/แบ่งหน้า ห้ามเผยชื่อโครงการหรือจำนวนรายการต่างscope; snapshotมีIDบริษัท/โครงการ/hashและเนื้อหาที่คำนวณแล้ว
-- [ ] รันเขียวเพิ่ม unauthorized list/details/preview/history, pagingผิด, directIDต่างบริษัท และยืนยันpreviewไม่มีwriteธุรกิจ; freezeกติกาไม่freezeสิทธิ์
-- [ ] ตรวจและ commit: `feat: resolve and preview effective finance policies`
+- [x] เขียน tests inheritได้บริษัทล่าสุด, overrideยังใช้baseเก่าและรายงานต้องทบทวน, rebaseหลังreviewจึงใช้ใหม่, กลับinheritต้องreview, ไม่มีกติกาคืน409ไม่สร้างค่าเอง
+- [x] เขียน tests snapshotก่อน/หลังเปลี่ยนกติกา: `Assert.Equal(oldHash, savedSnapshot.ContentHash); Assert.NotEqual(oldHash,newSnapshot.ContentHash);` เก็บชุดsnapshotเป็นข้อมูลimmutable ไม่คืน EF trackedobjectให้แก้
+- [x] รัน filter `FullyQualifiedName~FieldAdvanceResolver|FullyQualifiedName~FieldAdvanceRead` ให้แดง
+- [x] ทำ GET policy/history/review queue ภายใต้scopeที่ตรวจ และ POST `policies/preview` เป็นread-onlyด้านธุรกิจ; filterก่อนนับ/แบ่งหน้า ห้ามเผยชื่อโครงการหรือจำนวนรายการต่างscope; snapshotมีIDบริษัท/โครงการ/hashและเนื้อหาที่คำนวณแล้ว
+- [x] รันเขียวเพิ่ม unauthorized list/details/preview/history, pagingผิด, directIDต่างบริษัท และยืนยันpreviewไม่มีwriteธุรกิจ; freezeกติกาไม่freezeสิทธิ์
+- [x] ตรวจและ commit: `feat: resolve and preview effective finance policies`
+
+#### ผลตรวจ Task 7 — 21 ตุลาคม 2569
+
+- ผู้ใช้ยืนยันสิทธิ์อ่านสองข้อแล้วตาม spec ส่วน3.1: editor หรือ reviewer ต้องตรง scope; คิวอนุมัติต้องเป็น reviewer และสิทธิ์โครงการเปิดได้เฉพาะเนื้อหาบริษัทฐานที่จำเป็น ไม่เปิดรายการ/ประวัติบริษัททั้งหมด
+- เพิ่ม resolver และ API อ่าน6รายการ: รายการ รายละเอียด ประวัติ คิวรออนุมัติ กติกาที่มีผล และประเมินระดับอนุมัติ ตรวจ current session/MFA/person/grant ก่อนและหลังอ่านภายใต้ transaction/identity lock; POST preview ยังต้องผ่าน CSRF และไม่มี business write
+- Inherit ติดตามบริษัทตามเวลาที่พิสูจน์ได้; override ตรึงฐานและแสดงต้องทบทวนจนผ่าน rebase; snapshot แยกสำเนา nested arrays และแยก actual pointer จาก `ExpectedActive*` ไม่เปลี่ยน receipt เดิม
+- ข้อยุติทางเทคนิค: `asOf` ไม่ย้อนสิทธิ์ปัจจุบัน เวลาอนาคตคืน400 และหลักฐานย้อนหลังไม่พอ/ขัดกันคืน409 ไม่สร้างประวัติขึ้นเอง ข้อมูล legacy อาจต้องตรวจหลักฐานก่อนอ่านย้อนหลังได้ ไม่ backfill ใน Task นี้
+- TDD: เริ่ม37 behavioral RED ก่อน implementation เพิ่ม RED กรณี content/hash ไม่ตรงและ history ไม่มีผู้ตรวจ แล้วแก้จน focused **57/57** ผ่าน; impacted **691/691** ผ่าน ก่อนรีวิว การแก้ fixture สองกรณีเรื่อง audit/version ไม่ถูกนับเป็น production defect
+- แยก Peirce ผู้ลงมือกับ Boole ผู้ตรวจ: รอบแรก spec ผ่าน แต่พบ loader ซ้ำระดับ Important; รวมให้ใช้ implementation เดียว รัน covering **105/105** ผ่าน แล้ว re-review อนุมัติทั้ง spec และ quality ไม่มี Critical/Important ค้าง
+- Backend ทั้ง solution **2,211/2,211 ผ่าน ไม่มี fail/skip**, exit0 ใช้เวลา **49.0872 นาที** จาก `dotnet test backend/TPR10.sln --no-build --no-restore --logger 'console;verbosity=normal'`; focused/impacted เป็นชุดย่อย ไม่บวกซ้ำ
+- Backend Build **0 warnings/errors**, `dotnet format backend/TPR10.sln --verify-no-changes --no-restore` และ diff check ผ่าน ตรวจ SHA-256 ตรงกับโค้ดที่รีวิวครบ **13/13 ไฟล์** หลัง full tests
+- เว็บ `npm test` **74/74**, `npm run build`, `npm run lint` ผ่านหลังรัน HTTPS Dev แล้ว
+- HTTPS ครอบคลุม **50 กรณี** จากรอบที่สำเร็จ: Production4001 identity13 + scopes11 + boundary2, Dev4000 identity13 + scopes11 ผ่าน proxy4443 โดย CA เชื่อถือเฉพาะ profile ทดสอบ ไม่แก้ trust store เครื่อง
+- ข้อสังเกตที่คงไว้: รอบแรก Production boundary timeout ที่ `page.goto('/login')` ก่อนกรอกข้อมูล รันซ้ำพร้อม diagnostics ผ่าน2/2 โดยไม่เปลี่ยนโค้ดหน้าเว็บหรือ assertion; หน้า login ตอบ200ใน11–62ms และ assets200ประมาณ1–7ms ในรอบวินิจฉัย ยังพิสูจน์สาเหตุ timeout ครั้งแรกไม่ได้ จึงไม่อ้างว่าแก้ถาวร
+- Minor สำหรับ Task10: ลด N+1 queries ใน resolver/list เมื่อประวัติมาก โดยคงการตรวจหลักฐานและ identity lock; เป็นข้อยุติของ controller จากระดับความเสี่ยงในรีวิว ยังไม่ได้ทำ performance benchmark และไม่อ้างว่าแก้แล้ว
+- Code commit: `e3e11fd48433ed0878bc07e7ba52da4d5c97a716` — local เท่านั้น ไม่ push/PR/merge ไม่มี migration/bootstrap หรือข้อมูลจริงถูกเปลี่ยน พักมือถือจริง/NAS จริง; Task8 หน้าจอกติกาเป็นขั้นถัดไปเมื่อผู้ใช้สั่งเริ่ม
 
 ### Task 8: หน้าจอกติกาบริษัท โครงการ หมวด และการตรวจฉบับ
 
