@@ -112,7 +112,7 @@ export default function PolicyEditor({ userId, workspaceId, projectId, screen }:
   const dirty = !!state.selected && !!state.content && (JSON.stringify(state.selected.content) !== JSON.stringify(state.content) || state.mode !== state.selected.mode || state.basis !== state.selected.baseCompanyVersionId);
   return <div className="min-w-0 space-y-6">
     <p className="text-sm">จัดการกติกาเท่านั้น · การเปลี่ยนแปลงต้องผ่านผู้ตรวจคนละคน · ยังไม่ใช่การขอหรือจ่ายเงินจริง</p>
-    <div className="flex flex-wrap gap-3"><a className="underline" href={root}>เลือกขอบเขตการเงิน</a><button className={button} onClick={() => void load()}>โหลดใหม่</button></div>
+    <div className="flex flex-wrap gap-3"><a className="underline" href={root}>เลือกขอบเขตการเงิน</a><a className="underline" href={`${root}/grants`}>มอบหมายสิทธิ์</a><a className="underline" href={`${root}/reviews?domain=grants`}>งานรอตรวจสิทธิ์</a><button className={button} onClick={() => void load()}>โหลดใหม่</button></div>
     {state.busy && <p aria-live="polite">กำลังโหลดหรือดำเนินการ…</p>}
     {state.error && <p role="alert" className="rounded-lg border border-red-400 p-3">{state.error}</p>}
     {state.message && <p role="status" className="rounded-lg border border-green-600 p-3">{state.message}</p>}

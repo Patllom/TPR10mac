@@ -158,7 +158,7 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
         }
     }
 
-    private async Task<bool> CoversAsync(Guid actor, GrantSpec target, string operation, bool coverPeriod, CancellationToken ct)
+    internal async Task<bool> CoversAsync(Guid actor, GrantSpec target, string operation, bool coverPeriod, CancellationToken ct)
     {
         var person = await people.ResolveAsync(actor, target.Scope.WorkspaceId, ct);
         if (person is null) return false;
@@ -235,7 +235,7 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
         && spec.StartsAt != DateTimeOffset.MinValue && spec.StartsAt != DateTimeOffset.MaxValue
         && (spec.EndsAt is null || spec.EndsAt > spec.StartsAt && spec.EndsAt != DateTimeOffset.MaxValue);
     private static string Hash<T>(T payload) => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload)));
-    private static GrantSpec Spec(GrantProposal proposal) => new(proposal.RecipientId, new(proposal.WorkspaceId, proposal.ProjectId),
+    internal static GrantSpec Spec(GrantProposal proposal) => new(proposal.RecipientId, new(proposal.WorkspaceId, proposal.ProjectId),
         proposal.Capabilities, proposal.DelegableCapabilities, proposal.ApprovalLimit, proposal.StartsAtUtc, proposal.EndsAtUtc);
     private static GrantView View(GrantProposal proposal) => new(proposal.Id, proposal.State, proposal.Version, Spec(proposal));
     private static FinanceResult<GrantView> Invalid() => new(400, "invalid-request", null);

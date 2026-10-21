@@ -20,12 +20,18 @@ public sealed class FieldAdvanceOpenApiTests
         "post /api/v1/field-advances/policies/{id}/submit",
         "post /api/v1/field-advances/policies/{id}/review",
         "post /api/v1/field-advances/grants",
+        "get /api/v1/field-advances/grants",
+        "get /api/v1/field-advances/grants/scopes",
+        "get /api/v1/field-advances/grants/recipients",
+        "get /api/v1/field-advances/grants/review-queue",
+        "get /api/v1/field-advances/grants/{id}",
+        "get /api/v1/field-advances/grants/{id}/history",
         "post /api/v1/field-advances/grants/{id}/review",
         "post /api/v1/field-advances/grants/{id}/revoke"
     ];
 
     [Fact]
-    public async Task Policy_output_money_is_documented_as_string_without_changing_grant_schema()
+    public async Task Policy_and_grant_output_money_are_documented_as_strings()
     {
         using var keys = new TestKeyMaterial();
         await using var factory = new ApiFactory("Host=127.0.0.1;Port=1;Database=unused;Username=unused;Timeout=1", "Production", settings: keys.Settings);
@@ -38,8 +44,9 @@ public sealed class FieldAdvanceOpenApiTests
         var type = schemas.GetProperty(bandRef).GetProperty("properties").GetProperty("upperInclusive").GetProperty("type");
         Assert.Equal(JsonValueKind.String, type.ValueKind);
         Assert.Equal("string", type.GetString());
-        var grant = schemas.GetProperty("GrantSpec").GetProperty("properties").GetProperty("approvalLimit").GetRawText();
-        Assert.Contains("number", grant);
+        var grant = schemas.GetProperty("GrantWireSpec").GetProperty("properties").GetProperty("approvalLimit").GetRawText();
+        Assert.Contains("string", grant);
+        Assert.DoesNotContain("number", grant);
     }
 
     [Theory]
