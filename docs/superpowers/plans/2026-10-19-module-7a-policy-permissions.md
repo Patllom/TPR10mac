@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** Task 1–5 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 21 ตุลาคม 2569; ขั้นถัดไป Task 6 ยังไม่เริ่ม ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
+**สถานะแผน:** Task 1–6 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 21 ตุลาคม 2569; Task 7 ยังไม่เริ่ม ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -239,13 +239,29 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** `CreateDraftAsync(Guid actorId, FinanceScope scope, Guid? baseCompanyVersionId, PolicyContent content, CommandMeta meta, CancellationToken ct): Task<FinanceResult<PolicyView>>`; `UpdateDraftAsync(Guid actorId, Guid id, PolicyContent content, CommandMeta meta, CancellationToken ct): Task<FinanceResult<PolicyView>>`; `SubmitAsync(Guid actorId, Guid id, CommandMeta meta, CancellationToken ct)` และ `ReviewAsync(Guid actorId, Guid id, string decision, CommandMeta meta, CancellationToken ct)` คืน `Task<FinanceResult<PolicyView>>` ทั้งคู่
 
-- [ ] เขียน tests สร้าง/แก้/ส่ง/อนุมัติ, contributorคนใดอนุมัติไม่ได้, pendingแก้ตรงไม่ได้, returnedแก้แล้วต้องส่งใหม่, rejectedไม่reuseapproval, activeimmutable
-- [ ] เพิ่ม tests โครงการอ่อน/เข้มกว่าบริษัทได้แต่ผู้ตรวจต้องมีสิทธิ์บริษัท; เปลี่ยนกลับ inheritผ่านreview; เปิดสองdraftพร้อมกันต้องมีactiveเดียวและตรวจ expected active revision
-- [ ] รัน filter `FullyQualifiedName~FieldAdvancePolicy|FullyQualifiedName~FieldAdvanceOpenApi` ให้แดง
-- [ ] ทำ endpointsใต้ `/api/v1/field-advances` สำหรับ `policies`, `policies/{id}`, `policies/{id}/submit`, `policies/{id}/review`, `grants`, `grants/{id}/review`, `grants/{id}/revoke` โดย POST/PUTมีCSRF, MFA, no-storeและขอบเขตตรวจจากserver; ไม่มี DELETEประวัติ
-- [ ] ผูก reviewกับhash/versionที่ผู้ตรวจเห็น เก็บcontributorข้ามการส่งกลับและrevisionsที่แก้จากฉบับเดิม เปิดใช้/retireฉบับก่อน/audit/receiptในธุรกรรมเดียว พร้อมใช้ผล Task2/3
-- [ ] รันเขียวรวม tests faultก่อนcommit/ระหว่างaudit และ staleversion409; OpenAPIไม่เปิดprobes production
-- [ ] ตรวจและ commit: `feat: add versioned finance policy approval`
+- [x] เขียน tests สร้าง/แก้/ส่ง/อนุมัติ, contributorคนใดอนุมัติไม่ได้, pendingแก้ตรงไม่ได้, returnedแก้แล้วต้องส่งใหม่, rejectedไม่reuseapproval, activeimmutable
+- [x] เพิ่ม tests โครงการอ่อน/เข้มกว่าบริษัทได้แต่ผู้ตรวจต้องมีสิทธิ์บริษัทที่มอบหมายตรงโครงการ ไม่ต้องมี grant ระดับ null-project เพิ่ม; เปลี่ยนกลับ inheritผ่านreview; เปิดสองdraftพร้อมกันต้องมีactiveเดียวและตรวจ expected active revision
+- [x] รัน filter `FullyQualifiedName~FieldAdvancePolicy|FullyQualifiedName~FieldAdvanceOpenApi` ให้แดง
+- [x] ทำ endpointsใต้ `/api/v1/field-advances` สำหรับ `policies`, `policies/{id}`, `policies/{id}/submit`, `policies/{id}/review`, `grants`, `grants/{id}/review`, `grants/{id}/revoke` โดย POST/PUTมีCSRF, MFA, no-storeและขอบเขตตรวจจากserver; ไม่มี DELETEประวัติ
+- [x] ผูก reviewกับhash/versionที่ผู้ตรวจเห็น เก็บcontributorข้ามการส่งกลับและrevisionsที่แก้จากฉบับเดิม เปิดใช้/retireฉบับก่อน/audit/receiptในธุรกรรมเดียว พร้อมใช้ผล Task2/3
+- [x] รันเขียวรวม tests faultก่อนcommit/ระหว่างaudit และ staleversion409; OpenAPIไม่เปิดprobes production
+- [x] ตรวจและ commit: `feat: add versioned finance policy approval` — `c2aeb9e`
+
+#### ผลตรวจ Task 6 — 21 ตุลาคม 2569
+
+- ผู้ลงมือ Schrodinger แยกจากผู้ตรวจ Turing; ผ่านทั้งข้อกำหนดและคุณภาพ ไม่มี Critical/Important จากชุด backend 17 ไฟล์
+- ผู้ใช้ยืนยัน: ผู้แก้บริษัทฐานไม่เป็น contributor โครงการอัตโนมัติ แต่ผู้ร่วมแก้สายกติกาโครงการทุกแขนงยังห้ามตรวจ; การกลับ inherit ถ้าบริษัทเปลี่ยนระหว่างรอตรวจต้อง409 โหลดฐานล่าสุดและส่งตรวจใหม่
+- เพิ่มวงจร Draft → Pending → Active/Returned/Rejected, เก็บ review hash/version/content ที่เห็นจริง, ตรวจ current authority ก่อน replay และเปิดใช้/retire/audit/receipt ใน transaction เดียว
+- เพิ่ม migration `20261020233422_AddFieldAdvancePolicyLifecycle`; หลักฐาน review เก่าคง unknown ไม่สร้างย้อนหลัง และ downgrade ปฏิเสธเมื่อจะทำข้อมูล lifecycle ใหม่สูญหาย ไม่รันกับฐานข้อมูลจริง
+- Contract เพิ่ม `CommandMeta.Policy` แบบ optional และไม่ serialize null เพื่อรักษา receipt ของ grant เดิม; `PolicyView.ExpectedActive*` คือฐานเปรียบเทียบที่ฉบับนั้นใช้ ไม่ใช่ pointer หลังอนุมัติ Task 7 ต้องอ่าน pointer ปัจจุบันเอง
+- TDD: service/OpenAPI RED17 และ race/rollback RED4 ก่อน implementation พร้อม regression RED สำหรับ lineage, receipt compatibility, downgrade และ contributor ของการ submit; focused สุดท้าย **56/56 ผ่าน** รวม API inventory ที่แก้แล้ว
+- Impacted รอบแรก **636/637** ล้มเฉพาะ `IdentityOpenApiTests.Enumerates_every_versioned_operation_and_cookie_flags` ที่ยังขาด7 routes ใหม่ แก้ expected inventory และยืนยันผ่านใน targeted56; ไม่อ้างว่ารอบเดิมผ่าน
+- Backend ทั้ง solution **2,157/2,157 ผ่าน ไม่มี fail/skip**, exit0 ใช้เวลา **47.1080 นาที** ด้วย `dotnet test backend/TPR10.sln --no-build --no-restore --logger 'console;verbosity=normal'`; focused เป็นชุดย่อย ไม่บวกซ้ำ
+- เว็บรอบสุดท้าย **74/74**, Build และ Lint ผ่าน; backend Build **0 warnings/errors**, Format verify และ diff check ผ่าน; SHA-256 **17/17** ตรงชุด review
+- HTTPS ครบ50กรณี: production26 และ dev24 บนฐานข้อมูลทิ้งได้/CA เฉพาะ profile; รอบแรก dev scopes timeout1ที่โหลด `/login` รอ `app/login/page.js` ก่อนส่งข้อมูลเข้า API ต่อมารันทั้ง11กรณีพร้อม timing diagnostics ผ่านโดยไม่แก้โค้ดหรือผ่อน assertion ยังไม่ทราบต้นเหตุถาวร จัดเป็นความไม่สม่ำเสมอของ dev asset loading ไม่ปกปิด failure แรก
+- ความผิดพลาดเครื่องมือ: เริ่ม full suite รอบแรกด้วย PATH ที่ไม่มี `rg` จึงเก็บ log ไม่ได้ หยุดเฉพาะ process รอบนั้นแล้วรันใหม่ด้วย absolute path ผล2,157ข้างต้นมาจากรอบใหม่ที่จบ exit0 ไม่ใช่รอบที่หยุด
+- Minor ส่งต่อ Task10: ปรับการค้น lineage ที่อาจ O(n²) เมื่อประวัติยาว และเพิ่ม coverage แข่งแทน active ที่มีอยู่แล้ว; ไม่พบความผิดพลาดของ pointer compare ปัจจุบัน
+- Local code commit `c2aeb9e`; ไม่ push/PR/merge ไม่เริ่ม Task7 ไม่สร้างสิทธิ์จริง มือถือจริง/NAS จริงยังพัก
 
 ### Task 7: เลือกฉบับกติกา ประเมินตัวอย่าง และ API อ่านที่ไม่รั่วข้อมูล
 
