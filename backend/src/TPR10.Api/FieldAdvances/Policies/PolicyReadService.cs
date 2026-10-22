@@ -59,10 +59,11 @@ public sealed class PolicyReadService(Tpr10DbContext db, FinanceAccess access, R
         var rows = await Scoped(scope).Where(x => !queue || x.State == "Pending")
             .OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.Id).Skip((page - 1) * size).Take(size).ToArrayAsync(ct);
         var pointer = await Pointer(scope, ct);
+        var contents = await PolicyReadData.Contents(db, rows, ct);
         var values = new List<PolicyView>();
         foreach (var row in rows)
         {
-            var view = await View(row, pointer, ct);
+            var view = View(row, pointer, contents[row.Id]);
             if (view.Status != 200) return new(view.Status, view.Code, null);
             values.Add(view.Value!);
         }
@@ -70,8 +71,10 @@ public sealed class PolicyReadService(Tpr10DbContext db, FinanceAccess access, R
     }
 
     private async Task<FinanceResult<PolicyView>> View(PolicyRevision row, ActivePolicy? pointer, CancellationToken ct)
+        => View(row, pointer, await PolicyReadData.Content(db, row, ct));
+
+    private static FinanceResult<PolicyView> View(PolicyRevision row, ActivePolicy? pointer, PolicyContent content)
     {
-        var content = await PolicyReadData.Content(db, row, ct);
         // Unknown legacy provenance cannot silently become Company/Override.
         if (row.Mode is null || PolicyValidation.Validate(content).Length != 0
             || row.ContentHash != PolicyService.ContentHash(new(row.WorkspaceId, row.ProjectId), row.Mode, row.BaseCompanyVersionId, content))

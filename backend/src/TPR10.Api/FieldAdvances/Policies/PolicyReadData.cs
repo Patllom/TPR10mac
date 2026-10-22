@@ -7,6 +7,19 @@ namespace TPR10.Api.FieldAdvances.Policies;
 
 internal static class PolicyReadData
 {
+    internal static async Task<Dictionary<Guid, PolicyContent>> Contents(Tpr10DbContext db, PolicyRevision[] rows, CancellationToken ct)
+    {
+        var ids = rows.Select(x => x.Id).ToArray();
+        if (ids.Length == 0) return [];
+        var bands = (await db.Set<PolicyApprovalBand>().AsNoTracking().Where(x => ids.Contains(x.PolicyRevisionId))
+            .OrderBy(x => x.Order).ToArrayAsync(ct)).ToLookup(x => x.PolicyRevisionId);
+        var categories = (await db.Set<PolicyCategoryRule>().AsNoTracking().Where(x => ids.Contains(x.PolicyRevisionId))
+            .OrderBy(x => x.Id).ToArrayAsync(ct)).ToLookup(x => x.PolicyRevisionId);
+        return rows.ToDictionary(x => x.Id, x => new PolicyContent(x.ClearingDays,
+            bands[x.Id].Select(b => new ApprovalBand(b.Order, b.LevelCode, b.UpperInclusive)).ToArray(),
+            categories[x.Id].Select(c => new CategoryRule(c.Id, c.Name, c.Active, c.Unit, c.StandardRate, c.EvidenceTypes)).ToArray()));
+    }
+
     internal static async Task<PolicyContent> Content(Tpr10DbContext db, PolicyRevision row, CancellationToken ct) => new(row.ClearingDays,
         await db.Set<PolicyApprovalBand>().AsNoTracking().Where(x => x.PolicyRevisionId == row.Id).OrderBy(x => x.Order)
             .Select(x => new ApprovalBand(x.Order, x.LevelCode, x.UpperInclusive)).ToArrayAsync(ct),

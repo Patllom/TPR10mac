@@ -96,7 +96,8 @@ test('ส่งกลับต้องเสนอใหม่ ต่ออา�
   const n = 11; await session(context, 1, n); const reviewer = await browser.newContext();
   try {
     await session(reviewer, 2, n);
-    const first = await (await send(context, '', { spec: spec(n), meta: meta() })).json();
+    const originalEnd = '2030-01-01T00:00:00Z';
+    const first = await (await send(context, '', { spec: { ...spec(n), endsAt: originalEnd }, meta: meta() })).json();
     expect((await send(reviewer, `/${first.id}/review`, { decision: 'return', meta: meta() })).status()).toBe(200);
     await page.goto(`${root}/grants?${query(n)}`); await page.getByRole('button', { name: 'เปิดสิทธิ์', exact: true }).first().click();
     await page.getByRole('button', { name: 'เตรียมข้อเสนอใหม่จากรายการนี้', exact: true }).click();
@@ -104,12 +105,70 @@ test('ส่งกลับต้องเสนอใหม่ ต่ออา�
     await page.getByRole('button', { name: 'ส่งข้อเสนอ', exact: true }).click(); await expect(page.getByRole('status')).toContainText('เสนอสำเร็จ');
     const pending = (await (await reviewer.request.get(`${api}/review-queue?${query(n)}`)).json())[0]; expect(pending.id).not.toBe(first.id);
     expect((await send(reviewer, `/${pending.id}/review`, { decision: 'approve', meta: meta() })).status()).toBe(200);
-    const another = await (await send(context, '', { spec: spec(n), meta: meta() })).json();
+    const original = await (await context.request.get(`${api}/${pending.id}?${query(n)}`)).json();
+    await page.getByRole('button', { name: 'โหลดสิทธิ์ใหม่', exact: true }).click();
+    await page.locator('article').filter({ hasText: pending.id }).getByRole('button', { name: 'เปิดสิทธิ์', exact: true }).click();
+    await page.getByRole('button', { name: 'เตรียมข้อเสนอใหม่จากรายการนี้', exact: true }).click();
+    await page.getByLabel('สิ้นสุด (Asia/Bangkok)').fill('2030-02-01T07:00');
+    await expect(page.getByText(/สิ้นสุด:.*2030-01-01.*→.*2030-02-01/)).toBeVisible();
+    await page.getByLabel('เหตุผล', { exact: true }).fill('ต่ออายุจริงอีกหนึ่งเดือน');
+    await page.getByRole('button', { name: 'ส่งข้อเสนอ', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('เสนอสำเร็จ');
+    const another = (await (await reviewer.request.get(`${api}/review-queue?${query(n)}`)).json())[0];
+    expect(Date.parse(another.spec.endsAt)).toBe(Date.parse('2030-02-01T00:00:00Z'));
+    expect(another.assignmentId).toBeNull();
     expect((await send(reviewer, `/${another.id}/review`, { decision: 'approve', meta: meta() })).status()).toBe(200);
     const rows = await (await context.request.get(`${api}?${query(n)}`)).json();
     expect(rows.filter((r: { effectiveState: string; spec: { recipientId: string } }) => r.effectiveState === 'Active' && r.spec.recipientId === user(n, 3))).toHaveLength(2);
     expect(rows.find((r: { id: string }) => r.id === first.id).state).toBe('Draft');
+    const retained = rows.find((r: { id: string }) => r.id === pending.id);
+    expect(retained.assignmentId).toBe(original.assignmentId);
+    expect(retained.assignmentVersion).toBe(original.assignmentVersion);
+    expect(Date.parse(retained.spec.endsAt)).toBe(Date.parse(originalEnd));
+    expect(rows.find((r: { id: string }) => r.id === another.id).assignmentId).not.toBe(original.assignmentId);
   } finally { await reviewer.close(); }
+});
+
+for (const mode of ['details', 'draft', 'pending'] as const) test(`M1 timer รับสถานะและปุ่มตามเวลารุ่นเดิม ${mode}`, async ({ page, context, browser }) => {
+  test.setTimeout(65000);
+  const n = 11;
+  await session(context, mode === 'pending' ? 2 : 1, n);
+  const other = await browser.newContext();
+  try {
+    await session(other, mode === 'pending' ? 1 : 2, n);
+    const proposer = mode === 'pending' ? other : context;
+    const reviewer = mode === 'pending' ? context : other;
+    const proposed = await send(proposer, '', { spec: { ...spec(n), endsAt: new Date(Date.now() + 30000).toISOString() }, meta: meta() });
+    expect(proposed.status()).toBe(201);
+    const row = await proposed.json();
+    if (mode !== 'pending') expect((await send(reviewer, `/${row.id}/review`, { decision: 'approve', meta: meta() })).status()).toBe(200);
+    const before = await (await context.request.get(`${api}/${row.id}?${query(n)}`)).json();
+    await page.goto(`${root}/grants?${query(n)}`);
+    await page.locator('article').filter({ hasText: row.id }).getByRole('button', { name: 'เปิดสิทธิ์', exact: true }).click();
+    const details = page.locator('section').filter({ has: page.getByRole('heading', { name: 'รายละเอียดสิทธิ์', exact: true }) });
+    if (mode === 'pending') await expect(page.getByRole('button', { name: 'อนุมัติสิทธิ์', exact: true })).toBeEnabled();
+    else await expect(details.getByText('เริ่มใช้แล้ว', { exact: true })).toBeVisible();
+    if (mode === 'draft') {
+      await page.getByRole('button', { name: 'เตรียมข้อเสนอใหม่จากรายการนี้', exact: true }).click();
+      await page.getByLabel('เหตุผล', { exact: true }).fill('ร่างยังไม่ส่งเมื่อสิทธิ์เดิมหมดอายุ');
+      await page.getByLabel('สิ้นสุด (Asia/Bangkok)').fill('2030-02-01T07:00');
+    }
+    const refreshed = await page.waitForResponse(async response => {
+      if (!response.url().includes(`${api}/${row.id}?`) || response.status() !== 200) return false;
+      const data = await response.json();
+      return mode === 'pending' ? !data.canApprove : data.effectiveState === 'Expired';
+    }, { timeout: 48000 });
+    const after = await refreshed.json();
+    expect(after.version).toBe(before.version);
+    expect(after.assignmentVersion).toBe(before.assignmentVersion);
+    if (mode === 'draft') {
+      await expect(page.getByLabel('เหตุผล', { exact: true })).toHaveValue('ร่างยังไม่ส่งเมื่อสิทธิ์เดิมหมดอายุ');
+      await expect(page.getByLabel('สิ้นสุด (Asia/Bangkok)')).toHaveValue('2030-02-01T07:00');
+      await page.getByRole('button', { name: 'ยกเลิกการเตรียมข้อเสนอ', exact: true }).click();
+    }
+    if (mode === 'pending') await expect(page.getByRole('button', { name: 'อนุมัติสิทธิ์', exact: true })).toBeDisabled();
+    else await expect(details.getByText('หมดอายุ', { exact: true })).toBeVisible();
+  } finally { await other.close(); }
 });
 
 test('เปลี่ยนบทบาทแล้วหน้าจอและ API ล้าง grant data ใน session เดิม', async ({ page, context }) => {
@@ -164,10 +223,10 @@ test('QA 390px labels และ keyboard รักษาร่างระหว
   await expect(capability).toBeChecked();
   expect(await page.locator('input, select').evaluateAll(elements => elements.every(element => !!(element as HTMLInputElement).labels?.length))).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: resolve('.superpowers/sdd/2026-10-19-module-7a-policy-permissions/task-9-390px-keyboard.png'), fullPage: true });
+  await page.screenshot({ path: resolve('.superpowers/sdd/2026-10-19-module-7a-policy-permissions/task-10-390px-keyboard.png'), fullPage: true });
   await page.getByRole('button', { name: 'ยกเลิกการเตรียมข้อเสนอ', exact: true }).click();
   await page.getByRole('button', { name: 'เปิดสิทธิ์', exact: true }).first().click();
   await expect(page.getByRole('table', { name: 'ประวัติสิทธิ์' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: resolve('.superpowers/sdd/2026-10-19-module-7a-policy-permissions/task-9-390px-history.png'), fullPage: true });
+  await page.screenshot({ path: resolve('.superpowers/sdd/2026-10-19-module-7a-policy-permissions/task-10-390px-history.png'), fullPage: true });
 });

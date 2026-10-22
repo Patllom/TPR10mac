@@ -88,10 +88,12 @@ public sealed class PolicyResolver(Tpr10DbContext db, FinanceAccess access, Requ
         var activated = rows.Where(x => x.State is "Active" or "Retired" or "Approved").ToArray();
         if (pointer is null) return approved.Length == 0 && activated.Length == 0 ? [] : null;
         if (pointer.Version != approved.Length || activated.Length != approved.Length) return null;
+        var byId = activated.ToDictionary(x => x.Id);
+        var contents = await PolicyReadData.Contents(db, activated, ct);
         var result = new List<Activation>();
         foreach (var review in approved)
         {
-            var row = activated.SingleOrDefault(x => x.Id == review.PolicyRevisionId);
+            var row = byId.GetValueOrDefault(review.PolicyRevisionId);
             var view = PolicyReadData.Evidence(review, scope);
             if (row is null || view is null || row.Mode is null || row.Mode != view.Mode
                 || row.BaseCompanyVersionId != view.BaseCompanyVersionId || row.SourcePolicyRevisionId != view.SourcePolicyRevisionId
@@ -99,7 +101,7 @@ public sealed class PolicyResolver(Tpr10DbContext db, FinanceAccess access, Requ
                 || row.ContentHash != view.ContentHash || row.CreatedAtUtc > review.CreatedAtUtc || review.CreatedAtUtc > clock.GetUtcNow()
                 || row.Version != view.Version + (row.State == "Active" ? 1 : 2)
                 || row.State is not ("Active" or "Retired")) return null;
-            var content = await PolicyReadData.Content(db, row, ct);
+            var content = contents[row.Id];
             if (PolicyValidation.Validate(content).Length != 0
                 || row.ContentHash != PolicyService.ContentHash(scope, row.Mode, row.BaseCompanyVersionId, content)) return null;
             result.Add(new(view, review.CreatedAtUtc));
@@ -110,7 +112,7 @@ public sealed class PolicyResolver(Tpr10DbContext db, FinanceAccess access, Requ
             var item = ordered[i];
             if (item.View.ExpectedActiveVersion != i || item.View.ExpectedActiveRevisionId != (i == 0 ? (Guid?)null : ordered[i - 1].View.Id)
                 || i > 0 && item.At < ordered[i - 1].At) return null;
-            if (activated.Single(x => x.Id == item.View.Id).State != (i == ordered.Length - 1 ? "Active" : "Retired")) return null;
+            if (byId[item.View.Id].State != (i == ordered.Length - 1 ? "Active" : "Retired")) return null;
         }
         return ordered.Length > 0 && ordered[^1].View.Id == pointer.PolicyRevisionId ? ordered : null;
     }

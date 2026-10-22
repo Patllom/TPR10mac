@@ -57,8 +57,14 @@ export default function GrantEditor({ userId, workspaceId, projectId, screen = '
         const client = createGrantClient(s.choice.scope, userId, pending.current?.signal);
         const rows = await client.list(screen === 'reviews');
         const target = s.source ?? s.selected;
-        if (target) { const seen = await client.details(target.id); if (seen.version !== target.version || seen.assignmentVersion !== target.assignmentVersion) throw new GrantError(409); }
-        if (turn === generation.current && !busy.current) set(current => ({ ...current, rows }));
+        const seen = target ? await client.details(target.id) : null;
+        if (seen && target && (seen.version !== target.version || seen.assignmentVersion !== target.assignmentVersion)) throw new GrantError(409);
+        // Time can change status/actions without changing a stored version. Keep the unsent spec/reason,
+        // and only refresh the same record still displayed after the asynchronous reads complete.
+        const refresh = (record: GrantRecord | null) => seen && record?.id === seen.id
+          && record.version === seen.version && record.assignmentVersion === seen.assignmentVersion ? seen : record;
+        if (turn === generation.current && !busy.current) set(current => turn === generation.current && !busy.current
+          ? { ...current, rows, selected: refresh(current.selected), source: refresh(current.source) } : current);
       } catch (e) { if (turn === generation.current && !busy.current) { cancel(); failure(e); } }
     }, 15000);
     document.addEventListener('visibilitychange', visibility); window.addEventListener('focus', focus);

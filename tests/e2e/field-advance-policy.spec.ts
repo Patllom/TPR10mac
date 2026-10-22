@@ -7,6 +7,11 @@ const api = '/api/v1/field-advances/policies';
 const screenshot = (name: string) => resolve('.superpowers/sdd/2026-10-19-module-7a-policy-permissions', name);
 const workspace = (n: number) => `88100000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const project = (n: number) => `88200000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+function fixtureSql(input: string) {
+  const database = process.env.TPR10_E2E_DATABASE;
+  if (!database || !/^[a-f0-9]{64}$/.test(database)) throw new Error('ต้องใช้ disposable HTTPS fixture');
+  execFileSync('docker', ['exec', '-i', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], { input, stdio: ['pipe', 'ignore', 'pipe'] });
+}
 async function session(context: BrowserContext, actor: number, company = 1) {
   const database = process.env.TPR10_E2E_DATABASE;
   if (!database || !/^[a-f0-9]{64}$/.test(database)) throw new Error('ต้องใช้ disposable HTTPS fixture');
@@ -224,3 +229,47 @@ test('สิทธิ์โครงการค้นพบเฉพาะโ�
     await expect(page.getByRole('heading', { name: 'บริษัทจำลอง 8 · กติกาบริษัท', exact: true })).toHaveCount(0);
   } finally { await reviewer.close(); }
 });
+
+test('final I3 idle authorized policy keeps unsent draft after refresh', async ({ page, context }) => {
+  await session(context, 1, 1);
+  let checks = 0;
+  page.on('response', response => { if (response.url().includes(`${api}/scopes`) && response.status() === 200) checks++; });
+  await page.goto(`${root}/company?workspaceId=${workspace(1)}`);
+  await page.getByRole('button', { name: 'สร้างฉบับใหม่', exact: true }).click();
+  await page.getByLabel('วันเคลียร์ (วันปฏิทิน)').fill('17');
+  await page.getByLabel('เหตุผล', { exact: true }).fill('ร่างยังไม่ส่ง');
+  const before = checks;
+  await expect.poll(() => checks, { timeout: 22000 }).toBeGreaterThan(before);
+  await expect(page.getByLabel('วันเคลียร์ (วันปฏิทิน)')).toHaveValue('17');
+  await expect(page.getByRole('textbox', { name: 'เหตุผล', exact: true })).toHaveValue('ร่างยังไม่ส่ง');
+  await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toBeEnabled();
+});
+
+for (const [n, surface, removal] of [[9, 'root', 'revoke'], [10, 'details', 'revoke'], [11, 'root', 'expire'], [12, 'details', 'expire']] as const) {
+  test(`final I3 idle policy ${surface} clears after ${removal}`, async ({ page, context, browser }) => {
+    await session(context, 1, n);
+    const reviewer = await browser.newContext(); await session(reviewer, 2, n);
+    try {
+      const company = await seed(context, reviewer, n);
+      await page.goto(surface === 'root' ? root : `${root}/company?workspaceId=${workspace(n)}`);
+      if (surface === 'root') await expect(page.getByRole('link', { name: `บริษัทจำลอง ${n} · กติกาบริษัท`, exact: true })).toBeVisible();
+      else {
+        await page.getByRole('button', { name: 'เปิดฉบับ', exact: true }).first().click();
+        await expect(page.getByLabel('ชื่อหมวด 1', { exact: true })).toHaveValue('หมวดจำลอง');
+        await expect(page.getByText(`ฉบับ ${company.id}`, { exact: true })).toBeVisible();
+      }
+      const user = `88000000-0000-4000-8000-${String(n * 100 + 1).padStart(12, '0')}`;
+      // Independent backend change; no reload, focus change, auth broadcast or UI action.
+      if (removal === 'revoke') fixtureSql(`UPDATE field_advance_grant_assignments a SET revoked_at_utc=now(),revoked_by='${user}',revocation_reason='ถอนจำลอง',version=a.version+1 FROM field_advance_grant_proposals p WHERE p.id=a.proposal_id AND p.recipient_id='${user}';`);
+      else fixtureSql(`UPDATE field_advance_grant_proposals SET ends_at_utc=now()+interval '1 second' WHERE recipient_id='${user}';`);
+      if (surface === 'root') {
+        await expect(page.getByRole('link', { name: new RegExp(`บริษัทจำลอง ${n} ·`) })).toHaveCount(0, { timeout: 22000 });
+      } else {
+        await expect(page.getByRole('heading', { name: `บริษัทจำลอง ${n} · กติกาบริษัท`, exact: true })).toHaveCount(0, { timeout: 22000 });
+        await expect(page.getByLabel('ชื่อหมวด 1', { exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'สร้างฉบับใหม่', exact: true })).toHaveCount(0);
+        await expect(page.getByText(`ฉบับ ${company.id}`, { exact: true })).toHaveCount(0);
+      }
+    } finally { await reviewer.close(); }
+  });
+}

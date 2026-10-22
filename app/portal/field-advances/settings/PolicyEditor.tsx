@@ -20,19 +20,20 @@ function ContentSummary({ content }: { content: PolicyContent }) {
 }
 export default function PolicyEditor({ userId, workspaceId, projectId, screen }: { userId: string; workspaceId: string | null; projectId: string | null; screen: string }) {
   const [state, set] = useState<State>(empty);
-  const generation = useRef(0); const pending = useRef<AbortController | null>(null);
-  const cancel = useCallback(() => { generation.current++; pending.current?.abort(); }, []);
+  const generation = useRef(0); const pending = useRef<AbortController | null>(null); const busy = useRef(false);
+  const latest = useRef(state); latest.current = state;
+  const cancel = useCallback(() => { generation.current++; pending.current?.abort(); busy.current = false; }, []);
   const invalidate = useCallback(() => { cancel(); set(empty()); }, [cancel]);
-  const failure = (error: unknown) => {
+  const failure = useCallback((error: unknown) => {
     if (error instanceof DOMException && error.name === 'AbortError') return;
     const status = error instanceof PolicyError ? error.status : 503;
     const message = error instanceof PolicyError ? error.message : new PolicyError(503).message;
     set(s => status === 401 || status === 403 || status === 409 ? { ...failureState(s, status), ...empty(), error: message }
       : { ...s, busy: false, blocked: status !== 400, error: message, message: '' });
-  };
+  }, []);
   const load = useCallback(async () => {
     pending.current?.abort(); const controller = new AbortController(); pending.current = controller;
-    const turn = ++generation.current; set({ ...empty(), busy: true });
+    const turn = ++generation.current; busy.current = true; set({ ...empty(), busy: true });
     try {
       const choices = await discoverPolicies(userId, controller.signal);
       const choice = workspaceId ? choices.find(c => c.scope.workspaceId === workspaceId && c.scope.projectId === projectId) : null;
@@ -47,22 +48,47 @@ export default function PolicyEditor({ userId, workspaceId, projectId, screen }:
       }
       if (generation.current === turn) set({ ...empty(), choices, choice: choice ?? null, policies, effective, context, blocked: false });
     } catch (error) { if (generation.current === turn) failure(error); }
-  }, [projectId, screen, userId, workspaceId]);
+    finally { if (generation.current === turn) busy.current = false; }
+  }, [failure, projectId, screen, userId, workspaceId]);
   useEffect(() => {
     void load();
     const unsubscribe = subscribeAuthChanges(invalidate);
     const visibility = () => { if (document.hidden) invalidate(); else void load(); };
     const focus = () => { if (!document.hidden) void load(); };
+    let checking = false;
+    // Match grant management's bounded authority refresh without discarding an authorized draft.
+    const timer = window.setInterval(async () => {
+      const current = latest.current, turn = generation.current;
+      if (document.hidden || busy.current || current.blocked || checking) return;
+      checking = true;
+      try {
+        const choices = await discoverPolicies(userId, pending.current?.signal);
+        if (current.choice) {
+          const choice = choices.find(c => c.scope.workspaceId === current.choice!.scope.workspaceId && c.scope.projectId === current.choice!.scope.projectId);
+          if (!choice || JSON.stringify(choice.capabilities) !== JSON.stringify(current.choice.capabilities)) throw new PolicyError(403);
+          const client = createPolicyClient(choice.scope, userId, pending.current?.signal);
+          for (const target of [current.selected, current.source]) {
+            if (!target) continue;
+            const seen = await client.details(target.id);
+            if (seen.version !== target.version || seen.contentHash !== target.contentHash) throw new PolicyError(409);
+          }
+        }
+        if (turn === generation.current && !busy.current) set(s => turn === generation.current && !busy.current ? { ...s, choices } : s);
+      } catch (error) {
+        if (turn === generation.current && !busy.current) { invalidate(); failure(error); }
+      } finally { checking = false; }
+    }, 15000);
     document.addEventListener('visibilitychange', visibility); window.addEventListener('focus', focus);
-    return () => { unsubscribe(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('focus', focus); cancel(); };
-  }, [cancel, invalidate, load]);
+    return () => { unsubscribe(); clearInterval(timer); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('focus', focus); cancel(); };
+  }, [cancel, failure, invalidate, load, userId]);
   async function operate(action: (client: ReturnType<typeof createPolicyClient>) => Promise<Partial<State>>) {
-    if (!state.choice || state.blocked || state.busy) return;
-    const turn = generation.current; set(s => ({ ...s, busy: true, error: '', message: '' }));
+    if (!state.choice || state.blocked || busy.current) return;
+    const turn = ++generation.current; busy.current = true; set(s => ({ ...s, busy: true, error: '', message: '' }));
     try {
       const changes = await action(createPolicyClient(state.choice.scope, userId, pending.current?.signal));
       if (generation.current === turn) set(s => ({ ...s, ...changes, busy: false }));
     } catch (error) { if (generation.current === turn) failure(error); }
+    finally { if (generation.current === turn) busy.current = false; }
   }
   async function open(row: PolicyView) {
     await operate(async client => {

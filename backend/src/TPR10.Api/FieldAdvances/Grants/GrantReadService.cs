@@ -95,9 +95,8 @@ public sealed class GrantReadService(Tpr10DbContext db, FinanceAccess access, Gr
         if (!Page(page, size)) return Invalid<GrantRecord[]>();
         var candidates = await db.Set<GrantProposal>().AsNoTracking().Where(x => x.WorkspaceId == scope.WorkspaceId && x.ProjectId == scope.ProjectId && (!queue || x.State == "Pending"))
             .OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.Id).ToArrayAsync(ct);
-        var visible = new List<GrantProposal>();
-        foreach (var p in candidates) if (await Readable(p, queue, ct)) visible.Add(p);
-        var selected = visible.Skip((page - 1) * size).Take(size).ToArray();
+        var covered = await grants.CoveredAsync(Actor, scope, candidates.Select(GrantService.Spec).ToArray(), queue ? ["grant.review"] : caps, ct);
+        var selected = candidates.Where((_, i) => covered[i]).Skip((page - 1) * size).Take(size).ToArray();
         var rows = new List<GrantRecord>();
         foreach (var p in selected) rows.Add(await Record(p, ct));
         if (!(await Capabilities(scope, ct)).SequenceEqual(caps)) return Denied<GrantRecord[]>();

@@ -33,6 +33,7 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
         }
         else if (await db.Set<PolicyRevision>().AnyAsync(x => x.WorkspaceId == scope.WorkspaceId && x.ProjectId == scope.ProjectId, ct))
             return Invalid();
+        if (!await WritableBase(scope, baseCompanyVersionId, source, ct)) return Denied();
         var person = (await people.ResolveAsync(actorId, scope.WorkspaceId, ct))!.Value;
         var row = new PolicyRevision
         {
@@ -77,6 +78,7 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
         if (row.State is not ("Draft" or "Returned") || !VersionMatches(row, meta)) return Conflict();
         var options = meta.Policy!;
         if (options.SourcePolicyRevisionId != row.SourcePolicyRevisionId || !ValidMode(scope, options.Mode, options.BaseCompanyVersionId)) return Invalid();
+        if (!await WritableBase(scope, options.BaseCompanyVersionId, row, ct)) return Denied();
         if (!await ActiveMatches(scope, options, ct) || !await ValidBase(scope, options.Mode, options.BaseCompanyVersionId, content, ct)) return Conflict();
         db.Attach(row);
         row.Mode = options.Mode; row.BaseCompanyVersionId = options.BaseCompanyVersionId;
@@ -216,6 +218,14 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
         if (receipt.ActorId != actor || receipt.WorkspaceId != scope.WorkspaceId || receipt.Action != action || receipt.PayloadSha256 != hash) return Conflict();
         return JsonSerializer.Deserialize<FinanceResult<PolicyView>>(receipt.ResultJson) ?? throw new InvalidOperationException("Invalid retained policy receipt.");
     }
+    // A draft cannot manufacture permission to read an arbitrary company revision.
+    // Its existing/source basis is already readable; the only new choice is latest.
+    // Submission/review retain ValidBase, so a basis retiring while pending stays valid.
+    private Task<bool> WritableBase(FinanceScope scope, Guid? id, PolicyRevision? known, CancellationToken ct) =>
+        scope.ProjectId is null || known?.BaseCompanyVersionId == id && known is not null
+            ? Task.FromResult(true)
+            : db.Set<ActivePolicy>().AnyAsync(x => x.WorkspaceId == scope.WorkspaceId && x.ProjectId == null && x.PolicyRevisionId == id, ct);
+
     private async Task<bool> ValidBase(FinanceScope scope, string mode, Guid? id, PolicyContent content, CancellationToken ct)
     {
         if (scope.ProjectId is null) return id is null && mode == "Company";
@@ -241,23 +251,7 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
         // The query is exact-scope, so a project's company base never enters this lineage.
         var revisions = await db.Set<PolicyRevision>().AsNoTracking()
             .Where(x => x.WorkspaceId == row.WorkspaceId && x.ProjectId == row.ProjectId).ToDictionaryAsync(x => x.Id, ct);
-        var visited = new HashSet<Guid>();
-        var root = row;
-        while (root.SourcePolicyRevisionId is { } parent)
-        {
-            if (!visited.Add(root.Id) || !revisions.TryGetValue(parent, out var ancestor))
-                throw new InvalidOperationException("Invalid policy lineage.");
-            root = ancestor;
-        }
-        var lineage = new HashSet<Guid> { root.Id };
-        bool added;
-        do
-        {
-            added = false;
-            foreach (var revision in revisions.Values)
-                if (revision.SourcePolicyRevisionId is { } parent && lineage.Contains(parent))
-                    added |= lineage.Add(revision.Id);
-        } while (added);
+        var lineage = PolicyLineage.Members(row.Id, revisions.ToDictionary(x => x.Key, x => x.Value.SourcePolicyRevisionId));
         var result = revisions.Values.Where(x => lineage.Contains(x.Id)).Select(x => (x.CreatedByPersonId, x.CreatedBy)).ToList();
         var contributors = await db.Set<PolicyContributor>().AsNoTracking()
             .Where(x => x.WorkspaceId == row.WorkspaceId && lineage.Contains(x.PolicyRevisionId)).ToArrayAsync(ct);

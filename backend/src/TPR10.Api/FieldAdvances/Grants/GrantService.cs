@@ -19,7 +19,7 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
             spec = spec with { Capabilities = [.. spec.Capabilities], DelegableCapabilities = [.. spec.DelegableCapabilities] };
             if (!(await access.CheckAsync(actorId, spec.Scope, "grant.propose", ct)).Allowed) return Denied();
             var hash = Hash(new { spec, meta });
-            if (await ReplayAsync(actorId, spec.Scope, "grant.propose", meta, hash, ct) is { } replay) return replay;
+            if (await ReplayAsync(actorId, spec, "grant.propose", meta, hash, ct) is { } replay) return replay;
             var proposer = await people.ResolveAsync(actorId, spec.Scope.WorkspaceId, ct);
             var recipient = await people.ResolveAsync(spec.RecipientId, spec.Scope.WorkspaceId, ct);
             if (proposer is null || recipient is null || proposer == recipient) return Denied();
@@ -60,7 +60,7 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
             var spec = Spec(proposal);
             if (!(await access.CheckAsync(actorId, spec.Scope, "grant.review", ct)).Allowed) return Denied();
             var hash = Hash(new { proposalId, decision, meta });
-            if (await ReplayAsync(actorId, spec.Scope, "grant.review", meta, hash, ct) is { } replay) return replay;
+            if (await ReplayAsync(actorId, spec, "grant.review", meta, hash, ct) is { } replay) return replay;
             if (proposal.State != "Pending" || proposal.Version != meta.ExpectedVersion || proposal.Version == long.MaxValue)
                 return Conflict();
             async Task<bool> AuthorizedAsync()
@@ -118,7 +118,7 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
             var spec = Spec(proposal);
             if (!(await access.CheckAsync(actorId, spec.Scope, "grant.revoke", ct)).Allowed) return Denied();
             var hash = Hash(new { grantId, meta });
-            if (await ReplayAsync(actorId, spec.Scope, "grant.revoke", meta, hash, ct) is { } replay) return replay;
+            if (await ReplayAsync(actorId, spec, "grant.revoke", meta, hash, ct) is { } replay) return replay;
             if (grant.RevokedAtUtc is not null || grant.Version != meta.ExpectedVersion || grant.Version == long.MaxValue)
                 return Conflict();
             async Task<bool> AuthorizedAsync() =>
@@ -160,25 +160,43 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
 
     internal async Task<bool> CoversAsync(Guid actor, GrantSpec target, string operation, bool coverPeriod, CancellationToken ct)
     {
-        var person = await people.ResolveAsync(actor, target.Scope.WorkspaceId, ct);
-        if (person is null) return false;
+        var sources = await CoverageSources(actor, target.Scope, ct);
+        if (coverPeriod && target.EndsAt <= clock.GetUtcNow()) return false;
+        return Covers(sources, target, operation, coverPeriod);
+    }
+
+    // Batched filtering stays inside the reader's lock. The selected page is rechecked
+    // with current authority before disclosure, including expiry during the read.
+    internal async Task<bool[]> CoveredAsync(Guid actor, FinanceScope scope, GrantSpec[] targets, string[] operations, CancellationToken ct)
+    {
+        var sources = await CoverageSources(actor, scope, ct);
+        return targets.Select(target => target.Scope == scope && operations.Any(operation => Covers(sources, target, operation, false))).ToArray();
+    }
+
+    private async Task<GrantProposal[]> CoverageSources(Guid actor, FinanceScope scope, CancellationToken ct)
+    {
+        var person = await people.ResolveAsync(actor, scope.WorkspaceId, ct);
+        if (person is null) return [];
         var now = clock.GetUtcNow();
-        if (coverPeriod && target.EndsAt <= now) return false;
-        var sources = await (from assignment in db.Set<GrantAssignment>().AsNoTracking()
-                             join proposal in db.Set<GrantProposal>() on assignment.ProposalId equals proposal.Id
-                             join review in db.Set<GrantReview>() on assignment.ReviewId equals review.Id
-                             where assignment.WorkspaceId == target.Scope.WorkspaceId && assignment.ProjectId == target.Scope.ProjectId
-                                && proposal.WorkspaceId == assignment.WorkspaceId && proposal.ProjectId == assignment.ProjectId
-                                && review.WorkspaceId == assignment.WorkspaceId && review.ProposalId == proposal.Id
-                                && assignment.RevokedAtUtc == null && assignment.CreatedAtUtc <= now
-                                && proposal.State == "Approved" && review.Outcome == "Approved"
-                                && proposal.CreatedAtUtc <= now && review.CreatedAtUtc <= now
-                                && proposal.RecipientId == actor && proposal.RecipientPersonId == person
-                                && proposal.ProposedByPersonId != proposal.RecipientPersonId
-                                && review.ReviewerPersonId != proposal.RecipientPersonId
-                                && review.ReviewerPersonId != proposal.ProposedByPersonId
-                                && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
-                             select proposal).ToArrayAsync(ct);
+        return await (from assignment in db.Set<GrantAssignment>().AsNoTracking()
+                      join proposal in db.Set<GrantProposal>() on assignment.ProposalId equals proposal.Id
+                      join review in db.Set<GrantReview>() on assignment.ReviewId equals review.Id
+                      where assignment.WorkspaceId == scope.WorkspaceId && assignment.ProjectId == scope.ProjectId
+                         && proposal.WorkspaceId == assignment.WorkspaceId && proposal.ProjectId == assignment.ProjectId
+                         && review.WorkspaceId == assignment.WorkspaceId && review.ProposalId == proposal.Id
+                         && assignment.RevokedAtUtc == null && assignment.CreatedAtUtc <= now
+                         && proposal.State == "Approved" && review.Outcome == "Approved"
+                         && proposal.CreatedAtUtc <= now && review.CreatedAtUtc <= now
+                         && proposal.RecipientId == actor && proposal.RecipientPersonId == person
+                         && proposal.ProposedByPersonId != proposal.RecipientPersonId
+                         && review.ReviewerPersonId != proposal.RecipientPersonId
+                         && review.ReviewerPersonId != proposal.ProposedByPersonId
+                         && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
+                      select proposal).ToArrayAsync(ct);
+    }
+
+    private static bool Covers(GrantProposal[] sources, GrantSpec target, string operation, bool coverPeriod)
+    {
         if (!sources.Any(x => x.Capabilities.Contains(operation))) return false;
         // Each capability needs one source covering the WHOLE amount and period.
         // Never sum amounts, combine an amount from one source with a capability from another,
@@ -189,13 +207,16 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
                 && (!coverPeriod || source.EndsAtUtc is null || target.EndsAt is { } end && end <= source.EndsAtUtc)));
     }
 
-    private async Task<FinanceResult<GrantView>?> ReplayAsync(Guid actor, FinanceScope scope, string action,
+    private async Task<FinanceResult<GrantView>?> ReplayAsync(Guid actor, GrantSpec target, string action,
         CommandMeta meta, string hash, CancellationToken ct)
     {
         var receipt = await db.Set<FinanceCommandReceipt>().AsNoTracking().SingleOrDefaultAsync(x => x.CommandId == meta.CommandId, ct);
         if (receipt is null) return null;
-        if (receipt.ActorId != actor || receipt.WorkspaceId != scope.WorkspaceId || receipt.Action != action || receipt.PayloadSha256 != hash)
+        if (receipt.ActorId != actor || receipt.WorkspaceId != target.Scope.WorkspaceId || receipt.Action != action || receipt.PayloadSha256 != hash)
             return Conflict();
+        // Receipts disclose protected target data. Historical replay needs current coverage,
+        // but not a still-pending target or authority covering its historical time period.
+        if (!await CoversAsync(actor, target, action, false, ct)) return Denied();
         return JsonSerializer.Deserialize<FinanceResult<GrantView>>(receipt.ResultJson)
             ?? throw new InvalidOperationException("Invalid retained grant receipt.");
     }
