@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–3 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,398, Frontend Test 118 และเบราว์เซอร์ UI 1 ผ่าน พร้อม Build, Format และ Lint ครบ Task 4–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–4 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,436 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 5–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -167,12 +167,14 @@ actionของ RequestAccess จำกัด `read`/`edit`/`send-to-owner`/`con
 
 **อินเทอร์เฟซ:** `RequestDraftService.CreateAsync(Guid actorId, CreateRequest input, RequestCommand meta, CancellationToken ct)` และ `UpdateAsync(Guid actorId, Guid requestId, RequestContent content, RequestCommand meta, CancellationToken ct)` ทั้งคู่คืน `Task<FinanceResult<RequestView>>`; executor เป็น internal ใช้ transaction/receipt/audit ร่วมกับ Task6/7 ไม่เปิด generic action API
 
-- [ ] เขียน `Self_and_delegate_draft_keep_actor_history`, `Duplicate_command_returns_one_request`, `Same_command_different_payload_conflicts`, `Rollback_removes_request_event_and_receipt`: assert request/event/receipt count ไม่เพิ่มเมื่อ retry และทั้งหมดเท่าเดิมเมื่อ inject failure
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestDraftTests` ให้แดง
-- [ ] ทำ create/update ตรวจ scope/owner eligibility, ช่วงวันที่ start<=end, ชนิดคำขอ, team ไม่ซ้ำ และข้อมูลรายการตาม Task1 ไม่รับ client total/creator; draft version เพิ่มเมื่อแก้ ห้ามแก้ AwaitingOwner/submitted/terminal ตรง ๆ
-- [ ] สร้าง payload hash รวม action/actor/scope/content/version; receipt ผูก commandกับactor/action ไม่คืนผลก่อนตรวจสิทธิ์ปัจจุบัน; บันทึก event/participant/audit/receipt ภายใน transaction เดียว ปฏิเสธรหัสเดิมกับ payload ต่างด้วย409
-- [ ] รัน filtered tests ผ่าน เพิ่ม concurrent create/update และ revoked-after-success retry ไม่รั่วข้อมูล บันทึกข้อผิดพลาด DB ต้องไม่ค้าง entity state ทำให้ retry รอบถัดไปปน
-- [ ] ผู้ตรวจเทียบ B01/B12/B13 ตรวจชุดร่วม และ commit: `feat: add transactional advance request drafts`
+- [x] เขียน `Self_and_delegate_draft_keep_actor_history`, `Duplicate_command_returns_one_request`, `Same_command_different_payload_conflicts`, `Rollback_removes_request_event_and_receipt`: assert request/event/receipt count ไม่เพิ่มเมื่อ retry และทั้งหมดเท่าเดิมเมื่อ inject failure
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestDraftTests` ให้แดง
+- [x] ทำ create/update ตรวจ scope/owner eligibility, ช่วงวันที่ start<=end, ชนิดคำขอ, team ไม่ซ้ำ และข้อมูลรายการตาม Task1 ไม่รับ client total/creator; draft version เพิ่มเมื่อแก้ ห้ามแก้ AwaitingOwner/submitted/terminal ตรง ๆ
+- [x] สร้าง payload hash รวม action/actor/scope/content/version; receipt ผูก commandกับactor/action ไม่คืนผลก่อนตรวจสิทธิ์ปัจจุบัน; บันทึก event/participant/audit/receipt ภายใน transaction เดียว ปฏิเสธรหัสเดิมกับ payload ต่างด้วย409
+- [x] รัน filtered tests ผ่าน เพิ่ม concurrent create/update และ revoked-after-success retry ไม่รั่วข้อมูล บันทึกข้อผิดพลาด DB ต้องไม่ค้าง entity state ทำให้ retry รอบถัดไปปน
+- [x] ผู้ตรวจเทียบ B01/B12/B13 ตรวจชุดร่วม และ commit: `feat: add transactional advance request drafts`
+
+ผล Task 4: commits `88f6dcf`, `68a29be`; Dalton ลงมือ Carson ตรวจ และ Pascal ตรวจรอบแก้ query สิทธิ์ซ้ำให้ใช้ชุดเดียว เทสต์เฉพาะ Task 38 ผ่าน ผลสุดท้าย Backend 2,436/2,436, Frontend 118/118 และ Build/Format/Lint ผ่าน ไม่มีข้อพบ Task นี้ค้าง ไม่เริ่ม Task 5
 
 ### Task 5: เลือกผู้อนุมัติและหาทางพักอย่างปลอดภัย
 
@@ -285,4 +287,4 @@ node --input-type=module -e 'import { runHttpsSmoke } from "./infra/nginx/https-
 - มีชื่อไฟล์ สัญญาบริการ และเทสต์เฉพาะในทุกTask; migrationใช้ชื่อที่ระบุแต่ให้EFสร้างtimestampจริง ไม่สร้างชื่อวันที่ปลอม
 - จุดเสี่ยงทั้งห้าผูกกับเทสต์Taskที่รับผิดชอบแล้ว ไม่ให้metadata/alias/retryข้ามสิทธิ์
 - ข้อมูลโครงการ/ผู้รับผิดชอบเป็นตัวตนคำขอ และข้อมูลระดับอนุมัติผ่านgrantสามคน เป็นรายละเอียดการลงมือที่ต้องตรวจพร้อมแผนนี้ก่อนเริ่ม
-- ผู้ใช้อนุมัติแผนและสั่ง Task 1–3 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 4–10 ในรอบนี้
+- ผู้ใช้อนุมัติแผนและสั่ง Task 1–4 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 5–10 ในรอบนี้
