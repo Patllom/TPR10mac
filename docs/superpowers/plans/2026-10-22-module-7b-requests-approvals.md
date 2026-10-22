@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 Task 1–2 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,345 และ Frontend Test 109 ผ่าน พร้อม Build, Format และ Lint ครบ Task 3–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–3 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,398, Frontend Test 118 และเบราว์เซอร์ UI 1 ผ่าน พร้อม Build, Format และ Lint ครบ Task 4–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -152,12 +152,14 @@ Assert.Equal(400, EstimateCalculator.Calculate(lumpSumInStandardCategory, policy
 
 actionของ RequestAccess จำกัด `read`/`edit`/`send-to-owner`/`confirm`/`return-to-author`/`review`/`revise`/`withdraw`/`copy` ไม่รับค่าอื่น ส่วน RequestSeparation ใช้ `request.approve`/`finance.check`/`payment.record` เดิม; createยังไม่มีrequestIdจึงตรวจ FinanceAccess ตรงscopeและowner eligibility ภายในDraftService ไม่เปิดทาง CheckAsync ด้วยGuid.Empty
 
-- [ ] เขียน `Only_explicit_project_grants_allow_create_or_delegate`, `One_person_alias_cannot_self_approve`, `Previous_revision_approver_is_allowed_but_cannot_check_or_pay`, `One_source_must_cover_level_amount_and_period`; assertion `Allowed == false` สำหรับ admin/ทีม/ข้ามโครงการ/รวม grant, `Allowed == true` สำหรับผู้อนุมัติฉบับก่อนที่ไม่ซ้ำฉบับปัจจุบัน
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestAccessTests` และ `node --test tests/field-advance-grant.test.mjs` ให้แดงตรงความสามารถ/level ใหม่
-- [ ] เพิ่ม capability สองตัวและ field ระดับตามข้อกำหนดทางเทคนิค ปรับ validation จำนวน capability เดิมที่จำกัด 10 ให้รองรับรายการใหม่ครบ ไม่แก้เป็นรับ string อิสระ คุมให้ต่อระดับไม่เกินแหล่งอำนาจ ไม่ตีความ null limit ว่าไม่จำกัด
-- [ ] เพิ่ม UI เสนอ/ตรวจข้อมูลระดับและการแต่งตั้งหลักพร้อม wire/read serialization; การให้ต่อ PrimaryApprovalLevels ต้องมีแหล่งที่มี DelegablePrimaryApprovalLevels ครอบคลุมด้วย ไม่อนุมานจากสิทธิ์อนุมัติทั่วไป; bootstrap รองรับเฉพาะรายการที่บริษัทรับรองใหม่ ไม่ยกระดับข้อมูลเก่า อัปเดต hash/receipt ให้รวม fields ใหม่และเทสต์ HTTP tampering; ตรวจ DB guards ใน migration เดิมแล้วต่อด้วย migration ใหม่ ไม่แก้ประวัติ migration ที่ใช้งานแล้ว
-- [ ] ทดสอบ revoke/regrant, assignmentเก่า levelsว่าง, source grant ที่หมดอายุ และ alias คนเดียว รันคำสั่งเดิมผ่าน พร้อมเทสต์7A Grant/Bypass/Bootstrap เพื่อไม่เปลี่ยนกฎสามคน
-- [ ] ผู้ตรวจเทียบ B01/B06/B07/B14 ตรวจชุดร่วม และ commit: `feat: scope request access and approval levels`
+- [x] เขียน `Only_explicit_project_grants_allow_create_or_delegate`, `One_person_alias_cannot_self_approve`, `Previous_revision_approver_is_allowed_but_cannot_check_or_pay`, `One_source_must_cover_level_amount_and_period`; assertion `Allowed == false` สำหรับ admin/ทีม/ข้ามโครงการ/รวม grant, `Allowed == true` สำหรับผู้อนุมัติฉบับก่อนที่ไม่ซ้ำฉบับปัจจุบัน
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestAccessTests` และ `node --test tests/field-advance-grant.test.mjs` ให้แดงตรงความสามารถ/level ใหม่
+- [x] เพิ่ม capability สองตัวและ field ระดับตามข้อกำหนดทางเทคนิค ปรับ validation จำนวน capability เดิมที่จำกัด 10 ให้รองรับรายการใหม่ครบ ไม่แก้เป็นรับ string อิสระ คุมให้ต่อระดับไม่เกินแหล่งอำนาจ ไม่ตีความ null limit ว่าไม่จำกัด
+- [x] เพิ่ม UI เสนอ/ตรวจข้อมูลระดับและการแต่งตั้งหลักพร้อม wire/read serialization; การให้ต่อ PrimaryApprovalLevels ต้องมีแหล่งที่มี DelegablePrimaryApprovalLevels ครอบคลุมด้วย ไม่อนุมานจากสิทธิ์อนุมัติทั่วไป; bootstrap รองรับเฉพาะรายการที่บริษัทรับรองใหม่ ไม่ยกระดับข้อมูลเก่า อัปเดต hash/receipt ให้รวม fields ใหม่และเทสต์ HTTP tampering; ตรวจ DB guards ใน migration เดิมแล้วต่อด้วย migration ใหม่ ไม่แก้ประวัติ migration ที่ใช้งานแล้ว
+- [x] ทดสอบ revoke/regrant, assignmentเก่า levelsว่าง, source grant ที่หมดอายุ และ alias คนเดียว รันคำสั่งเดิมผ่าน พร้อมเทสต์7A Grant/Bypass/Bootstrap เพื่อไม่เปลี่ยนกฎสามคน
+- [x] ผู้ตรวจเทียบ B01/B06/B07/B14 ตรวจชุดร่วม และ commit: `feat: scope request access and approval levels`
+
+ผล Task 3: commits `ae3bb9b`, `73358c9`, `6fddc5a`; ตรวจอิสระและรอบแก้ครบ Backend 2,398/2,398, Frontend 118/118, เบราว์เซอร์ UI 1/1 และ Build/Format/Lint ผ่านวันที่ 23 ตุลาคม 2569 ไม่มีข้อพบ Task นี้ค้าง รายละเอียดรวมการแก้ fixture เก่าอยู่ในรายงาน ยังไม่เริ่ม Task 4
 
 ### Task 4: ร่างคำขอและธุรกรรมคำสั่ง
 
@@ -283,4 +285,4 @@ node --input-type=module -e 'import { runHttpsSmoke } from "./infra/nginx/https-
 - มีชื่อไฟล์ สัญญาบริการ และเทสต์เฉพาะในทุกTask; migrationใช้ชื่อที่ระบุแต่ให้EFสร้างtimestampจริง ไม่สร้างชื่อวันที่ปลอม
 - จุดเสี่ยงทั้งห้าผูกกับเทสต์Taskที่รับผิดชอบแล้ว ไม่ให้metadata/alias/retryข้ามสิทธิ์
 - ข้อมูลโครงการ/ผู้รับผิดชอบเป็นตัวตนคำขอ และข้อมูลระดับอนุมัติผ่านgrantสามคน เป็นรายละเอียดการลงมือที่ต้องตรวจพร้อมแผนนี้ก่อนเริ่ม
-- ผู้ใช้อนุมัติแผนและสั่ง Task 1 และ Task 2 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 3–10 ในรอบนี้
+- ผู้ใช้อนุมัติแผนและสั่ง Task 1–3 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 4–10 ในรอบนี้
