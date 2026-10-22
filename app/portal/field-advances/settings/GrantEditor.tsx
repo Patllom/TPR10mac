@@ -8,8 +8,18 @@ import type { ScopeChoice } from '@/lib/field-advances/policy-types';
 const root = '/portal/field-advances/settings';
 const input = 'mt-1 block w-full min-w-0 rounded-lg border border-slate-400 bg-transparent p-2';
 const button = 'rounded-lg border border-orange-600 px-4 py-2 text-sm font-semibold disabled:opacity-40';
-type State = { choices: ScopeChoice[]; choice: ScopeChoice | null; rows: GrantRecord[]; selected: GrantRecord | null; source: GrantRecord | null; spec: GrantSpec | null; history: GrantHistory[]; recipients: Recipient[]; prefix: string; recipientPage: number; editing: boolean; reason: string; blocked: boolean; busy: boolean; error: string; message: string };
-const empty = (): State => ({ choices: [], choice: null, rows: [], selected: null, source: null, spec: null, history: [], recipients: [], prefix: '', recipientPage: 1, editing: false, reason: '', blocked: true, busy: false, error: '', message: '' });
+type LevelText = Partial<Record<(typeof grantLevelFields)[number][0], string>>;
+type State = { choices: ScopeChoice[]; choice: ScopeChoice | null; rows: GrantRecord[]; selected: GrantRecord | null; source: GrantRecord | null; spec: GrantSpec | null; levelText: LevelText; history: GrantHistory[]; recipients: Recipient[]; prefix: string; recipientPage: number; editing: boolean; reason: string; blocked: boolean; busy: boolean; error: string; message: string };
+const empty = (): State => ({ choices: [], choice: null, rows: [], selected: null, source: null, spec: null, levelText: {}, history: [], recipients: [], prefix: '', recipientPage: 1, editing: false, reason: '', blocked: true, busy: false, error: '', message: '' });
+function withLevelText(spec: GrantSpec, text: LevelText): GrantSpec {
+  const parsed = { ...spec };
+  for (const [key] of grantLevelFields) {
+    const raw = text[key];
+    // Keep empty segments: full grant validation must reject malformed lists, not silently grant a subset.
+    if (raw !== undefined) parsed[key] = raw === '' ? [] : raw.split(',').map(value => value.trim());
+  }
+  return parsed;
+}
 const dateLabel = (value: string) => new Date(value).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }) + ' (Asia/Bangkok)';
 const localDate = (value: string | null) => value ? new Date(Date.parse(value) + 7 * 3600000).toISOString().slice(0, 16) : '';
 const utcDate = (value: string) => value && Number.isFinite(Date.parse(value + '+07:00')) ? new Date(value + '+07:00').toISOString() : '';
@@ -85,20 +95,20 @@ export default function GrantEditor({ userId, workspaceId, projectId, screen = '
   function start(source: GrantRecord | null) {
     if (!state.choice || !canPropose || disabled) return;
     set(s => ({ ...s, source, spec: source ? structuredClone(source.spec) : { recipientId: '', scope: s.choice!.scope, capabilities: [], delegableCapabilities: [], approvalLimit: null, startsAt: new Date().toISOString(), endsAt: null },
-      editing: true, recipients: [], prefix: '', recipientPage: 1, reason: '', error: '', message: '' }));
+      levelText: {}, editing: true, recipients: [], prefix: '', recipientPage: 1, reason: '', error: '', message: '' }));
   }
   function update(spec: GrantSpec) { set(s => ({ ...s, spec, message: '' })); }
   async function open(row: GrantRecord) {
-    await operate(async client => ({ selected: await client.details(row.id), history: await client.history(row.id), source: null, spec: null, editing: false, reason: '', recipients: [] }));
+    await operate(async client => ({ selected: await client.details(row.id), history: await client.history(row.id), source: null, spec: null, levelText: {}, editing: false, reason: '', recipients: [] }));
   }
   function command(action: 'propose' | 'approve' | 'return' | 'reject' | 'revoke') {
     const meta = { commandId: crypto.randomUUID(), expectedVersion: action === 'propose' ? 1 : action === 'revoke' ? state.selected!.assignmentVersion! : state.selected!.version, reason: state.reason };
     void operate(async client => {
       // Revalidate the comparison source before creating an additive proposal from it.
       if (action === 'propose' && state.source) { const seen = await client.details(state.source.id); if (seen.version !== state.source.version || seen.assignmentVersion !== state.source.assignmentVersion) throw new GrantError(409); }
-      const result = action === 'propose' ? await client.proposeGrant(state.spec!, meta) : action === 'revoke' ? await client.revokeGrant(state.selected!.assignmentId!, meta, state.selected!.id) : await client.reviewGrant(state.selected!.id, action, meta);
+      const result = action === 'propose' ? await client.proposeGrant(withLevelText(state.spec!, state.levelText), meta) : action === 'revoke' ? await client.revokeGrant(state.selected!.assignmentId!, meta, state.selected!.id) : await client.reviewGrant(state.selected!.id, action, meta);
       const id = action === 'revoke' ? state.selected!.id : result.id;
-      return { selected: await client.details(id), history: await client.history(id), rows: await client.list(screen === 'reviews'), source: null, spec: null, editing: false, reason: '', recipients: [], message: ({ propose: 'เสนอสำเร็จ — รอผู้ตรวจคนละบุคคล', approve: 'อนุมัติสำเร็จ — เริ่มใช้ตามเวลา', return: 'ส่งกลับสำเร็จ — ต้องเสนอใหม่', reject: 'ปฏิเสธสำเร็จ', revoke: 'ถอนสำเร็จ' })[action] };
+      return { selected: await client.details(id), history: await client.history(id), rows: await client.list(screen === 'reviews'), source: null, spec: null, levelText: {}, editing: false, reason: '', recipients: [], message: ({ propose: 'เสนอสำเร็จ — รอผู้ตรวจคนละบุคคล', approve: 'อนุมัติสำเร็จ — เริ่มใช้ตามเวลา', return: 'ส่งกลับสำเร็จ — ต้องเสนอใหม่', reject: 'ปฏิเสธสำเร็จ', revoke: 'ถอนสำเร็จ' })[action] };
     });
   }
   const current = state.selected;
@@ -146,13 +156,13 @@ export default function GrantEditor({ userId, workspaceId, projectId, screen = '
           <div className="grid gap-4 sm:grid-cols-2">{(['capabilities', 'delegableCapabilities'] as const).map(key => <fieldset key={key} className="min-w-0 rounded border p-3"><legend>{key === 'capabilities' ? 'ความสามารถที่ใช้' : 'ความสามารถที่มอบต่อได้'}</legend>{grantCapabilities.map(c => <label key={c} className="block break-all py-1"><input type="checkbox" checked={state.spec![key].includes(c)} onChange={e => update({ ...state.spec!, [key]: e.target.checked ? [...state.spec![key], c] : state.spec![key].filter(x => x !== c) })} /> {key === 'capabilities' ? 'ใช้' : 'มอบต่อ'} {c}</label>)}</fieldset>)}</div>
           <label className="block">วงเงินอำนาจ (บาท)<input className={input} inputMode="decimal" value={state.spec.approvalLimit ?? ''} onChange={e => update({ ...state.spec!, approvalLimit: e.target.value || null })} /></label><p className="text-sm">เว้นว่าง = ไม่มีอำนาจอนุมัติยอดเงิน</p>
           <p className="text-sm">ระบุรหัสระดับคั่นด้วยจุลภาค: supervisor, project-manager หรือรหัสระดับตามกติกาโครงการ การแต่งตั้งหลักต้องอยู่ในระดับอำนาจที่ตรงกัน และต้องมีอำนาจแต่งตั้งต่อจากต้นทาง</p>
-          <div className="grid gap-4 sm:grid-cols-2">{grantLevelFields.map(([key, label]) => <label key={key}>{label}<input className={input} value={(state.spec![key] ?? []).join(', ')} onChange={e => update({ ...state.spec!, [key]: e.target.value ? e.target.value.split(',').map(v => v.trim()) : [] })} /></label>)}</div>
+          <div className="grid gap-4 sm:grid-cols-2">{grantLevelFields.map(([key, label]) => <label key={key}>{label}<input className={input} value={state.levelText[key] ?? (state.spec![key] ?? []).join(', ')} onChange={e => set(s => ({ ...s, levelText: { ...s.levelText, [key]: e.target.value }, message: '' }))} onBlur={() => set(s => s.spec ? { ...s, spec: withLevelText(s.spec, s.levelText) } : s)} /></label>)}</div>
           <div className="grid gap-4 sm:grid-cols-2"><label>เริ่มใช้ (Asia/Bangkok)<input className={input} type="datetime-local" value={localDate(state.spec.startsAt)} onChange={e => update({ ...state.spec!, startsAt: utcDate(e.target.value) })} /></label>
             <label>สิ้นสุด (Asia/Bangkok)<input className={input} type="datetime-local" value={localDate(state.spec.endsAt)} onChange={e => update({ ...state.spec!, endsAt: e.target.value ? utcDate(e.target.value) : null })} /></label></div>
           <label className="block">เหตุผล<input className={input} value={state.reason} maxLength={1000} onChange={e => set(s => ({ ...s, reason: e.target.value }))} /></label>
         </fieldset>
         {state.source && <section><h4 className="font-semibold">ความต่างก่อนเสนอใหม่</h4><ul className="break-words">{grantDifferences(state.source.spec, state.spec).map(d => <li key={d}>{d}</li>)}</ul></section>}
-        <div className="flex flex-wrap gap-3"><button className={button} disabled={disabled} onClick={() => command('propose')}>ส่งข้อเสนอ</button><button className={button} disabled={disabled} onClick={() => set(s => ({ ...s, editing: false, source: null, spec: null, reason: '', recipients: [] }))}>ยกเลิกการเตรียมข้อเสนอ</button></div>
+        <div className="flex flex-wrap gap-3"><button className={button} disabled={disabled} onClick={() => command('propose')}>ส่งข้อเสนอ</button><button className={button} disabled={disabled} onClick={() => set(s => ({ ...s, editing: false, source: null, spec: null, levelText: {}, reason: '', recipients: [] }))}>ยกเลิกการเตรียมข้อเสนอ</button></div>
       </section>}
       {!!state.history.length && !state.editing && <div className="overflow-x-auto"><table aria-label="ประวัติสิทธิ์" className="w-full text-left text-sm"><caption className="py-2 text-left font-semibold">ประวัติสิทธิ์</caption><thead><tr>{['เหตุการณ์', 'เวลา (Asia/Bangkok)', 'ผู้ดำเนินการ', 'เหตุผล'].map(h => <th className="p-2" key={h}>{h}</th>)}</tr></thead><tbody>{state.history.map((h, i) => <tr className="border-t" key={i}><td className="p-2">{grantStatus(h.outcome)}</td><td className="p-2">{dateLabel(h.at)}</td><td className="break-all p-2">{h.actorId}</td><td className="break-words p-2">{h.reason}</td></tr>)}</tbody></table></div>}
     </>}
