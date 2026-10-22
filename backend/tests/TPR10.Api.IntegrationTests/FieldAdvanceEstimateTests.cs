@@ -113,14 +113,30 @@ public sealed class FieldAdvanceEstimateTests
         => Assert.Equal(400, EstimateCalculator.Calculate([
             Line(null, null, "9999999999999999.99", "LumpSum"), Line(null, null, "0.01", "LumpSum")], Policy()).Status);
 
-    [Fact]
-    public void Accepts_exact_decimal_quantity_without_an_extra_business_cap()
+    [Theory]
+    [InlineData("0.01", "100000000000001.00")]
+    [InlineData("0", "1")]
+    public void Accepts_maximum_storable_quantity(string rate, string expectedTotal)
     {
         var result = EstimateCalculator.Calculate([
-            Line("79228162514264337593543950335", "0"), Line(null, null, "1", "LumpSum")], Policy());
+            Line("9999999999999999.9999", rate), Line(null, null, "1", "LumpSum")], Policy());
         Assert.Equal(200, result.Status);
-        Assert.Equal(decimal.MaxValue, result.Value!.Lines[0].Quantity);
-        Assert.Equal(1m, result.Value.Total);
+        Assert.Equal(9999999999999999.9999m, result.Value!.Lines[0].Quantity);
+        Assert.Equal(decimal.Parse(expectedTotal, System.Globalization.CultureInfo.InvariantCulture), result.Value.Total);
+    }
+
+    [Theory]
+    [InlineData("10000000000000000", "0.01")]
+    [InlineData("10000000000000000", "0")]
+    [InlineData("79228162514264337593543950335", "0.01")]
+    [InlineData("79228162514264337593543950335", "0")]
+    public void Rejects_unstorable_quantity_even_when_rate_is_small_or_zero(string quantity, string rate)
+    {
+        var result = EstimateCalculator.Calculate([
+            Line(quantity, rate), Line(null, null, "1", "LumpSum")], Policy());
+        Assert.Equal(400, result.Status);
+        Assert.Equal("invalid-quantity", result.Code);
+        Assert.Null(result.Value);
     }
 
     [Fact]

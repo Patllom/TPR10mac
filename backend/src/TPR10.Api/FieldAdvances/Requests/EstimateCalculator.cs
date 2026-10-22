@@ -7,6 +7,8 @@ public static class EstimateCalculator
 {
     // Same numeric(18,2) storage boundary as 7A; not a business approval limit.
     private const decimal MaximumAmount = 9999999999999999.99m;
+    // Quantity is stored as numeric(20,4), independently of the resulting amount.
+    private const decimal MaximumQuantity = 9999999999999999.9999m;
 
     public static FinanceResult<Estimate> Calculate(EstimateLineInput[] lines, PolicySnapshot policy)
     {
@@ -27,7 +29,7 @@ public static class EstimateCalculator
             decimal amount;
             if (line.Mode == "QuantityRate")
             {
-                if (!TryDecimal(line.Quantity, 4, out var parsedQuantity))
+                if (!TryDecimal(line.Quantity, 4, out var parsedQuantity) || parsedQuantity > MaximumQuantity)
                     return new(400, "invalid-quantity", null);
                 quantity = parsedQuantity;
                 if (category.StandardRate is { } standardRate)
