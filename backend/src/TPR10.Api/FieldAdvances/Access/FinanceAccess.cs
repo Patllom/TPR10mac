@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Data;
-using TPR10.Api.FieldAdvances.Data;
 using TPR10.Api.Organization.Data;
 using TPR10.Api.Scopes;
 
@@ -22,22 +21,8 @@ public sealed class FinanceAccess(Tpr10DbContext db, ScopeAccess session, Financ
         if (scope.ProjectId is { } projectId && !await db.Set<Project>().AnyAsync(p => p.Id == projectId
                 && p.WorkspaceId == scope.WorkspaceId && p.IsActive, ct)) return Denied();
         var now = clock.GetUtcNow();
-        var allowed = await (from assignment in db.Set<GrantAssignment>().AsNoTracking()
-                             join proposal in db.Set<GrantProposal>() on assignment.ProposalId equals proposal.Id
-                             join review in db.Set<GrantReview>() on assignment.ReviewId equals review.Id
-                             where assignment.WorkspaceId == scope.WorkspaceId && assignment.ProjectId == scope.ProjectId
-                                 && proposal.WorkspaceId == assignment.WorkspaceId && proposal.ProjectId == assignment.ProjectId
-                                 && review.WorkspaceId == assignment.WorkspaceId && review.ProposalId == proposal.Id
-                                 && assignment.RevokedAtUtc == null && assignment.CreatedAtUtc <= now
-                                 && proposal.State == "Approved" && review.Outcome == "Approved"
-                                 && proposal.CreatedAtUtc <= now && review.CreatedAtUtc <= now
-                                 && proposal.RecipientId == actorId && proposal.RecipientPersonId == personId
-                                 && proposal.ProposedByPersonId != proposal.RecipientPersonId
-                                 && review.ReviewerPersonId != proposal.RecipientPersonId
-                                 && review.ReviewerPersonId != proposal.ProposedByPersonId
-                                 && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
-                                 && proposal.Capabilities.Contains(capability)
-                             select assignment.Id).AnyAsync(ct);
+        var allowed = await FinanceGrantQueries.Current(db, scope, capability, now)
+            .AnyAsync(proposal => proposal.RecipientId == actorId && proposal.RecipientPersonId == personId, ct);
         return allowed ? new(true, "allowed") : Denied();
     }
 

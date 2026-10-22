@@ -123,25 +123,14 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
             && await OwnerEligibleAsync(scope, request.OwnerPersonId, ct);
     }
 
-    // Mirrors FinanceAccess grant validity, without requiring the owner's interactive session.
+    // Shares FinanceAccess grant validity, without requiring the owner's interactive session.
     // Each eligible grant must belong to one currently active, unambiguously linked account.
     private async Task<bool> OwnerEligibleAsync(FinanceScope scope, Guid owner, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        var accounts = await (from assignment in db.Set<GrantAssignment>().AsNoTracking()
-                              join proposal in db.Set<GrantProposal>() on assignment.ProposalId equals proposal.Id
-                              join review in db.Set<GrantReview>() on assignment.ReviewId equals review.Id
-                              where assignment.WorkspaceId == scope.WorkspaceId && assignment.ProjectId == scope.ProjectId
-                                  && proposal.WorkspaceId == assignment.WorkspaceId && proposal.ProjectId == assignment.ProjectId
-                                  && review.WorkspaceId == assignment.WorkspaceId && review.ProposalId == proposal.Id
-                                  && assignment.RevokedAtUtc == null && assignment.CreatedAtUtc <= now
-                                  && proposal.State == "Approved" && review.Outcome == "Approved"
-                                  && proposal.CreatedAtUtc <= now && review.CreatedAtUtc <= now
-                                  && proposal.RecipientPersonId == owner && proposal.ProposedByPersonId != owner
-                                  && review.ReviewerPersonId != owner && review.ReviewerPersonId != proposal.ProposedByPersonId
-                                  && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
-                                  && proposal.Capabilities.Contains("request.create")
-                              select proposal.RecipientId).Distinct().ToArrayAsync(ct);
+        var accounts = await FinanceGrantQueries.Current(db, scope, "request.create", now)
+            .Where(proposal => proposal.RecipientPersonId == owner)
+            .Select(proposal => proposal.RecipientId).Distinct().ToArrayAsync(ct);
         foreach (var account in accounts)
             if (await people.ResolveAsync(account, scope.WorkspaceId, ct) == owner) return true;
         return false;
