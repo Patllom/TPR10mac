@@ -1,6 +1,7 @@
 using TPR10.Api.FieldAdvances.Access;
 using TPR10.Api.FieldAdvances.Grants;
 using TPR10.Api.FieldAdvances.Policies;
+using TPR10.Api.FieldAdvances.Requests;
 using TPR10.Api.Identity;
 
 namespace TPR10.Api.FieldAdvances;
@@ -11,6 +12,8 @@ public static class FieldAdvanceRegistration
     {
         services.AddScoped<FinancePersonResolver>();
         services.AddScoped<FinanceAccess>();
+        services.AddScoped<RequestAccess>();
+        services.AddScoped<RequestDraftService>();
         services.AddScoped<PolicyService>();
         services.AddScoped<PolicyResolver>();
         services.AddScoped<PolicyReadService>();
