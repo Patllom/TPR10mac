@@ -8,6 +8,34 @@ const scope = { workspaceId: w, projectId: null };
 const spec = { recipientId: id, scope, capabilities: ['report.read'], delegableCapabilities: [], approvalLimit: '9999999999999999.99', startsAt: '2026-10-21T00:00:00Z', endsAt: '2026-10-22T00:00:00Z' };
 const meta = { commandId: id, expectedVersion: 1, reason: 'ทดสอบ' };
 const row = { id, state: 'Pending', version: 1, spec, assignmentId: null, assignmentVersion: null, effectiveState: 'Pending', proposedBy: w, recipientName: 'ผู้รับ', canReview: false, canApprove: false, canRevoke: false };
+test('new request capabilities and all four level arrays survive proposal wire', async () => {
+  const extended = { ...spec, scope: { workspaceId: w, projectId: id }, capabilities: ['request.create', 'request.delegate', 'request.approve'],
+    delegableCapabilities: ['request.approve'], approvalLevels: ['project-manager'], delegableApprovalLevels: ['project-manager'],
+    primaryApprovalLevels: ['project-manager'], delegablePrimaryApprovalLevels: ['project-manager'] };
+  let sent;
+  const c = api.createGrantClient(extended.scope, w, undefined, transport(async (_, o) => { sent = JSON.parse(o.body).spec; return Response.json({ id, state: 'Pending', version: 1, spec: extended }); }));
+  await c.proposeGrant(extended, meta);
+  assert.deepEqual(sent, extended);
+});
+test('primary appointment without matching approval authority is rejected', async () => {
+  let calls = 0;
+  await assert.rejects(() => client(async () => { calls++; return Response.json(row); }).proposeGrant({ ...spec,
+    approvalLevels: [], delegableApprovalLevels: [], primaryApprovalLevels: ['project-manager'], delegablePrimaryApprovalLevels: [] }, meta), e => e.status === 400);
+  assert.equal(calls, 0);
+});
+test('all twelve supported capabilities are accepted without accepting arbitrary strings', () => {
+  api.validateGrant({ ...spec, capabilities: ['policy.edit.company', 'policy.edit.project', 'policy.review', 'grant.propose', 'grant.review', 'grant.revoke', 'request.create', 'request.delegate', 'request.approve', 'finance.check', 'payment.record', 'report.read'] });
+  assert.throws(() => api.validateGrant({ ...spec, capabilities: ['request.override'] }), e => e.status === 400);
+});
+for (const invalid of [null, [''], ['project-manager', 'PROJECT-MANAGER'], ['x'.repeat(65)], ['supervisor\n']]) test(`invalid approval level array is rejected: ${JSON.stringify(invalid)}`, () => {
+  assert.throws(() => api.validateGrant({ ...spec, scope: { workspaceId: w, projectId: id }, capabilities: ['request.approve'], approvalLevels: invalid }), e => e.status === 400);
+});
+test('review differences expose each independent approval and primary appointment change', () => {
+  const diff = api.grantDifferences(spec, { ...spec, approvalLevels: ['supervisor'], delegableApprovalLevels: ['project-manager'],
+    primaryApprovalLevels: ['director'], delegablePrimaryApprovalLevels: ['executive'] });
+  assert.equal(diff.length, 4);
+  for (const code of ['supervisor', 'project-manager', 'director', 'executive']) assert.ok(diff.some(line => line.includes(code)));
+});
 function transport(handler) { return async (url, options) => url.endsWith('/session') ? Response.json({ userId: w, stage: 'Active', permissions: [], mfaVerifiedAtUtc: null }) : url.endsWith('/csrf') ? Response.json({ token: 'fixture' }) : handler(url, options); }
 function client(handler) { assert.equal(typeof api.createGrantClient, 'function', 'grant client must implement the workflow'); return api.createGrantClient(scope, w, undefined, transport(handler)); }
 test('proposal preserves exact string money, CSRF and no-store without retries', async () => {

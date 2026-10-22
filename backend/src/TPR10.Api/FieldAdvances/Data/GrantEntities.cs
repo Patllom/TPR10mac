@@ -13,6 +13,10 @@ public sealed class GrantProposal
     public long Version { get; set; } = 1;
     public required string[] Capabilities { get; set; }
     public required string[] DelegableCapabilities { get; set; }
+    public string[] ApprovalLevels { get; set; } = [];
+    public string[] DelegableApprovalLevels { get; set; } = [];
+    public string[] PrimaryApprovalLevels { get; set; } = [];
+    public string[] DelegablePrimaryApprovalLevels { get; set; } = [];
     public decimal? ApprovalLimit { get; set; }
     public DateTimeOffset StartsAtUtc { get; set; }
     public DateTimeOffset? EndsAtUtc { get; set; }

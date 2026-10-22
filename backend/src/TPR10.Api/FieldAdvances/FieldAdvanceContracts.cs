@@ -42,7 +42,13 @@ public sealed record PolicyHistoryView(Guid Id, Guid PolicyRevisionId, string Ou
 // RecipientId is an account. A later server resolver must obtain its explicit person identity.
 public sealed record GrantSpec(Guid RecipientId, FinanceScope Scope, string[] Capabilities,
     string[] DelegableCapabilities, decimal? ApprovalLimit,
-    DateTimeOffset StartsAt, DateTimeOffset? EndsAt);
+    DateTimeOffset StartsAt, DateTimeOffset? EndsAt)
+{
+    public string[] ApprovalLevels { get; init; } = [];
+    public string[] DelegableApprovalLevels { get; init; } = [];
+    public string[] PrimaryApprovalLevels { get; init; } = [];
+    public string[] DelegablePrimaryApprovalLevels { get; init; } = [];
+}
 public sealed record GrantView(Guid Id, string State, long Version, GrantSpec Spec);
 public sealed record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
     Guid[] ApproverPersonIds, Guid[] CheckerPersonIds, Guid[] PayerPersonIds);

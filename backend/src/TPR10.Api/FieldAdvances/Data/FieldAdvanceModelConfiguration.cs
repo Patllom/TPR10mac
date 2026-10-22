@@ -103,12 +103,23 @@ public static class FieldAdvanceModelConfiguration
         proposal.Property(x => x.State).HasMaxLength(30);
         proposal.Property(x => x.Capabilities).HasColumnType("text[]");
         proposal.Property(x => x.DelegableCapabilities).HasColumnType("text[]");
+        proposal.Property(x => x.ApprovalLevels).HasColumnType("text[]").HasDefaultValueSql("'{}'::text[]");
+        proposal.Property(x => x.DelegableApprovalLevels).HasColumnType("text[]").HasDefaultValueSql("'{}'::text[]");
+        proposal.Property(x => x.PrimaryApprovalLevels).HasColumnType("text[]").HasDefaultValueSql("'{}'::text[]");
+        proposal.Property(x => x.DelegablePrimaryApprovalLevels).HasColumnType("text[]").HasDefaultValueSql("'{}'::text[]");
         proposal.Property(x => x.ApprovalLimit).HasPrecision(18, 2);
         proposal.ToTable(t =>
         {
             t.HasCheckConstraint("ck_field_advance_grant_amount", "approval_limit IS NULL OR approval_limit>=0");
             t.HasCheckConstraint("ck_field_advance_grant_period", "isfinite(starts_at_utc) AND (ends_at_utc IS NULL OR (isfinite(ends_at_utc) AND ends_at_utc>starts_at_utc))");
             t.HasCheckConstraint("ck_field_advance_grant_state", "state IN ('Draft','Pending','Approved','Rejected','Withdrawn')");
+            t.HasCheckConstraint("ck_field_advance_grant_primary_levels", "primary_approval_levels <@ approval_levels AND delegable_primary_approval_levels <@ delegable_approval_levels");
+            t.HasCheckConstraint("ck_field_advance_grant_level_authority", """
+                (cardinality(approval_levels)=0 OR (project_id IS NOT NULL AND approval_limit IS NOT NULL AND 'request.approve'=ANY(capabilities)))
+                AND (cardinality(delegable_approval_levels)=0 OR (project_id IS NOT NULL AND approval_limit IS NOT NULL AND 'request.approve'=ANY(delegable_capabilities)))
+                AND array_position(approval_levels,NULL) IS NULL AND array_position(delegable_approval_levels,NULL) IS NULL
+                AND array_position(primary_approval_levels,NULL) IS NULL AND array_position(delegable_primary_approval_levels,NULL) IS NULL
+                """);
         });
 
         var grantReview = Row<GrantReview>(model, "field_advance_grant_reviews");

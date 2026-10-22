@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Navigation discards scoped state. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { subscribeAuthChanges } from '@/lib/auth/auth-change';
-import { createGrantClient, discoverGrants, GrantError, grantCapabilities, grantDifferences, grantStatus, type GrantSpec, type GrantRecord, type GrantHistory, type Recipient } from '@/lib/field-advances/grant-client';
+import { createGrantClient, discoverGrants, GrantError, grantCapabilities, grantLevelFields, grantDifferences, grantStatus, type GrantSpec, type GrantRecord, type GrantHistory, type Recipient } from '@/lib/field-advances/grant-client';
 import type { ScopeChoice } from '@/lib/field-advances/policy-types';
 
 const root = '/portal/field-advances/settings';
@@ -122,6 +122,7 @@ export default function GrantEditor({ userId, workspaceId, projectId, screen = '
         <h3 className="font-semibold">รายละเอียดสิทธิ์</h3><p>{current.recipientName}</p><p>{grantStatus(current.effectiveState)}</p>
         <p className="break-all">ผู้เสนอ: {current.proposedBy} · ผู้รับ: {current.spec.recipientId}</p>
         <p>ความสามารถ: {current.spec.capabilities.join(', ')}</p><p>มอบต่อได้: {current.spec.delegableCapabilities.join(', ') || 'ไม่มี'}</p>
+        {grantLevelFields.map(([key, label]) => <p key={key}>{label}: {(current.spec[key] ?? []).join(', ') || 'ไม่มี'}</p>)}
         <p>วงเงิน: {current.spec.approvalLimit ?? 'ไม่มีอำนาจอนุมัติยอดเงิน'}</p><p>เริ่ม: {dateLabel(current.spec.startsAt)}</p><p>สิ้นสุด: {current.spec.endsAt ? dateLabel(current.spec.endsAt) : 'ไม่กำหนด'}</p>
         <p>รุ่นข้อเสนอ {current.version}{current.assignmentVersion ? ` · รุ่นสิทธิ์ ${current.assignmentVersion}` : ''}</p>
         {canPropose && screen !== 'history' && <button className={button} disabled={disabled} onClick={() => start(current)}>เตรียมข้อเสนอใหม่จากรายการนี้</button>}
@@ -144,6 +145,8 @@ export default function GrantEditor({ userId, workspaceId, projectId, screen = '
           <p>ขอบเขต: {state.choice.workspaceName} · {state.choice.projectName ?? 'ระดับบริษัท'}</p>
           <div className="grid gap-4 sm:grid-cols-2">{(['capabilities', 'delegableCapabilities'] as const).map(key => <fieldset key={key} className="min-w-0 rounded border p-3"><legend>{key === 'capabilities' ? 'ความสามารถที่ใช้' : 'ความสามารถที่มอบต่อได้'}</legend>{grantCapabilities.map(c => <label key={c} className="block break-all py-1"><input type="checkbox" checked={state.spec![key].includes(c)} onChange={e => update({ ...state.spec!, [key]: e.target.checked ? [...state.spec![key], c] : state.spec![key].filter(x => x !== c) })} /> {key === 'capabilities' ? 'ใช้' : 'มอบต่อ'} {c}</label>)}</fieldset>)}</div>
           <label className="block">วงเงินอำนาจ (บาท)<input className={input} inputMode="decimal" value={state.spec.approvalLimit ?? ''} onChange={e => update({ ...state.spec!, approvalLimit: e.target.value || null })} /></label><p className="text-sm">เว้นว่าง = ไม่มีอำนาจอนุมัติยอดเงิน</p>
+          <p className="text-sm">ระบุรหัสระดับคั่นด้วยจุลภาค: supervisor, project-manager หรือรหัสระดับตามกติกาโครงการ การแต่งตั้งหลักต้องอยู่ในระดับอำนาจที่ตรงกัน และต้องมีอำนาจแต่งตั้งต่อจากต้นทาง</p>
+          <div className="grid gap-4 sm:grid-cols-2">{grantLevelFields.map(([key, label]) => <label key={key}>{label}<input className={input} value={(state.spec![key] ?? []).join(', ')} onChange={e => update({ ...state.spec!, [key]: e.target.value ? e.target.value.split(',').map(v => v.trim()) : [] })} /></label>)}</div>
           <div className="grid gap-4 sm:grid-cols-2"><label>เริ่มใช้ (Asia/Bangkok)<input className={input} type="datetime-local" value={localDate(state.spec.startsAt)} onChange={e => update({ ...state.spec!, startsAt: utcDate(e.target.value) })} /></label>
             <label>สิ้นสุด (Asia/Bangkok)<input className={input} type="datetime-local" value={localDate(state.spec.endsAt)} onChange={e => update({ ...state.spec!, endsAt: e.target.value ? utcDate(e.target.value) : null })} /></label></div>
           <label className="block">เหตุผล<input className={input} value={state.reason} maxLength={1000} onChange={e => set(s => ({ ...s, reason: e.target.value }))} /></label>

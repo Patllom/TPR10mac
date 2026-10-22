@@ -16,9 +16,17 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
         {
             if (!Valid(meta) || meta.ExpectedVersion != 1 || !Valid(spec)) return Invalid();
             // Own the arrays throughout the async operation; caller changes cannot alter checked content.
-            spec = spec with { Capabilities = [.. spec.Capabilities], DelegableCapabilities = [.. spec.DelegableCapabilities] };
+            spec = spec with
+            {
+                Capabilities = [.. spec.Capabilities],
+                DelegableCapabilities = [.. spec.DelegableCapabilities],
+                ApprovalLevels = [.. spec.ApprovalLevels],
+                DelegableApprovalLevels = [.. spec.DelegableApprovalLevels],
+                PrimaryApprovalLevels = [.. spec.PrimaryApprovalLevels],
+                DelegablePrimaryApprovalLevels = [.. spec.DelegablePrimaryApprovalLevels]
+            };
             if (!(await access.CheckAsync(actorId, spec.Scope, "grant.propose", ct)).Allowed) return Denied();
-            var hash = Hash(new { spec, meta });
+            var hash = ProposalHash(spec, meta);
             if (await ReplayAsync(actorId, spec, "grant.propose", meta, hash, ct) is { } replay) return replay;
             var proposer = await people.ResolveAsync(actorId, spec.Scope.WorkspaceId, ct);
             var recipient = await people.ResolveAsync(spec.RecipientId, spec.Scope.WorkspaceId, ct);
@@ -36,6 +44,10 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
                 State = "Pending",
                 Capabilities = spec.Capabilities,
                 DelegableCapabilities = spec.DelegableCapabilities,
+                ApprovalLevels = spec.ApprovalLevels,
+                DelegableApprovalLevels = spec.DelegableApprovalLevels,
+                PrimaryApprovalLevels = spec.PrimaryApprovalLevels,
+                DelegablePrimaryApprovalLevels = spec.DelegablePrimaryApprovalLevels,
                 ApprovalLimit = spec.ApprovalLimit,
                 StartsAtUtc = spec.StartsAt.ToUniversalTime(),
                 EndsAtUtc = spec.EndsAt?.ToUniversalTime(),
@@ -204,7 +216,11 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
         return target.Capabilities.Concat(target.DelegableCapabilities).Distinct().All(capability =>
             sources.Any(source => source.DelegableCapabilities.Contains(capability)
                 && (target.ApprovalLimit is null || source.ApprovalLimit is { } limit && limit >= target.ApprovalLimit)
-                && (!coverPeriod || source.EndsAtUtc is null || target.EndsAt is { } end && end <= source.EndsAtUtc)));
+                && (capability != "request.approve" ||
+                    target.ApprovalLevels.Concat(target.DelegableApprovalLevels).All(source.DelegableApprovalLevels.Contains)
+                    && target.PrimaryApprovalLevels.Concat(target.DelegablePrimaryApprovalLevels).All(source.DelegablePrimaryApprovalLevels.Contains))
+                && (!coverPeriod || source.StartsAtUtc <= target.StartsAt
+                    && (source.EndsAtUtc is null || target.EndsAt is { } end && end <= source.EndsAtUtc))));
     }
 
     private async Task<FinanceResult<GrantView>?> ReplayAsync(Guid actor, GrantSpec target, string action,
@@ -247,17 +263,58 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
         && !string.IsNullOrWhiteSpace(meta.Reason) && meta.Reason.Length <= 1000 && !meta.Reason.Any(char.IsControl);
     private static bool Valid(GrantSpec? spec) => spec is not null && spec.RecipientId != Guid.Empty
         && spec.Scope is not null && spec.Scope.WorkspaceId != Guid.Empty && spec.Scope.ProjectId != Guid.Empty
-        && spec.Capabilities is { Length: > 0 and <= 10 } && spec.DelegableCapabilities is { Length: <= 10 }
+        && spec.Capabilities is { Length: > 0 and <= 12 } && spec.DelegableCapabilities is { Length: <= 12 }
         && spec.Capabilities.Concat(spec.DelegableCapabilities).All(FinanceCapabilities.Contains)
         && spec.Capabilities.Distinct().Count() == spec.Capabilities.Length
         && spec.DelegableCapabilities.Distinct().Count() == spec.DelegableCapabilities.Length
+        && ValidLevels(spec)
         && (spec.ApprovalLimit is null || spec.ApprovalLimit is >= 0 and <= 9999999999999999.99m
             && decimal.Round(spec.ApprovalLimit.Value, 2) == spec.ApprovalLimit)
         && spec.StartsAt != DateTimeOffset.MinValue && spec.StartsAt != DateTimeOffset.MaxValue
         && (spec.EndsAt is null || spec.EndsAt > spec.StartsAt && spec.EndsAt != DateTimeOffset.MaxValue);
     private static string Hash<T>(T payload) => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload)));
+    private static string ProposalHash(GrantSpec spec, CommandMeta meta)
+    {
+        // Empty level sets convey no new authority. Preserve the original 7A canonical payload
+        // for that case so existing command receipts remain replayable without rewriting history.
+        // Any nonempty set uses the extended payload, binding all four arrays together.
+        if (spec.ApprovalLevels.Length == 0 && spec.DelegableApprovalLevels.Length == 0
+            && spec.PrimaryApprovalLevels.Length == 0 && spec.DelegablePrimaryApprovalLevels.Length == 0)
+            return Hash(new
+            {
+                spec = new
+                {
+                    spec.RecipientId,
+                    spec.Scope,
+                    spec.Capabilities,
+                    spec.DelegableCapabilities,
+                    spec.ApprovalLimit,
+                    spec.StartsAt,
+                    spec.EndsAt
+                },
+                meta
+            });
+        return Hash(new { spec, meta });
+    }
     internal static GrantSpec Spec(GrantProposal proposal) => new(proposal.RecipientId, new(proposal.WorkspaceId, proposal.ProjectId),
-        proposal.Capabilities, proposal.DelegableCapabilities, proposal.ApprovalLimit, proposal.StartsAtUtc, proposal.EndsAtUtc);
+        proposal.Capabilities, proposal.DelegableCapabilities, proposal.ApprovalLimit, proposal.StartsAtUtc, proposal.EndsAtUtc)
+    {
+        ApprovalLevels = proposal.ApprovalLevels,
+        DelegableApprovalLevels = proposal.DelegableApprovalLevels,
+        PrimaryApprovalLevels = proposal.PrimaryApprovalLevels,
+        DelegablePrimaryApprovalLevels = proposal.DelegablePrimaryApprovalLevels
+    };
+    internal static bool ValidLevels(GrantSpec spec)
+    {
+        string[][] sets = [spec.ApprovalLevels, spec.DelegableApprovalLevels, spec.PrimaryApprovalLevels, spec.DelegablePrimaryApprovalLevels];
+        if (sets.Any(levels => levels is null || levels.Length > 100
+            || levels.Any(level => string.IsNullOrWhiteSpace(level) || level.Length > 64 || level != level.Trim() || level.Any(char.IsControl))
+            || levels.Distinct(StringComparer.OrdinalIgnoreCase).Count() != levels.Length)) return false;
+        return spec.PrimaryApprovalLevels.All(spec.ApprovalLevels.Contains)
+            && spec.DelegablePrimaryApprovalLevels.All(spec.DelegableApprovalLevels.Contains)
+            && (spec.ApprovalLevels.Length == 0 || spec.Scope.ProjectId is not null && spec.ApprovalLimit is not null && spec.Capabilities.Contains("request.approve"))
+            && (spec.DelegableApprovalLevels.Length == 0 || spec.Scope.ProjectId is not null && spec.ApprovalLimit is not null && spec.DelegableCapabilities.Contains("request.approve"));
+    }
     private static GrantView View(GrantProposal proposal) => new(proposal.Id, proposal.State, proposal.Version, Spec(proposal));
     private static FinanceResult<GrantView> Invalid() => new(400, "invalid-request", null);
     private static FinanceResult<GrantView> Denied() => new(403, "finance-access-denied", null);

@@ -15,6 +15,7 @@ public sealed class FinanceAccess(Tpr10DbContext db, ScopeAccess session, Financ
         var identity = await session.ValidateSessionAsync(requireMfa: true, ct);
         if (identity.Status is not null || identity.ActorId != actorId || actorId == Guid.Empty
             || scope is null || scope.WorkspaceId == Guid.Empty || scope.ProjectId == Guid.Empty
+            || scope.ProjectId is null && capability is "request.create" or "request.delegate"
             || !FinanceCapabilities.Contains(capability)) return Denied();
         var personId = await people.ResolveAsync(actorId, scope.WorkspaceId, ct);
         if (personId is null) return Denied();

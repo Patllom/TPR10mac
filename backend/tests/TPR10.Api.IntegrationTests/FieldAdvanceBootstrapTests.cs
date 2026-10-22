@@ -19,6 +19,27 @@ public sealed class FieldAdvanceBootstrapTests(PostgresFixture postgres)
 {
     private static readonly Guid OperatorPersonId = Guid.Parse("72000000-0000-0000-0000-000000000034");
 
+    [Fact]
+    public async Task Certified_new_manifest_can_delegate_levels_without_granting_usage_or_reopening_bootstrap()
+    {
+        await using var f = await ReadyAsync();
+        var manifest = Manifest();
+        var grant = manifest["grants"]![1]!;
+        grant["delegableCapabilities"] = new JsonArray("request.create", "request.delegate", "request.approve");
+        grant["approvalLevels"] = new JsonArray();
+        grant["delegableApprovalLevels"] = new JsonArray("supervisor", "project-manager");
+        grant["primaryApprovalLevels"] = new JsonArray();
+        grant["delegablePrimaryApprovalLevels"] = new JsonArray("project-manager");
+        Assert.Equal(0, (await RunAsync(f, manifest)).Code);
+        await using var db = f.CreateContext();
+        var proposal = await db.Set<GrantProposal>().SingleAsync(x => x.ProjectId == ProjectId);
+        Assert.Empty(proposal.ApprovalLevels);
+        Assert.Equal(["supervisor", "project-manager"], proposal.DelegableApprovalLevels);
+        Assert.Equal(["project-manager"], proposal.DelegablePrimaryApprovalLevels);
+        Assert.DoesNotContain("request.approve", proposal.Capabilities);
+        Assert.Equal(2, (await RunAsync(f, Manifest())).Code);
+    }
+
     [Theory]
     [InlineData("startsAtUtc")]
     [InlineData("endsAtUtc")]

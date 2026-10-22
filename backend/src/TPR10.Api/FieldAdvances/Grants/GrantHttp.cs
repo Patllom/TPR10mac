@@ -7,13 +7,33 @@ namespace TPR10.Api.FieldAdvances.Grants;
 public sealed record GrantWireSpec(Guid RecipientId, FinanceScope Scope, string[] Capabilities, string[] DelegableCapabilities,
     string? ApprovalLimit, DateTimeOffset StartsAt, DateTimeOffset? EndsAt)
 {
+    public string[] ApprovalLevels { get; init; } = [];
+    public string[] DelegableApprovalLevels { get; init; } = [];
+    public string[] PrimaryApprovalLevels { get; init; } = [];
+    public string[] DelegablePrimaryApprovalLevels { get; init; } = [];
     internal static GrantWireSpec From(GrantSpec s) => new(s.RecipientId, s.Scope, s.Capabilities, s.DelegableCapabilities,
-        s.ApprovalLimit?.ToString("0.00", CultureInfo.InvariantCulture), s.StartsAt, s.EndsAt);
+        s.ApprovalLimit?.ToString("0.00", CultureInfo.InvariantCulture), s.StartsAt, s.EndsAt)
+    {
+        ApprovalLevels = s.ApprovalLevels,
+        DelegableApprovalLevels = s.DelegableApprovalLevels,
+        PrimaryApprovalLevels = s.PrimaryApprovalLevels,
+        DelegablePrimaryApprovalLevels = s.DelegablePrimaryApprovalLevels
+    };
 }
 public sealed record GrantHttpSpec(Guid RecipientId, FinanceScope Scope, string[] Capabilities, string[] DelegableCapabilities,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ApprovalLimit, DateTimeOffset StartsAt, DateTimeOffset? EndsAt)
 {
-    internal GrantSpec Domain() => new(RecipientId, Scope, Capabilities, DelegableCapabilities, ApprovalLimit, StartsAt, EndsAt);
+    public string[] ApprovalLevels { get; init; } = [];
+    public string[] DelegableApprovalLevels { get; init; } = [];
+    public string[] PrimaryApprovalLevels { get; init; } = [];
+    public string[] DelegablePrimaryApprovalLevels { get; init; } = [];
+    internal GrantSpec Domain() => new(RecipientId, Scope, Capabilities, DelegableCapabilities, ApprovalLimit, StartsAt, EndsAt)
+    {
+        ApprovalLevels = ApprovalLevels,
+        DelegableApprovalLevels = DelegableApprovalLevels,
+        PrimaryApprovalLevels = PrimaryApprovalLevels,
+        DelegablePrimaryApprovalLevels = DelegablePrimaryApprovalLevels
+    };
 }
 public sealed record ProposeGrantHttpRequest(GrantHttpSpec Spec, CommandMeta Meta);
 public sealed record GrantHttpView(Guid Id, string State, long Version, GrantWireSpec Spec);

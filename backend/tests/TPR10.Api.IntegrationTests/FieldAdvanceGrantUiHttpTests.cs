@@ -16,6 +16,63 @@ public sealed class FieldAdvanceGrantUiHttpTests(PostgresFixture postgres)
     private static string Query => $"workspaceId={WorkspaceId}&projectId={ProjectId}";
     private const string Root = "/api/v1/field-advances/grants";
 
+    [Fact]
+    public async Task Approval_level_wire_read_and_receipt_bind_every_array_and_current_primary_authority()
+    {
+        await using var f = await ReadyAsync(postgres);
+        string[] capabilities = ["policy.edit.company", "policy.edit.project", "policy.review", "grant.propose", "grant.review", "grant.revoke",
+            "request.create", "request.delegate", "request.approve", "finance.check", "payment.record", "report.read"];
+        await using (var db = f.CreateContext())
+        {
+            foreach (var source in await db.Set<GrantProposal>().ToArrayAsync())
+            {
+                source.DelegableCapabilities = capabilities;
+                source.DelegableApprovalLevels = ["project-manager", "supervisor"];
+                source.DelegablePrimaryApprovalLevels = ["project-manager"];
+            }
+            await db.SaveChangesAsync();
+        }
+        using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var client = await Client(factory, f, AuthorId);
+        var spec = Spec(f) with
+        {
+            Capabilities = capabilities,
+            DelegableCapabilities = capabilities,
+            ApprovalLimit = 100m,
+            ApprovalLevels = ["project-manager"],
+            DelegableApprovalLevels = ["project-manager"],
+            PrimaryApprovalLevels = ["project-manager"],
+            DelegablePrimaryApprovalLevels = ["project-manager"]
+        };
+        var meta = Meta();
+        using var response = await Send(client, HttpMethod.Post, "grants", new { spec, meta });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetGuid();
+        var read = await client.GetFromJsonAsync<JsonElement>($"{Root}/{id}?{Query}");
+        foreach (var field in new[] { "approvalLevels", "delegableApprovalLevels", "primaryApprovalLevels", "delegablePrimaryApprovalLevels" })
+        {
+            Assert.Equal("project-manager", Assert.Single(read.GetProperty("spec").GetProperty(field).EnumerateArray()).GetString());
+            var altered = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new { spec, meta }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))!;
+            altered["spec"]![field] = field is "approvalLevels" or "delegableApprovalLevels"
+                ? new System.Text.Json.Nodes.JsonArray("project-manager", "supervisor") : new System.Text.Json.Nodes.JsonArray();
+            using var changed = await Send(client, HttpMethod.Post, "grants", altered);
+            Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
+        }
+        using var replay = await Send(client, HttpMethod.Post, "grants", new { spec, meta });
+        Assert.Equal(await response.Content.ReadAsStringAsync(), await replay.Content.ReadAsStringAsync());
+        await using (var db = f.CreateContext())
+        {
+            var source = await db.Set<GrantProposal>().SingleAsync(x => x.RecipientId == AuthorId);
+            source.DelegablePrimaryApprovalLevels = [];
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"{Root}/{id}?{Query}")).StatusCode);
+        using var deniedReplay = await Send(client, HttpMethod.Post, "grants", new { spec, meta });
+        Assert.Equal(HttpStatusCode.Forbidden, deniedReplay.StatusCode);
+    }
+
     [Theory]
     [InlineData("delegation")]
     [InlineData("source-expired")]

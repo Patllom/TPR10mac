@@ -2621,6 +2621,13 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.PrimitiveCollection<string[]>("ApprovalLevels")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("approval_levels")
+                        .HasDefaultValueSql("'{}'::text[]");
+
                     b.Property<decimal?>("ApprovalLimit")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
@@ -2637,14 +2644,35 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnName("created_at_utc")
                         .HasDefaultValueSql("now()");
 
+                    b.PrimitiveCollection<string[]>("DelegableApprovalLevels")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("delegable_approval_levels")
+                        .HasDefaultValueSql("'{}'::text[]");
+
                     b.PrimitiveCollection<string[]>("DelegableCapabilities")
                         .IsRequired()
                         .HasColumnType("text[]")
                         .HasColumnName("delegable_capabilities");
 
+                    b.PrimitiveCollection<string[]>("DelegablePrimaryApprovalLevels")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("delegable_primary_approval_levels")
+                        .HasDefaultValueSql("'{}'::text[]");
+
                     b.Property<DateTimeOffset?>("EndsAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("ends_at_utc");
+
+                    b.PrimitiveCollection<string[]>("PrimaryApprovalLevels")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("primary_approval_levels")
+                        .HasDefaultValueSql("'{}'::text[]");
 
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uuid")
@@ -2715,7 +2743,11 @@ namespace TPR10.Api.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_field_advance_grant_amount", "approval_limit IS NULL OR approval_limit>=0");
 
+                            t.HasCheckConstraint("ck_field_advance_grant_level_authority", "(cardinality(approval_levels)=0 OR (project_id IS NOT NULL AND approval_limit IS NOT NULL AND 'request.approve'=ANY(capabilities)))\nAND (cardinality(delegable_approval_levels)=0 OR (project_id IS NOT NULL AND approval_limit IS NOT NULL AND 'request.approve'=ANY(delegable_capabilities)))\nAND array_position(approval_levels,NULL) IS NULL AND array_position(delegable_approval_levels,NULL) IS NULL\nAND array_position(primary_approval_levels,NULL) IS NULL AND array_position(delegable_primary_approval_levels,NULL) IS NULL");
+
                             t.HasCheckConstraint("ck_field_advance_grant_period", "isfinite(starts_at_utc) AND (ends_at_utc IS NULL OR (isfinite(ends_at_utc) AND ends_at_utc>starts_at_utc))");
+
+                            t.HasCheckConstraint("ck_field_advance_grant_primary_levels", "primary_approval_levels <@ approval_levels AND delegable_primary_approval_levels <@ delegable_approval_levels");
 
                             t.HasCheckConstraint("ck_field_advance_grant_proposals_project", "project_id IS NULL OR project_id<>'00000000-0000-0000-0000-000000000000'::uuid");
 
