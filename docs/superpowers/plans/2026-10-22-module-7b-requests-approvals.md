@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 เริ่มเฉพาะ Task 1 โดยแยกผู้ลงมือและผู้ตรวจ Task 2–10 ยังไม่เริ่ม ผลตรวจจริงจะบันทึกแยกจากเกณฑ์ในแผน
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 Task 1 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ Backend Test 2,300 และ Frontend Test 109 ผ่าน พร้อม Build, Format และ Lint ครบ Task 2–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -113,7 +113,7 @@ git diff --check
 
 **อินเทอร์เฟซ:** รับ `PolicySnapshot`/`CategoryRule` เดิม; สร้าง `EstimateCalculator.Calculate(EstimateLineInput[] lines, PolicySnapshot policy) : FinanceResult<Estimate>` และชนิดร่วมข้างต้น
 
-- [ ] เขียนเทสต์ `Rounds_each_line_before_sum`, `Rejects_excess_lexical_precision`, `Cannot_override_standard_rate`, `Rejects_overflow_and_negative` พร้อม assertion ต่อไปนี้ (สร้าง policy จำลองในไฟล์เทสต์ ไม่ใช่นโยบายจริง):
+- [x] เขียนเทสต์ `Rounds_each_line_before_sum`, `Rejects_excess_lexical_precision`, `Cannot_override_standard_rate`, `Rejects_overflow_and_negative` พร้อม assertion ต่อไปนี้ (สร้าง policy จำลองในไฟล์เทสต์ ไม่ใช่นโยบายจริง):
 
 ```csharp
 Assert.Equal(24.70m, EstimateCalculator.Calculate(twoLinesOf1_2345Times10, policy).Value!.Total);
@@ -122,10 +122,12 @@ Assert.Equal(400, EstimateCalculator.Calculate(linesWithRate10_000, policy).Stat
 Assert.Equal(400, EstimateCalculator.Calculate(lumpSumInStandardCategory, policy).Status);
 ```
 
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceEstimateTests` ต้องแดงเพราะยังไม่มี calculator/ยังคำนวณผิด บันทึกหลักฐาน Red
-- [ ] ทำ parser ตามจำนวนหลักจริงก่อนแปลง decimal ใช้ checked arithmetic และ `decimal.Round(lineTotal, 2, MidpointRounding.AwayFromZero)` ไม่รับ exponent/NaN/Infinity/JSON number ตรวจหมวด active; อัตรามาตรฐานมาจาก snapshot และถ้าส่งค่าต่างให้ปฏิเสธ
-- [ ] เพิ่มเทสต์ยอด 0, ค่ามากกว่าขีดจำกัด 7A `9999999999999999.99m`, ผลคูณล้น, ผลรวมล้น, 0.005 → 0.01 และหมวดไม่มาตรฐานทั้งสองแบบ แล้วรันคำสั่งเดิมต้องผ่านทุกเคส
-- [ ] ผู้ตรวจเทียบ B02/B03 ตรวจชุดร่วม และ commit เฉพาะไฟล์นี้: `feat: add field advance estimate calculation`
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceEstimateTests` ต้องแดงเพราะยังไม่มี calculator/ยังคำนวณผิด บันทึกหลักฐาน Red
+- [x] ทำ parser ตามจำนวนหลักจริงก่อนแปลง decimal ใช้ checked arithmetic และ `decimal.Round(lineTotal, 2, MidpointRounding.AwayFromZero)` ไม่รับ exponent/NaN/Infinity/JSON number ตรวจหมวด active; อัตรามาตรฐานมาจาก snapshot และถ้าส่งค่าต่างให้ปฏิเสธ
+- [x] เพิ่มเทสต์ยอด 0, ค่ามากกว่าขีดจำกัด 7A `9999999999999999.99m`, ผลคูณล้น, ผลรวมล้น, 0.005 → 0.01 และหมวดไม่มาตรฐานทั้งสองแบบ แล้วรันคำสั่งเดิมต้องผ่านทุกเคส
+- [x] ผู้ตรวจเทียบ B02/B03 ตรวจชุดร่วม และ commit เฉพาะไฟล์นี้: `feat: add field advance estimate calculation`
+
+ผล Task 1: commits `7a5e8b8` และ `6531274`; แก้ขอบเขต quantity ตาม `numeric(20,4)` จาก review พร้อม assertion Red 4 เคสก่อนแก้ เทสต์เฉพาะ 42/42 ผ่าน ผู้ตรวจซ้ำไม่มี Critical/Important ค้าง และชุดตรวจร่วมผ่านทั้งหมด
 
 ### Task 2: ฐานข้อมูลคำขอ ฉบับ และประวัติ
 
