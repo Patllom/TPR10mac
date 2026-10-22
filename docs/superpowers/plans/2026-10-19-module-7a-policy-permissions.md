@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-19-module-7a-policy-permissions-design.md` — ผู้ใช้อนุมัติแล้ว 19 ตุลาคม 2569
 
-**สถานะแผน:** Task 1–9 เสร็จและผ่าน Test, Build, Lint พร้อมผู้ตรวจอิสระแล้ว ณ 22 ตุลาคม 2569; Task 10 ยังไม่เริ่ม มีข้อสังเกต Minor จาก Task 9 ให้ตรวจต่อใน Task 10 ตามรายการด้านล่าง ยังไม่ถือว่า Module 7A ส่งมอบครบ ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
+**สถานะแผน:** Task 1–10 เสร็จใน branch พร้อม Test, Build, Lint และผู้ตรวจอิสระ ณ 22 ตุลาคม 2569; Task10 แก้ Minor เดิมทั้งสองและ Important จาก whole-branch review ครบ มี Minor ใหม่สองรายการที่ตัดสินเก็บเป็นงานติดตาม ไม่ใช่การรับรอง rollout ดูผลและข้อจำกัดใน `docs/reports/2026-10-19-module-7a-verification.md` ไม่มี push/PR/merge และยังพักทดสอบมือถือจริง/NAS จริง
 
 ## ข้อจำกัดร่วมทุก Task
 
@@ -359,13 +359,23 @@ record RequestParticipation(Guid OwnerPersonId, Guid? DelegatePersonId,
 
 **สัญญา:** ใช้บริการTask1–9โดยไม่เพิ่มendpointธุรกิจใหม่ ส่งมอบรายงานคำสั่ง/exit code/จำนวนผ่าน-ไม่ผ่าน/commit/ข้อจำกัด และรายการตรวจเกณฑ์ A01–A12
 
-- [ ] เพิ่ม testsโจมตีทางAPIเดิม/aliasperson, parallelapprove/revoke, replaycommandข้ามscope, faultaudit, company/project inactive→activeไม่ฟื้นสิทธิ์ และsnapshotยังอ่านย้อนหลังได้โดยไม่คงสิทธิ์เก่า
-- [ ] รัน filter `FullyQualifiedName~FieldAdvanceDelivery|FullyQualifiedName~FieldAdvanceAtomicity` ก่อนแก้ หากพบช่องโหว่ให้เก็บเทสต์แดงแล้วแก้เฉพาะเจ้าของโค้ด ไม่ลดassertionเพื่อผ่าน
-- [ ] รันชุดตรวจทั้งหมดด้านล่างและบันทึกผลจริง ไม่ใช้จำนวนเทสต์จากModule6เป็นหลักฐานใหม่
-- [ ] ทำCode Reviewทั้งbranchกับspec A01–A12: แก้ข้อพบ เพิ่มregressionและรันชุดที่กระทบซ้ำ; ไม่มีประเด็นความถูกต้อง/สิทธิ์ค้างที่ยังไม่ตัดสิน
-- [ ] ตรวจ migration บนฐานทิ้งได้: applyจากฐานเดิม, backup/restore และ downgradeเมื่อไม่มีข้อมูล7A; หากมีประวัติแล้ว downgradeต้องหยุดอย่างปลอดภัย ไม่ลบประวัติการเงินเพื่อย้อนรุ่น
-- [ ] เติมrunbookตั้งต้น/เปลี่ยนฉบับ/revoke/เหตุขัดข้อง/ข้อจำกัดinfra และรายงานว่า realmobile/NAS deferred, requestเงินจริง7B–7Dยังไม่ส่งมอบ
-- [ ] ตรวจและ commit: `test: verify field advance policy delivery`; หยุดให้ผู้ใช้ตรวจผล ไม่ push/เปิดPR/mergeจนได้รับคำสั่ง
+- [x] เพิ่ม testsโจมตีทางAPIเดิม/aliasperson, parallelapprove/revoke, replaycommandข้ามscope, faultaudit, company/project inactive→activeไม่ฟื้นสิทธิ์ และsnapshotยังอ่านย้อนหลังได้โดยไม่คงสิทธิ์เก่า
+- [x] รัน filter `FullyQualifiedName~FieldAdvanceDelivery|FullyQualifiedName~FieldAdvanceAtomicity` ก่อนแก้ หากพบช่องโหว่ให้เก็บเทสต์แดงแล้วแก้เฉพาะเจ้าของโค้ด ไม่ลดassertionเพื่อผ่าน
+- [x] รันชุดตรวจทั้งหมดด้านล่างและบันทึกผลจริง ไม่ใช้จำนวนเทสต์จากModule6เป็นหลักฐานใหม่
+- [x] ทำCode Reviewทั้งbranchกับspec A01–A12: แก้ข้อพบ เพิ่มregressionและรันชุดที่กระทบซ้ำ; ไม่มีประเด็นความถูกต้อง/สิทธิ์ค้างที่ยังไม่ตัดสิน
+- [x] ตรวจ migration บนฐานทิ้งได้: applyจากฐานเดิม, backup/restore และ downgradeเมื่อไม่มีข้อมูล7A; หากมีประวัติแล้ว downgradeต้องหยุดอย่างปลอดภัย ไม่ลบประวัติการเงินเพื่อย้อนรุ่น
+- [x] เติมrunbookตั้งต้น/เปลี่ยนฉบับ/revoke/เหตุขัดข้อง/ข้อจำกัดinfra และรายงานว่า realmobile/NAS deferred, requestเงินจริง7B–7Dยังไม่ส่งมอบ
+- [x] ตรวจและ commit: `test: verify field advance policy delivery`; หยุดให้ผู้ใช้ตรวจผล ไม่ push/เปิดPR/mergeจนได้รับคำสั่ง
+
+**ผล Task10 — 22 ตุลาคม 2569:**
+
+- โค้ด/เทสต์/runbook commit `d0262ea` จำนวน21ไฟล์ ผู้ลงมือ Euler แยกจากผู้ตรวจ Task Huygens และผู้ตรวจทั้ง branch/ชุดแก้ Banach; whole-branch base `d657c164` ไม่เหลือ Critical/Important หลังแก้และตรวจซ้ำ
+- Minor เดิมจาก Task9 แก้แล้ว: รีเฟรชรายละเอียด/ปุ่มตามเวลาแม้ version ไม่เปลี่ยน และต่ออายุจริงผ่าน proposal ใหม่โดยคง assignment เดิม; runner ใช้ `env -u NO_COLOR` เฉพาะ child ที่ FORCE_COLOR ไม่ suppress warnings ทั้งหมด
+- Test backend **2,258/2,258**, Node **109/109**, Build frontend/backend, Lint, format ทั้ง solution, diff check และ hash21/21 ผ่าน; HTTPS ผลผ่านตามโหมด **Dev115 / Production117** ไม่รวมรอบซ้ำ ชุดได้รับผลจาก final fixes รันทวนแล้ว
+- เพิ่ม coverage rollback ณ commit, successful replay หลังถอน session/capability, target delegation ที่แคบลง, company-null scope, active replacement race, backup/restore และ downgrade guards พร้อมเก็บ RED/failed attempts ตามจริง
+- ตัดสินพัก residual Minorสองรายการ: M2 discovery/selected-page/history performance ต้องมี representative workload/budget ก่อน rollout หลายโครงการ; M3 poll หลังอนุมัติ replacement อาจแจ้ง false conflict ต้องโหลดใหม่โดยผลอนุมัติที่ commit แล้วไม่หาย เจ้าของงาน backend/UI ตามรายงาน ไม่ใช่ user waiver และไม่เปิดรอบแก้ซ้ำไม่สิ้นสุด
+- Initial Dev login timeout ยังไม่พิสูจน์สาเหตุ (รันทวน unchanged ผ่าน); capture fixture clock-race มี deterministic regression และแก้แล้ว แต่ไม่อ้างว่ามี payload ของ failure เดิมครบ; เปิดเผยในรายงาน
+- ไม่มีการ migrate/bootstrap ฐานจริง ไม่ส่งมอบ workflowเงิน7B–7D ไม่ push/PR/merge และพักมือถือจริง/NAS จริงตามเดิม
 
 ## ชุดคำสั่งตรวจจริงก่อนแจ้งพัฒนาเสร็จ
 
