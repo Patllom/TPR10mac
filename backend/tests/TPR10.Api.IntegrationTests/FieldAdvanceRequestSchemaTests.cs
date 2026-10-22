@@ -44,26 +44,44 @@ public sealed class FieldAdvanceRequestSchemaTests(PostgresFixture postgres)
         {
             case "project-company":
             case "owner-company":
-                db.Add(new AdvanceRequest { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId,
+                db.Add(new AdvanceRequest
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = WorkspaceId,
                     ProjectId = reference == "project-company" ? OtherProjectId : ProjectId,
                     OwnerPersonId = reference == "owner-company" ? Guid.Parse("72000000-0000-0000-0000-000000000041") : AuthorPersonId,
-                    CreatedBy = AuthorId });
+                    CreatedBy = AuthorId
+                });
                 break;
             case "line-revision":
                 var line = f.Line; line.Id = Guid.NewGuid(); line.LineOrder = 2; line.ProjectId = otherProject; db.Add(line); break;
             case "step-revision":
                 var step = f.Step; step.Id = Guid.NewGuid(); step.StepOrder = 2; step.ProjectId = otherProject; db.Add(step); break;
             case "participant-request":
-                db.Add(new AdvanceRequestParticipant { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId,
-                    ProjectId = otherProject, RequestId = f.Request.Id, PersonId = ReviewerPersonId, Role = "Approver", CreatedBy = AuthorId }); break;
+                db.Add(new AdvanceRequestParticipant
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = WorkspaceId,
+                    ProjectId = otherProject,
+                    RequestId = f.Request.Id,
+                    PersonId = ReviewerPersonId,
+                    Role = "Approver",
+                    CreatedBy = AuthorId
+                }); break;
             default:
                 var revision = f.NewRevision(2, false);
                 if (reference == "revision-request") revision.ProjectId = otherProject;
                 if (reference == "policy-company") revision.CompanyPolicyRevisionId = ProjectRevisionId;
                 if (reference == "policy-project")
                 {
-                    var request = new AdvanceRequest { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId,
-                        ProjectId = otherProject, OwnerPersonId = AuthorPersonId, CreatedBy = AuthorId };
+                    var request = new AdvanceRequest
+                    {
+                        Id = Guid.NewGuid(),
+                        WorkspaceId = WorkspaceId,
+                        ProjectId = otherProject,
+                        OwnerPersonId = AuthorPersonId,
+                        CreatedBy = AuthorId
+                    };
                     db.Add(request); revision.RequestId = request.Id; revision.ProjectId = otherProject;
                 }
                 db.Add(revision); break;
@@ -181,8 +199,16 @@ public sealed class FieldAdvanceRequestSchemaTests(PostgresFixture postgres)
         await using var f = await FieldAdvanceRequestFixture.CreateAsync(postgres);
         await f.SeedRequestAsync();
         await using var db = f.CreateContext();
-        var duplicate = new AdvanceApprovalStep { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId,
-            ProjectId = ProjectId, RequestId = f.Request.Id, RevisionId = f.Revision.Id, StepOrder = 1, LevelCode = "Manager" };
+        var duplicate = new AdvanceApprovalStep
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            ProjectId = ProjectId,
+            RequestId = f.Request.Id,
+            RevisionId = f.Revision.Id,
+            StepOrder = 1,
+            LevelCode = "Manager"
+        };
         db.Add(duplicate);
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         Assert.Equal("23505", Assert.IsType<PostgresException>(error.InnerException).SqlState);
@@ -297,13 +323,23 @@ public sealed class FieldAdvanceRequestSchemaTests(PostgresFixture postgres)
             var receipt = f.NewReceipt();
             db.AddRange(receipt, f.NewEvent(receipt.CommandId), new AdvanceRequestParticipant
             {
-                Id = Guid.NewGuid(), WorkspaceId = WorkspaceId, ProjectId = ProjectId, RequestId = request.Id,
-                PersonId = ReviewerPersonId, Role = "Approver", CreatedBy = ReviewerId
+                Id = Guid.NewGuid(),
+                WorkspaceId = WorkspaceId,
+                ProjectId = ProjectId,
+                RequestId = request.Id,
+                PersonId = ReviewerPersonId,
+                Role = "Approver",
+                CreatedBy = ReviewerId
             }, new AuditEvent
             {
-                Id = Guid.NewGuid(), EventType = "request.approved", OccurredAtUtc = DateTimeOffset.UtcNow,
-                CorrelationId = Guid.NewGuid().ToString(), ActorId = ReviewerId, WorkspaceId = WorkspaceId,
-                ProjectId = ProjectId, TargetId = request.Id
+                Id = Guid.NewGuid(),
+                EventType = "request.approved",
+                OccurredAtUtc = DateTimeOffset.UtcNow,
+                CorrelationId = Guid.NewGuid().ToString(),
+                ActorId = ReviewerId,
+                WorkspaceId = WorkspaceId,
+                ProjectId = ProjectId,
+                TargetId = request.Id
             });
             await db.SaveChangesAsync();
             // Fail after the first batch reached PostgreSQL, then roll back the whole command.
