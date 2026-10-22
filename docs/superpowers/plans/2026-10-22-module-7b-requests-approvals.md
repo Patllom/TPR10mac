@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 Task 1 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ Backend Test 2,300 และ Frontend Test 109 ผ่าน พร้อม Build, Format และ Lint ครบ Task 2–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 Task 1–2 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,345 และ Frontend Test 109 ผ่าน พร้อม Build, Format และ Lint ครบ Task 3–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -135,12 +135,14 @@ Assert.Equal(400, EstimateCalculator.Calculate(lumpSumInStandardCategory, policy
 
 **อินเทอร์เฟซ:** entity `AdvanceRequest`, `AdvanceRequestRevision`, `AdvanceRequestLine`, `AdvanceApprovalStep`, `AdvanceRequestEvent`, `AdvanceRequestParticipant` ใช้ผ่าน `db.Set<T>()`; fixture `CreateAsync(PostgresFixture postgres) : Task<FieldAdvanceRequestFixture>` และ `CreateContext() : Tpr10DbContext`
 
-- [ ] เขียนเทสต์ `Migration_preserves_7A`, `One_current_revision`, `Cross_scope_reference_is_rejected`, `Submitted_content_is_immutable` บน PostgreSQL จริงแบบ disposable: `Assert.ThrowsAsync<DbUpdateException>(...)` สำหรับ FK/unique ผิด และ `Assert.Equal(before, retainedPolicy)` หลัง migrate
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestSchemaTests` ต้องแดงเพราะยังไม่มี schema/guards
-- [ ] กำหนด FK คำขอ–ฉบับ–รายการ–ขั้น–event ให้ scope ตรง, unique `(RequestId,RevisionNumber)`, `(RevisionId,StepOrder)`, unique ผลอนุมัติสำเร็จต่อ person ต่อ revision; numeric จำนวน `(20,4)` และเงิน `(18,2)` ตรวจ overflow ก่อน DB; เก็บ content/policy snapshot JSON พร้อม hash และ aggregate version
-- [ ] เพิ่ม participant แบบ append-only, snapshot/content guards หลังส่ง, Restrict delete ประวัติ; เก็บ assignee เป็นข้อมูลเปลี่ยนได้แยกจาก snapshot ใช้ `FinanceCommandReceipt` เดิมไม่สร้าง receipt ซ้ำอีกระบบ
-- [ ] สร้าง migration ด้วย `dotnet ef migrations add AddFieldAdvanceRequests --project backend/src/TPR10.Api --output-dir Data/Migrations` ตรวจ SQL แล้วทดสอบ upgrade จากฐาน7Aและฐานเปล่า ไม่ migrate ฐานผู้ใช้จริง รัน filtered tests ต้องผ่าน
-- [ ] ผู้ตรวจเทียบ B04/B13 ตรวจชุดร่วม และ commit: `feat: persist field advance request revisions`
+- [x] เขียนเทสต์ `Migration_preserves_7A`, `One_current_revision`, `Cross_scope_reference_is_rejected`, `Submitted_content_is_immutable` บน PostgreSQL จริงแบบ disposable: `Assert.ThrowsAsync<DbUpdateException>(...)` สำหรับ FK/unique ผิด และ `Assert.Equal(before, retainedPolicy)` หลัง migrate
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestSchemaTests` ต้องแดงเพราะยังไม่มี schema/guards
+- [x] กำหนด FK คำขอ–ฉบับ–รายการ–ขั้น–event ให้ scope ตรง, unique `(RequestId,RevisionNumber)`, `(RevisionId,StepOrder)`, unique ผลอนุมัติสำเร็จต่อ person ต่อ revision; numeric จำนวน `(20,4)` และเงิน `(18,2)` ตรวจ overflow ก่อน DB; เก็บ content/policy snapshot JSON พร้อม hash และ aggregate version
+- [x] เพิ่ม participant แบบ append-only, snapshot/content guards หลังส่ง, Restrict delete ประวัติ; เก็บ assignee เป็นข้อมูลเปลี่ยนได้แยกจาก snapshot ใช้ `FinanceCommandReceipt` เดิมไม่สร้าง receipt ซ้ำอีกระบบ
+- [x] สร้าง migration ด้วย `dotnet ef migrations add AddFieldAdvanceRequests --project backend/src/TPR10.Api --output-dir Data/Migrations` ตรวจ SQL แล้วทดสอบ upgrade จากฐาน7Aและฐานเปล่า ไม่ migrate ฐานผู้ใช้จริง รัน filtered tests ต้องผ่าน
+- [x] ผู้ตรวจเทียบ B04/B13 ตรวจชุดร่วม และ commit: `feat: persist field advance request revisions`
+
+ผล Task 2: commits `91a17dd` และ `efd7513`; เทสต์ schema 45/45 ผ่าน ตรวจอิสระและตรวจรอบแก้ Format ผ่าน ไม่มีข้อพบค้าง ชุดตรวจร่วมทั้งหมดผ่านบนโค้ดหลังแก้ ยังไม่เปิด API หรือพัฒนาสิทธิ์ Task 3
 
 ### Task 3: สิทธิ์ยื่นคำขอและอำนาจตามระดับ
 
@@ -281,4 +283,4 @@ node --input-type=module -e 'import { runHttpsSmoke } from "./infra/nginx/https-
 - มีชื่อไฟล์ สัญญาบริการ และเทสต์เฉพาะในทุกTask; migrationใช้ชื่อที่ระบุแต่ให้EFสร้างtimestampจริง ไม่สร้างชื่อวันที่ปลอม
 - จุดเสี่ยงทั้งห้าผูกกับเทสต์Taskที่รับผิดชอบแล้ว ไม่ให้metadata/alias/retryข้ามสิทธิ์
 - ข้อมูลโครงการ/ผู้รับผิดชอบเป็นตัวตนคำขอ และข้อมูลระดับอนุมัติผ่านgrantสามคน เป็นรายละเอียดการลงมือที่ต้องตรวจพร้อมแผนนี้ก่อนเริ่ม
-- ผู้ใช้อนุมัติแผนและสั่งเริ่ม Task 1 แล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน การอนุมัตินี้ไม่ใช่ผลผ่าน Test/Build/Lint และไม่ใช่คำสั่งเริ่ม Task 2–10 ในรอบเดียวกัน
+- ผู้ใช้อนุมัติแผนและสั่ง Task 1 และ Task 2 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 3–10 ในรอบนี้
