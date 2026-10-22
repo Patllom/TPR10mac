@@ -3,6 +3,8 @@ using TPR10.Api.Auditing;
 using TPR10.Api.Data;
 using TPR10.Api.Identity.Authorization;
 using TPR10.Api.Scopes.Data;
+using TPR10.Api.FieldAdvances.Data;
+using FinanceGrant = TPR10.Api.FieldAdvances.Data.GrantAssignment;
 
 namespace TPR10.Api.Scopes.Assignments;
 
@@ -31,7 +33,35 @@ public sealed class AssignmentLifecycle(Tpr10DbContext db, IAuditEventWriter aud
             && (scope.SiteId == null || a.SiteId == scope.SiteId)).OrderBy(a => a.Id).ToArrayAsync(ct);
         rows = rows.Where(a => a.RevokedAtUtc is null).ToArray();
         await RevokeAsync(rows, actorId, reason, ct);
-        return rows.Select(a => a.UserId).Distinct().OrderBy(id => id).ToArray();
+        var financeRecipients = await RevokeFinanceForScopeAsync(scope, actorId, reason, ct);
+        return rows.Select(a => a.UserId).Concat(financeRecipients).Distinct().OrderBy(id => id).ToArray();
+    }
+
+    private async Task<Guid[]> RevokeFinanceForScopeAsync(ScopeKey scope, Guid actorId, string reason, CancellationToken ct)
+    {
+        // Finance grants have no site scope; closing one site must not revoke the whole project's grants.
+        if (scope.SiteId is not null) return [];
+        var candidates = await (from assignment in db.Set<FinanceGrant>()
+                                join proposal in db.Set<GrantProposal>() on assignment.ProposalId equals proposal.Id
+                                where assignment.RevokedAtUtc == null && assignment.WorkspaceId == scope.WorkspaceId
+                                    && (scope.ProjectId == null || assignment.ProjectId == scope.ProjectId)
+                                orderby assignment.Id
+                                select new { Assignment = assignment, proposal.RecipientId }).ToArrayAsync(ct);
+        // Repeated calls before the caller saves must not increment versions or audit twice.
+        var rows = candidates.Where(x => x.Assignment.RevokedAtUtc is null).ToArray();
+        var now = clock.GetUtcNow();
+        foreach (var row in rows)
+        {
+            var assignment = row.Assignment;
+            assignment.RevokedAtUtc = now;
+            assignment.RevokedBy = actorId;
+            assignment.RevocationReason = reason.Trim();
+            assignment.Version = checked(assignment.Version + 1);
+            await audit.WriteAsync(new SecurityAuditRequest(actorId, permission.ActingRoleId, assignment.WorkspaceId, assignment.ProjectId, null,
+                "field-advance.grant.revoked", "field-advance-grant", assignment.Id, "success", new Dictionary<string, string>
+                { ["reason"] = reason.Trim(), ["changed-fields"] = "revoked-at,revoked-by,revocation-reason,version" }), ct);
+        }
+        return rows.Select(x => x.RecipientId).Distinct().OrderBy(id => id).ToArray();
     }
 
     private void RequireTransaction()

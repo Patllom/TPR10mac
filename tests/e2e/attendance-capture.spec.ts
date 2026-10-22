@@ -1,6 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { captureChallenge } from './fixtures/capture-challenge';
 
 // Disposable database/session and synthetic device inputs only; never use a real employee camera.
 const site = { workspaceId: '11111111-1111-4111-8111-111111111111', projectId: '22222222-2222-4222-8222-222222222222', siteId: '33333333-3333-4333-8333-333333333333' };
@@ -45,7 +46,7 @@ async function setup(page: Page, context: BrowserContext, mode = 'ok', overnight
   await session(context); await devices(page, mode);
   const event = { id, occurredAtUtc: '2020-01-01T01:00:00Z', site: { ...site, isValid: true }, gps: { latitude: 13, longitude: 100, accuracyMeters: 150, sampledAtUtc: '2020-01-01T01:00:00Z' }, photo: { evidenceId: id } };
   await page.route('**/api/v1/attendance/current', route => route.fulfill({ json: { openDay: overnight ? { id, employeeId: id, workDate: '2020-01-01', version: 1, in: event, out: null, readBasis: 1, effectiveInUtc: event.occurredAtUtc, effectiveOutUtc: null } : null, todayCompleted: false, serverNowUtc: now() } }));
-  await page.route('**/api/v1/attendance/capture-challenges', route => route.fulfill({ status: 201, json: { id, serverNowUtc: now(), expiresAtUtc: new Date(Date.now() + (mode === 'expired' ? -1000 : 120000)).toISOString() } }));
+  await page.route('**/api/v1/attendance/capture-challenges', route => route.fulfill({ status: 201, json: captureChallenge(id, mode === 'expired' ? -1000 : 120000) }));
   await page.goto('/portal/attendance');
   await expect(page.getByLabel('สถานที่ลงเวลา')).toBeVisible();
   await page.getByLabel('สถานที่ลงเวลา').selectOption(site.siteId);
@@ -90,7 +91,7 @@ test('review: silent account switch during challenge must not open camera', asyn
     : route.fallback());
   await page.route('**/api/v1/attendance/capture-challenges', route => {
     switched = true;
-    return route.fulfill({ status: 201, json: { id, serverNowUtc: now(), expiresAtUtc: new Date(Date.now() + 120000).toISOString() } });
+    return route.fulfill({ status: 201, json: captureChallenge(id) });
   });
   await page.getByRole('button', { name: 'เปิดกล้อง', exact: true }).click();
   await expect(page.locator('section').getByRole('alert')).toContainText('บัญชี');
@@ -221,7 +222,7 @@ test('GPS ที่เก่าเฉพาะตอนยืนยันต้�
 });
 test('ภาพหมดอายุระหว่างรอยืนยันต้องถ่ายใหม่', async ({ page, context }) => {
   await setup(page, context);
-  await page.route('**/api/v1/attendance/capture-challenges', route => route.fulfill({ status: 201, json: { id, serverNowUtc: now(), expiresAtUtc: new Date(Date.now() + 3500).toISOString() } }));
+  await page.route('**/api/v1/attendance/capture-challenges', route => route.fulfill({ status: 201, json: captureChallenge(id, 3500) }));
   await capture(page);
   await expect(page.locator('section').getByRole('alert')).toContainText('หมดอายุ', { timeout: 7000 });
   await expect(page.getByAltText('ภาพรอยืนยัน ยังไม่ประทับเวลา')).toHaveCount(0);
@@ -257,7 +258,7 @@ test('503 จาก current ไม่ logout หรือเปิดกล้�
 });
 test('คำขอไม่เคยถึง server ต้องรอ challenge หมดอายุและตรวจ 404 ก่อนเริ่มใหม่', async ({ page, context }) => {
   await setup(page, context);
-  await page.route('**/api/v1/attendance/capture-challenges', route => route.fulfill({ status: 201, json: { id, serverNowUtc: now(), expiresAtUtc: new Date(Date.now() + 4000).toISOString() } }));
+  await page.route('**/api/v1/attendance/capture-challenges', route => route.fulfill({ status: 201, json: captureChallenge(id, 4000) }));
   await page.route('**/api/v1/attendance/check-ins', route => route.abort('failed'));
   await page.route('**/api/v1/attendance/operations/*?action=CheckIn', route => route.fulfill({ status: 404, json: {} }));
   await capture(page); await page.getByRole('button', { name: 'ยืนยันลงเวลา', exact: true }).click();

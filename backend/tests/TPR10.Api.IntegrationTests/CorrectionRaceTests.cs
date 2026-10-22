@@ -273,7 +273,7 @@ public sealed class CorrectionRaceTests(PostgresFixture postgres)
     public async Task Recovery_migration_roundtrips_and_refuses_to_discard_recovery_history()
     {
         await using var f = await Fixture(); await using var db = f.Capture.Data.Database.CreateContext();
-        var previous = (await db.Database.GetAppliedMigrationsAsync()).Reverse().Skip(1).First();
+        const string previous = "20261017173751_AllowCorrectedAttendanceCheckout";
         var migrator = db.GetService<IMigrator>();
         await migrator.MigrateAsync(previous); await migrator.MigrateAsync();
         var v = await CorrectionRoutingTests.Draft(f.Capture);
@@ -301,7 +301,7 @@ public sealed class CorrectionRaceTests(PostgresFixture postgres)
         await using var downgrade = f.Capture.Data.Database.CreateContext();
         await downgrade.Database.OpenConnectionAsync();
         var pid = ((NpgsqlConnection)downgrade.Database.GetDbConnection()).ProcessID;
-        var previous = (await downgrade.Database.GetAppliedMigrationsAsync()).Reverse().Skip(1).First();
+        const string previous = "20261017173751_AllowCorrectedAttendanceCheckout";
         var pending = downgrade.GetService<IMigrator>().MigrateAsync(previous);
         await using var observer = f.Capture.Data.Database.CreateContext();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
