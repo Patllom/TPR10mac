@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–8 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุดหลัง review Task 8: Backend Test 2,539 และ Frontend Test 139 ผ่าน พร้อม Build, Format และ Lint ครบ Task 9–10 ยังไม่เริ่ม คง M2/M3 และ Minor T7-M1 ไว้ติดตาม พักมือถือจริงและ NAS จริง รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–9 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Task 9: Backend 2,542/2,542, Frontend 143/143, HTTPS 4000/4001 พอร์ตละ 9/9 พร้อม Build, Format และ Lint ผ่านครบบนโค้ด `eda408a` Task 10 ยังไม่เริ่ม คง M2/M3 และ Minor T7-M1 ไว้ติดตาม พักมือถือจริงและ NAS จริง รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -243,17 +243,19 @@ actionของ RequestAccess จำกัด `read`/`edit`/`send-to-owner`/`con
 
 ### Task 9: หน้าจอใช้งานภาษาไทย
 
+ข้อยืนยันผู้ใช้ 23 ตุลาคม 2569: ผู้มีสิทธิ์ยื่นคำขอในโครงการค้นหาเฉพาะชื่อพนักงานที่ยังทำงานในบริษัทเดียวกันเพื่อเลือกสมาชิกทีมได้ คืนเฉพาะชื่อและ ID ที่จำเป็นต่อการเลือก ไม่เปิดข้อมูลส่วนบุคคลอื่น ไม่เพิ่มสิทธิ์ดูคำขอหรือข้อมูลการเงินแก่ผู้ยื่นหรือสมาชิกทีม ตรวจสิทธิ์ปัจจุบันและขอบเขตบริษัทฝั่งเซิร์ฟเวอร์ พร้อมจำกัดผลค้นและแบ่งหน้า
+
 ข้อผูกพันจาก Task 8: `/people` เป็น owner picker ไม่ใช่รายชื่อทีมทั้งหมด ต้องจัดแหล่งเลือกสมาชิกทีมที่ตรวจสิทธิ์เหมาะสมโดยไม่เพิ่มสิทธิ์การเงิน ใช้ current หลังคำสั่ง ไม่ใช้ receipt เก่าเป็นสถานะหน้าจอ และเก็บ command ID/payload เดิมเฉพาะบริบทบัญชีผู้ส่งสำหรับ reconciliation เมื่อยังไม่ทราบผล พร้อมล้างข้อมูลป้องกันเมื่อเปลี่ยนบัญชีหรือพบ 401/403
 
 **ไฟล์:** สร้าง `app/portal/field-advances/page.tsx`, `app/portal/field-advances/new/page.tsx`, `app/portal/field-advances/[requestId]/page.tsx`, `app/portal/field-advances/approvals/page.tsx`, `app/portal/field-advances/RequestEditor.tsx`, `app/portal/field-advances/RequestDetails.tsx`, `app/portal/field-advances/RequestQueue.tsx`, `lib/field-advances/request-view.ts`, `tests/e2e/field-advance-request.spec.ts`; แก้ `app/portal/page.tsx`, `tests/field-advance-request.test.mjs`, `backend/tests/TPR10.E2E.Fixture/FieldAdvanceSeed.cs`, `infra/nginx/https-smoke-fixture.mjs`
 
 **อินเทอร์เฟซ:** ใช้client Task8; view helpers `requestStateLabel(state: string): string`, `diffRequestContent(previous: RequestContent, current: RequestContent): string[]`; component props ใช้ `RequestView`/`ConfirmationQuote` ไม่สร้างdomain rulesชุดที่สอง
 
-- [ ] เขียนPlaywright flowแยกowner/delegate/approver: draft→ownerconfirm→ทุกstep→Approved; return→revise→confirmใหม่; withdraw พร้อมreason; assertข้อความ “อนุมัติแล้ว รอดำเนินการจ่าย” และไม่มีปุ่มจ่าย
-- [ ] เพิ่มspecใหม่ในallowlistของ HTTPS fixture และseedเฉพาะฐานdisposable ไม่มีข้อมูลจริง; รันคำสั่งHTTPSด้านล่างที่4001 ต้องแดงเพราะยังไม่มีหน้า/flow
-- [ ] ทำรายการmy/delegatedและqueue, editorคงrawstringและแสดงserverquote, detailsแสดงความต่าง/snapshot/history/hold reason; confirm/withdrawมีdialogทบทวน เหตุผลบังคับที่server; ไม่เลือกผู้อนุมัติเองและไม่แสดงหน้าหลังapprovedเป็นแบบแก้ตรง
-- [ ] ทดสอบdwellหลังทุกcommandและpoll15วินาทีด้วยเวลาเทสต์ หน้าไม่แจ้งconflictเทียมจากversionเก่า; change-account/sessionหมดอายุทิ้งresponseและข้อมูลค้าง; unknown network resultแสดงไม่ทราบผลก่อนretry ห้ามแสดงสำเร็จโดยเดา
-- [ ] รันNode/view testsและHTTPS flowทั้ง4000/4001ผ่าน รวมไม่มีสิทธิ์เปิดตรง/มือถือจำลองviewport (ไม่แทนมือถือจริง) ผู้ตรวจเทียบ B01/B10/B11/B14/B15 ตรวจชุดร่วม แล้ว commit: `feat: add Thai advance request screens`
+- [x] เขียนPlaywright flowแยกowner/delegate/approver: draft→ownerconfirm→ทุกstep→Approved; return→revise→confirmใหม่; withdraw พร้อมreason; assertข้อความ “อนุมัติแล้ว รอดำเนินการจ่าย” และไม่มีปุ่มจ่าย
+- [x] เพิ่มspecใหม่ในallowlistของ HTTPS fixture และseedเฉพาะฐานdisposable ไม่มีข้อมูลจริง; รันคำสั่งHTTPSด้านล่างที่4001 ต้องแดงเพราะยังไม่มีหน้า/flow
+- [x] ทำรายการmy/delegatedและqueue, editorคงrawstringและแสดงserverquote, detailsแสดงความต่าง/snapshot/history/hold reason; confirm/withdrawมีdialogทบทวน เหตุผลบังคับที่server; ไม่เลือกผู้อนุมัติเองและไม่แสดงหน้าหลังapprovedเป็นแบบแก้ตรง
+- [x] ทดสอบdwellหลังทุกcommandและpoll15วินาทีด้วยเวลาเทสต์ หน้าไม่แจ้งconflictเทียมจากversionเก่า; change-account/sessionหมดอายุทิ้งresponseและข้อมูลค้าง; unknown network resultแสดงไม่ทราบผลก่อนretry ห้ามแสดงสำเร็จโดยเดา
+- [x] รันNode/view testsและHTTPS flowทั้ง4000/4001ผ่าน รวมไม่มีสิทธิ์เปิดตรง/มือถือจำลองviewport (ไม่แทนมือถือจริง) ผู้ตรวจเทียบ B01/B10/B11/B14/B15 ตรวจชุดร่วม แล้ว commit: `feat: add Thai advance request screens`
 
 คำสั่งHTTPSหลังเพิ่มallowlist ใช้fixtureเดิม ไม่ติดตั้งCAลงเครื่องหรือปิดcertificate validation:
 
