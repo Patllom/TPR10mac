@@ -10,7 +10,12 @@ public sealed record RequestContent(string Kind, string Purpose, DateOnly FieldS
 public sealed record CreateRequest(FinanceScope Scope, Guid OwnerPersonId, RequestContent Content);
 public sealed record RequestCommand(Guid CommandId, long ExpectedVersion, string Reason);
 public sealed record RequestView(Guid Id, Guid RevisionId, long Version, string State, FinanceScope Scope,
-    Guid OwnerPersonId, Guid? DelegatePersonId, RequestContent Content, Estimate? Estimate, string? HoldCode);
+    Guid OwnerPersonId, Guid? DelegatePersonId, RequestContent Content, Estimate? Estimate, string? HoldCode)
+{
+    // Read-only enrichment; command receipts remain historical and never imply current authority.
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RequestStepView? CurrentStep { get; init; }
+}
 public sealed record ConfirmationQuote(Guid RequestId, Guid RevisionId, long Version,
     string ConfirmationHash, Estimate Estimate, PolicySnapshot Policy, string[] Levels);
 public sealed record RequestDecision(string Outcome, Guid StepId);
