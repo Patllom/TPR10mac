@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–7 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,529 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 8–10 ยังไม่เริ่ม คง M2/M3 และ Minor T7-M1 ไว้ติดตาม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–8 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุดหลัง review Task 8: Backend Test 2,539 และ Frontend Test 139 ผ่าน พร้อม Build, Format และ Lint ครบ Task 9–10 ยังไม่เริ่ม คง M2/M3 และ Minor T7-M1 ไว้ติดตาม พักมือถือจริงและ NAS จริง รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -234,14 +234,16 @@ actionของ RequestAccess จำกัด `read`/`edit`/`send-to-owner`/`con
 
 `RequestReadService.ListAsync(Guid actorId, FinanceScope scope, string mode, int page, int pageSize, CancellationToken ct) : Task<FinanceResult<RequestView[]>>`, `DetailsAsync(Guid actorId, Guid id, CancellationToken ct) : Task<FinanceResult<RequestView>>`; mode=`mine`/`delegated`/`review`/`report` (reportต้องสิทธิ์แยก ไม่ใช่dashboardใหม่); history DTOใช้ eventId/revisionId/action/actor/time/reason; scopesและpeopleคืนเฉพาะID/nameที่มีสิทธิ์เลือก ไม่เปิดรายชื่อทุกบริษัท
 
-- [ ] เขียน HTTPเทสต์ `Direct_url_cannot_bypass_scope`, `No_financial_access_for_admin_or_team`, `Json_number_cannot_bypass_precision`, `Commands_require_mfa_csrf`; assert401/403ตามmiddleware, ไม่มีเนื้อหาหรือcountข้ามscope และไม่มีside effect
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestHttpTests` และ `node --test tests/field-advance-request.test.mjs` ให้แดง
-- [ ] ต่อAPIเข้าบริการไม่ย้ายbusinessrulesเข้าหน้าเว็บ เงินออกเป็นstring; ปฏิเสธunknown fieldsที่อ้างสิทธิ์/ยอด; pagingมีลำดับคงที่และpageSize1–100; history/scopes/peopleมีขอบเขตและlimitเช่นเดียวกับlist ไม่โหลดทั้งระบบแล้วค่อยกรองในbrowser
-- [ ] client `createRequestClient(userId: string, transport: typeof fetch = fetch)` คืน `list`, `details`, `quote`, `create`, `update`, `sendToOwner`, `confirm`, `returnToAuthor`, `review`, `revise`, `withdraw`, `copy`, `history`, `scopes`, `people` ตรงAPIข้างต้น ใช้ request-types mirrored contracts เงินstring/วันที่ISO; ทุกcallรับAbortSignal ตรวจบัญชีก่อน/หลังresponseและCSRFเหมือนgrant-client
-- [ ] เพิ่ม clientเทสต์ `Drops_response_after_account_switch`, `Unknown_result_keeps_original_command_id`, `Large_money_remains_string`; retryไม่สร้างIDใหม่จนทราบผลเดิม 409โหลดใหม่ 401/403ล้างข้อมูลที่ป้องกัน ตรวจreceiptยังต้องมีสิทธิ์อ่าน
-- [ ] รันfilteredและNodeผ่าน เพิ่มOpenAPIcontractเก่าไม่ถดถอย ผู้ตรวจเทียบ B02/B12/B14/B15 ตรวจชุดร่วม แล้ว commit: `feat: expose scoped advance request API`
+- [x] เขียน HTTPเทสต์ `Direct_url_cannot_bypass_scope`, `No_financial_access_for_admin_or_team`, `Json_number_cannot_bypass_precision`, `Commands_require_mfa_csrf`; assert401/403ตามmiddleware, ไม่มีเนื้อหาหรือcountข้ามscope และไม่มีside effect
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestHttpTests` และ `node --test tests/field-advance-request.test.mjs` ให้แดง
+- [x] ต่อAPIเข้าบริการไม่ย้ายbusinessrulesเข้าหน้าเว็บ เงินออกเป็นstring; ปฏิเสธunknown fieldsที่อ้างสิทธิ์/ยอด; pagingมีลำดับคงที่และpageSize1–100; history/scopes/peopleมีขอบเขตและlimitเช่นเดียวกับlist ไม่โหลดทั้งระบบแล้วค่อยกรองในbrowser
+- [x] client `createRequestClient(userId: string, transport: typeof fetch = fetch)` คืน `list`, `details`, `quote`, `create`, `update`, `sendToOwner`, `confirm`, `returnToAuthor`, `review`, `revise`, `withdraw`, `copy`, `history`, `scopes`, `people` ตรงAPIข้างต้น ใช้ request-types mirrored contracts เงินstring/วันที่ISO; ทุกcallรับAbortSignal ตรวจบัญชีก่อน/หลังresponseและCSRFเหมือนgrant-client
+- [x] เพิ่ม clientเทสต์ `Drops_response_after_account_switch`, `Unknown_result_keeps_original_command_id`, `Large_money_remains_string`; retryไม่สร้างIDใหม่จนทราบผลเดิม 409โหลดใหม่ 401/403ล้างข้อมูลที่ป้องกัน ตรวจreceiptยังต้องมีสิทธิ์อ่าน
+- [x] รันfilteredและNodeผ่าน เพิ่มOpenAPIcontractเก่าไม่ถดถอย ผู้ตรวจเทียบ B02/B12/B14/B15 ตรวจชุดร่วม แล้ว commit: `feat: expose scoped advance request API`
 
 ### Task 9: หน้าจอใช้งานภาษาไทย
+
+ข้อผูกพันจาก Task 8: `/people` เป็น owner picker ไม่ใช่รายชื่อทีมทั้งหมด ต้องจัดแหล่งเลือกสมาชิกทีมที่ตรวจสิทธิ์เหมาะสมโดยไม่เพิ่มสิทธิ์การเงิน ใช้ current หลังคำสั่ง ไม่ใช้ receipt เก่าเป็นสถานะหน้าจอ และเก็บ command ID/payload เดิมเฉพาะบริบทบัญชีผู้ส่งสำหรับ reconciliation เมื่อยังไม่ทราบผล พร้อมล้างข้อมูลป้องกันเมื่อเปลี่ยนบัญชีหรือพบ 401/403
 
 **ไฟล์:** สร้าง `app/portal/field-advances/page.tsx`, `app/portal/field-advances/new/page.tsx`, `app/portal/field-advances/[requestId]/page.tsx`, `app/portal/field-advances/approvals/page.tsx`, `app/portal/field-advances/RequestEditor.tsx`, `app/portal/field-advances/RequestDetails.tsx`, `app/portal/field-advances/RequestQueue.tsx`, `lib/field-advances/request-view.ts`, `tests/e2e/field-advance-request.spec.ts`; แก้ `app/portal/page.tsx`, `tests/field-advance-request.test.mjs`, `backend/tests/TPR10.E2E.Fixture/FieldAdvanceSeed.cs`, `infra/nginx/https-smoke-fixture.mjs`
 
