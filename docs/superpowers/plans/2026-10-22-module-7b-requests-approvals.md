@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–6 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,501 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 7–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–7 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,529 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 8–10 ยังไม่เริ่ม คง M2/M3 และ Minor T7-M1 ไว้ติดตาม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -216,15 +216,17 @@ actionของ RequestAccess จำกัด `read`/`edit`/`send-to-owner`/`con
 
 **อินเทอร์เฟซ:** `RequestReviewService.DecideAsync(Guid actorId, Guid requestId, RequestDecision decision, RequestCommand meta, CancellationToken ct)`; `RequestRevisionService.ReturnToAuthorAsync`, `ReviseAsync`, `WithdrawAsync`, `CopyAsync` ใช้ `(Guid actorId, Guid requestId, RequestCommand meta, CancellationToken ct)` ทั้งหมดคืน `Task<FinanceResult<RequestView>>`; `RequestReviewService.ReevaluateAsync(Guid requestId, CancellationToken ct) : Task<bool>` เป็น internal worker API ไม่มีทางอนุมัติ/เพิ่มสิทธิ์
 
-- [ ] เขียน `Returned_revision_restarts_all_steps`, `Prior_approver_can_vote_again_only_once`, `Owner_only_can_withdraw_before_final`, `Final_approval_races_with_withdrawal`, `Reevaluation_is_idempotent`: assertมีterminalหนึ่งทาง, effect/auditไม่ซ้ำ, ฉบับเก่า/ข้อห้ามเดิมไม่หาย
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter 'FullyQualifiedName~FieldAdvanceRequestLifecycleTests|FullyQualifiedName~FieldAdvanceRequestRaceTests'` ให้แดง
-- [ ] Decideตรวจผู้รับงาน/step/version/สิทธิ์ใหม่ก่อนลงผล Return/Rejectต้องreason; Approveไปขั้นถัดไปหรือApproved ไม่เรียกจ่ายเงิน ReturnToAuthorเฉพาะownerตอนAwaitingOwner คืนDraftพร้อมเหตุผล; ReviseเฉพาะReturnedสร้างฉบับDraftใหม่ไม่ยกvotes
-- [ ] Withdraw ownerเท่านั้นก่อนApprovedและไม่ใช่Rejected/Withdrawn ปิดpendingstepsพร้อมประวัติ; CopyเฉพาะRejected/Withdrawnที่ยังอ่านได้ สร้างIDใหม่/เชื่อมต้นทาง/ตรวจสิทธิ์ยื่นและownerใหม่ตามข้อมูลเดิม ไม่copyผล; APIไม่มีแก้Approvedตรง
-- [ ] Reevaluateเก็บsnapshot/ผลก่อนหน้า ใช้resolverปัจจุบันเฉพาะขั้นค้าง เมื่อเปลี่ยนจริงจึงเพิ่มversion/audit; worker `BackgroundService` ใช้ scopeใหม่ต่อrequest, default interval30วินาที batch50 กำหนดค่าได้ วนแบบcursorไม่อดตายที่หน้าแรก ทดสอบด้วยTimeProvider ไม่sleepจริง และตรวจซ้ำในทุกคำสั่งก่อนลงผล; auditระบุsystem re-evaluationตามรูปแบบระบบ ไม่ปลอมเป็นผู้อนุมัติและไม่มีสิทธิ์ส่งคำขอหรืออนุมัติแทน
-- [ ] รันfilteredผ่าน เพิ่มสองworkerแข่ง, revokeชนapprove, reassignmentชนwithdraw, rollbackหลังreceipt/audit, terminalไม่ถูกworkerเปิดกลับ; ไม่มีjobแก้7Cpayment hold
-- [ ] ผู้ตรวจเทียบ B07–B13 ตรวจชุดร่วม และ commit: `feat: complete advance request approval lifecycle`
+- [x] เขียน `Returned_revision_restarts_all_steps`, `Prior_approver_can_vote_again_only_once`, `Owner_only_can_withdraw_before_final`, `Final_approval_races_with_withdrawal`, `Reevaluation_is_idempotent`: assertมีterminalหนึ่งทาง, effect/auditไม่ซ้ำ, ฉบับเก่า/ข้อห้ามเดิมไม่หาย
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter 'FullyQualifiedName~FieldAdvanceRequestLifecycleTests|FullyQualifiedName~FieldAdvanceRequestRaceTests'` ให้แดง
+- [x] Decideตรวจผู้รับงาน/step/version/สิทธิ์ใหม่ก่อนลงผล Return/Rejectต้องreason; Approveไปขั้นถัดไปหรือApproved ไม่เรียกจ่ายเงิน ReturnToAuthorเฉพาะownerตอนAwaitingOwner คืนDraftพร้อมเหตุผล; ReviseเฉพาะReturnedสร้างฉบับDraftใหม่ไม่ยกvotes
+- [x] Withdraw ownerเท่านั้นก่อนApprovedและไม่ใช่Rejected/Withdrawn ปิดpendingstepsพร้อมประวัติ; CopyเฉพาะRejected/Withdrawnที่ยังอ่านได้ สร้างIDใหม่/เชื่อมต้นทาง/ตรวจสิทธิ์ยื่นและownerใหม่ตามข้อมูลเดิม ไม่copyผล; APIไม่มีแก้Approvedตรง
+- [x] Reevaluateเก็บsnapshot/ผลก่อนหน้า ใช้resolverปัจจุบันเฉพาะขั้นค้าง เมื่อเปลี่ยนจริงจึงเพิ่มversion/audit; worker `BackgroundService` ใช้ scopeใหม่ต่อrequest, default interval30วินาที batch50 กำหนดค่าได้ วนแบบcursorไม่อดตายที่หน้าแรก ทดสอบด้วยTimeProvider ไม่sleepจริง และตรวจซ้ำในทุกคำสั่งก่อนลงผล; auditระบุsystem re-evaluationตามรูปแบบระบบ ไม่ปลอมเป็นผู้อนุมัติและไม่มีสิทธิ์ส่งคำขอหรืออนุมัติแทน
+- [x] รันfilteredผ่าน เพิ่มสองworkerแข่ง, revokeชนapprove, reassignmentชนwithdraw, rollbackหลังreceipt/audit, terminalไม่ถูกworkerเปิดกลับ; ไม่มีjobแก้7Cpayment hold
+- [x] ผู้ตรวจเทียบ B07–B13 ตรวจชุดร่วม และ commit: `feat: complete advance request approval lifecycle`
 
 ### Task 8: API และ client ที่ไม่รั่วสิทธิ์
+
+ข้อผูกพันจาก Task 7: history ต้องรวม `AdvanceRequestEvent` ของบุคคลกับ `audit_events` action `field-advance.request.reevaluate` ของระบบ หลังตรวจสิทธิ์อ่านคำขอ โดยคง revision/version/step และค่าก่อน–หลังใน metadata ไม่เปิด audit ทั้งระบบให้ผู้ขอ และไม่แสดงเหตุการณ์ระบบเป็นการกระทำของเจ้าของหรือผู้อนุมัติ คิวงานต้องตรวจสถานะคำขอ/ฉบับปัจจุบัน/ขั้นตามลำดับ ไม่ใช้ `Outcome=null` อย่างเดียว เพราะขั้นที่ถูกปิดด้วยการถอนหรือส่งกลับยังไม่มีผลอนุมัติ
 
 **ไฟล์:** สร้าง `backend/src/TPR10.Api/FieldAdvances/Requests/RequestReadService.cs`, `backend/src/TPR10.Api/FieldAdvances/Requests/RequestEndpoints.cs`, `backend/src/TPR10.Api/FieldAdvances/Requests/RequestHttpContracts.cs`, `backend/tests/TPR10.Api.IntegrationTests/FieldAdvanceRequestHttpTests.cs`, `lib/field-advances/request-types.ts`, `lib/field-advances/request-client.ts`, `tests/field-advance-request.test.mjs`; แก้ Registration และ `backend/src/TPR10.Api/FieldAdvances/FieldAdvanceOpenApiTransformer.cs`
 
