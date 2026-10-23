@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–5 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,477 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 6–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–6 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,501 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 7–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -199,12 +199,16 @@ actionของ RequestAccess จำกัด `read`/`edit`/`send-to-owner`/`con
 
 **อินเทอร์เฟซ:** `RequestSubmissionService.QuoteAsync(Guid actorId, Guid requestId, CancellationToken ct) : Task<FinanceResult<ConfirmationQuote>>`; `SendToOwnerAsync(Guid actorId, Guid requestId, RequestCommand meta, CancellationToken ct)` และ `ConfirmAsync(Guid actorId, Guid requestId, string confirmationHash, RequestCommand meta, CancellationToken ct)` คืน `Task<FinanceResult<RequestView>>`
 
-- [ ] เขียน `Delegate_cannot_confirm`, `Policy_or_content_changed_requires_new_quote`, `Override_keeps_approved_company_basis`, `Confirmation_freezes_all_steps`: assert409เมื่อhashเปลี่ยนและไม่มีsnapshotใหม่; confirmสำเร็จเก็บ policy IDs/hash/ยอด/ทุกstep ครบในธุรกรรมเดียว
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestSubmissionTests` ให้แดง
-- [ ] Quote อ่านผ่าน RequestAccess และ `PolicyResolver.ResolveAuthorizedAsync` ภายใต้lock; hashรวม revision/version/content/estimate/policyIDs/contenthash; ไม่ให้ผู้ขออ่าน management endpoint ทั้งชุด
-- [ ] SendToOwner เปลี่ยน Draftเป็นAwaitingOwner; Confirm เฉพาะowner (selfใช้Draftได้) ตรวจ quoteใหม่และสิทธิ์ปัจจุบันก่อน freeze สร้างทุกขั้นตามยอดโดยรอทีละขั้น; หากกติกาไม่มี/ยอดเกินทุกbandให้แจ้งแก้ก่อนส่ง หากมีขั้นแต่ไม่มีคนให้ส่งแล้วเป็นHeld พร้อมเหตุผล
-- [ ] รันเทสต์ผ่าน เพิ่มpolicy activationชนconfirm, content editชนconfirm, snapshot immutability และaudit failure ไม่มีpartial submission
-- [ ] ผู้ตรวจเทียบ B01/B04/B05/B13 ตรวจชุดร่วม และ commit: `feat: confirm and freeze advance request submissions`
+- [x] เขียน `Delegate_cannot_confirm`, `Policy_or_content_changed_requires_new_quote`, `Override_keeps_approved_company_basis`, `Confirmation_freezes_all_steps`: assert409เมื่อhashเปลี่ยนและไม่มีsnapshotใหม่; confirmสำเร็จเก็บ policy IDs/hash/ยอด/ทุกstep ครบในธุรกรรมเดียว
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestSubmissionTests` ให้แดง
+- [x] Quote อ่านผ่าน RequestAccess และ `PolicyResolver.ResolveAuthorizedAsync` ภายใต้lock; hashรวม revision/version/content/estimate/policyIDs/contenthash; ไม่ให้ผู้ขออ่าน management endpoint ทั้งชุด
+- [x] SendToOwner เปลี่ยน Draftเป็นAwaitingOwner; Confirm เฉพาะowner (selfใช้Draftได้) ตรวจ quoteใหม่และสิทธิ์ปัจจุบันก่อน freeze สร้างทุกขั้นตามยอดโดยรอทีละขั้น; หากกติกาไม่มี/ยอดเกินทุกbandให้แจ้งแก้ก่อนส่ง หากมีขั้นแต่ไม่มีคนให้ส่งแล้วเป็นHeld พร้อมเหตุผล
+- [x] รันเทสต์ผ่าน เพิ่มpolicy activationชนconfirm, content editชนconfirm, snapshot immutability และaudit failure ไม่มีpartial submission
+- [x] ผู้ตรวจเทียบ B01/B04/B05/B13 ตรวจชุดร่วม และ commit: `feat: confirm and freeze advance request submissions`
+
+ผล Task 6: commit `fa5c499`; Helmholtz ลงมือและ Socrates ตรวจอิสระ ผ่านโดยไม่มีข้อพบค้าง เทสต์เฉพาะ 24/24, regression ที่เกี่ยวข้อง 249/249 ผลสุดท้าย Backend 2,501/2,501, Frontend 118/118 พร้อม Build/Format/Lint ผ่านวันที่ 23 ตุลาคม 2569 ยังไม่เริ่ม Task 7
+
+ข้อกำหนดส่งต่อ: Task 7 ลงผล/ประเมินใหม่เฉพาะขั้นปัจจุบันภายใต้ lock เดิม ใช้ snapshot ที่ตรึงไว้ ไม่ข้ามขั้นที่ยังไม่มีผู้รับงาน; Task 9 ต้องจับคู่รายละเอียดและ quote ด้วย request/revision/version เมื่อได้409ให้ทบทวนใหม่ และหลัง replay ให้อ่านสถานะปัจจุบันใหม่ ไม่ใช้ receipt เป็นสถานะล่าสุดโดยอัตโนมัติ
 
 ### Task 7: ลงผล ฉบับแก้ไข ถอน และประเมินผู้รับงานใหม่
 
@@ -291,4 +295,4 @@ node --input-type=module -e 'import { runHttpsSmoke } from "./infra/nginx/https-
 - มีชื่อไฟล์ สัญญาบริการ และเทสต์เฉพาะในทุกTask; migrationใช้ชื่อที่ระบุแต่ให้EFสร้างtimestampจริง ไม่สร้างชื่อวันที่ปลอม
 - จุดเสี่ยงทั้งห้าผูกกับเทสต์Taskที่รับผิดชอบแล้ว ไม่ให้metadata/alias/retryข้ามสิทธิ์
 - ข้อมูลโครงการ/ผู้รับผิดชอบเป็นตัวตนคำขอ และข้อมูลระดับอนุมัติผ่านgrantสามคน เป็นรายละเอียดการลงมือที่ต้องตรวจพร้อมแผนนี้ก่อนเริ่ม
-- ผู้ใช้อนุมัติแผนและสั่ง Task 1–5 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 6–10 ในรอบนี้
+- ผู้ใช้อนุมัติแผนและสั่ง Task 1–6 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 7–10 ในรอบนี้
