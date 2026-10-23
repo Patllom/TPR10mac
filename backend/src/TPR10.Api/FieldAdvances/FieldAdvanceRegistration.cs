@@ -15,6 +15,9 @@ public static class FieldAdvanceRegistration
         services.AddScoped<RequestAccess>();
         services.AddScoped<RequestDraftService>();
         services.AddScoped<RequestSubmissionService>();
+        services.AddScoped<RequestReviewService>();
+        services.AddScoped<RequestRevisionService>();
+        services.AddHostedService<RequestRoutingWorker>();
         services.AddScoped<ApprovalRouteResolver>();
         services.AddScoped<PolicyService>();
         services.AddScoped<PolicyResolver>();

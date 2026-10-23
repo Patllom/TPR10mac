@@ -13,7 +13,15 @@ public sealed class ApprovalRouteResolver(Tpr10DbContext db, FinancePersonResolv
     // Caller owns transaction and advisory lock 7241002 through assignment/decision commit.
     // Caller persists the current revision's total and frozen snapshot before resolving.
     // This helper does not mutate requests, steps, history, or transaction ownership.
-    public async Task<RouteChoice> ResolveAsync(Guid requestId, Guid revisionId, string levelCode, CancellationToken ct)
+    public Task<RouteChoice> ResolveAsync(Guid requestId, Guid revisionId, string levelCode, CancellationToken ct)
+        => ResolveCoreAsync(requestId, revisionId, levelCode, null, ct);
+
+    // ตรวจตำแหน่ง/สิทธิ์ซ้ำหลัง audit ภายใน transaction ที่ลงผลอยู่เท่านั้น
+    // ไม่นับผลของขั้นที่เพิ่งลงเองเป็นข้อห้าม แต่ยังคงผลทุกขั้นก่อนหน้าและประวัติทั้งคำขอ
+    internal Task<RouteChoice> RecheckDecisionAsync(Guid requestId, Guid revisionId, string levelCode, Guid decidingStepId, CancellationToken ct)
+        => ResolveCoreAsync(requestId, revisionId, levelCode, decidingStepId, ct);
+
+    private async Task<RouteChoice> ResolveCoreAsync(Guid requestId, Guid revisionId, string levelCode, Guid? decidingStepId, CancellationToken ct)
     {
         var traversed = new List<Guid>();
         RouteChoice Hold(string code) => new(null, null, code, traversed.ToArray());
@@ -34,7 +42,7 @@ public sealed class ApprovalRouteResolver(Tpr10DbContext db, FinancePersonResolv
 
         var participants = await db.Set<AdvanceRequestParticipant>().AsNoTracking().Where(x => x.RequestId == requestId).ToArrayAsync(ct);
         var decisions = await db.Set<AdvanceApprovalStep>().AsNoTracking()
-            .Where(x => x.RequestId == requestId && x.Outcome == "Approved")
+            .Where(x => x.RequestId == requestId && x.Outcome == "Approved" && (decidingStepId == null || x.Id != decidingStepId))
             .Select(x => new { x.RevisionId, PersonId = x.DecidedByPersonId ?? Guid.Empty }).ToArrayAsync(ct);
         Guid[] Role(string role) => participants.Where(x => x.Role == role).Select(x => x.PersonId).Distinct().ToArray();
         RequestParticipationHistory history = new(

@@ -105,7 +105,7 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
                 content, estimate, 200, () => AuthorizeAuthorAsync(actorId, request, ct), ct);
         }, ct);
 
-    private async Task<Guid?> AuthorizeCreateAsync(Guid actor, FinanceScope scope, Guid owner, CancellationToken ct)
+    internal async Task<Guid?> AuthorizeCreateAsync(Guid actor, FinanceScope scope, Guid owner, CancellationToken ct)
     {
         if (scope is null || scope.ProjectId is null || scope.ProjectId == Guid.Empty || owner == Guid.Empty) return null;
         var person = await people.ResolveAsync(actor, scope.WorkspaceId, ct);
@@ -114,7 +114,7 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
         return await OwnerEligibleAsync(scope, owner, ct) ? person : null;
     }
 
-    private async Task<bool> AuthorizeAuthorAsync(Guid actor, AdvanceRequest request, CancellationToken ct)
+    internal async Task<bool> AuthorizeAuthorAsync(Guid actor, AdvanceRequest request, CancellationToken ct)
     {
         var scope = new FinanceScope(request.WorkspaceId, request.ProjectId);
         var person = await people.ResolveAsync(actor, request.WorkspaceId, ct);
@@ -183,4 +183,13 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
 
     internal static bool ValidMeta(RequestCommand meta) => meta is not null && meta.CommandId != Guid.Empty
         && meta.ExpectedVersion >= 0 && meta.Reason is not null && meta.Reason.Length <= 2000;
+
+    internal async Task<Estimate> StoredEstimateAsync(AdvanceRequestRevision revision, CancellationToken ct)
+    {
+        var content = JsonSerializer.Deserialize<RequestContent>(revision.ContentJson)!;
+        var lines = await db.Set<AdvanceRequestLine>().AsNoTracking().Where(x => x.RevisionId == revision.Id)
+            .OrderBy(x => x.LineOrder).ToArrayAsync(ct);
+        return new(lines.Select((line, i) => new EstimateLine(content.Lines[i].Id, line.CategoryId,
+            line.Description, line.Mode, line.Quantity, line.UnitRate, line.Amount)).ToArray(), revision.Total);
+    }
 }
