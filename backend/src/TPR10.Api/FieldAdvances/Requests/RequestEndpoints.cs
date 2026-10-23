@@ -5,6 +5,12 @@ namespace TPR10.Api.FieldAdvances.Requests;
 
 public static class RequestEndpoints
 {
+    public static async Task<IResult> Configuration(RequestReadService s, RequestSession session, Guid workspaceId, Guid? projectId, CancellationToken ct) =>
+        RequestHttp.Result(await s.ConfigurationAsync(Actor(session), new(workspaceId, projectId), ct));
+    public static async Task<IResult> Screen(RequestReadService s, RequestSession session, Guid id, CancellationToken ct) =>
+        RequestHttp.Result(await s.ScreenAsync(Actor(session), id, ct));
+    public static async Task<IResult> TeamPeople(RequestReadService s, RequestSession session, Guid workspaceId, Guid? projectId, string? prefix, int? page, int? pageSize, CancellationToken ct) =>
+        RequestHttp.Result(await s.TeamPeopleAsync(Actor(session), new(workspaceId, projectId), prefix ?? "", page ?? 1, pageSize ?? 20, ct));
     private static Guid Actor(RequestSession session) => session.Entity?.UserId ?? Guid.Empty;
     public static Task<IResult> Create(RequestDraftService s, RequestSession session, HttpRequest request, CancellationToken ct) =>
         Command<CreateRequestHttp>(request, x => s.CreateAsync(Actor(session), x.Input, x.Meta, ct), ct);

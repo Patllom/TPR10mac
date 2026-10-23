@@ -34,6 +34,89 @@ public sealed class FieldAdvanceRequestHttpTests(PostgresFixture postgres)
         new("Individual", "Survey", new(2026, 10, 24), new(2026, 10, 25), new(2026, 10, 23), [],
             [new(Guid.NewGuid(), Guid.Parse("78000000-0000-0000-0000-000000000001"), "Travel", "QuantityRate", "1.2345", null, null)]));
     private static RequestCommand Meta(long version = 0) => new(Guid.NewGuid(), version, "test");
+    [Fact]
+    public async Task Team_picker_uses_current_certified_employees_without_finance_grants_and_clears_on_revocation()
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var owner = await Client(factory, f, AuthorId);
+        await using var db = f.CreateContext();
+        await db.Set<GrantProposal>().Where(x => x.RecipientId == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, Array.Empty<string>()));
+        var name = (await db.Set<IdentityUser>().SingleAsync(x => x.Id == RecipientId)).Username;
+        var response = await owner.GetAsync($"{Root}/team-people?{Query}&prefix={Uri.EscapeDataString(name)}&pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var row = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement[]>())!);
+        Assert.Equal(RecipientPersonId, row.GetProperty("id").GetGuid());
+        Assert.Equal(name, row.GetProperty("name").GetString());
+        Assert.Equal(new[] { "id", "name" }, row.EnumerateObject().Select(x => x.Name).Order());
+        Assert.Empty((await owner.GetFromJsonAsync<JsonElement[]>($"{Root}/team-people?{Query}&prefix={Uri.EscapeDataString(name)}&pageSize=1&page=2"))!);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync($"{Root}/team-people?{Query}&pageSize=101")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync($"{Root}/team-people?workspaceId={OtherWorkspaceId}&projectId={ProjectId}")).StatusCode);
+        await db.Set<IdentityUser>().Where(x => x.Id == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.IsActive, false));
+        Assert.Empty((await owner.GetFromJsonAsync<JsonElement[]>($"{Root}/team-people?{Query}&prefix={Uri.EscapeDataString(name)}"))!);
+        await db.Set<GrantProposal>().Where(x => x.RecipientId == AuthorId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, Array.Empty<string>()));
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync($"{Root}/team-people?{Query}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Team_picker_collapses_certified_aliases_and_excludes_unlinked_or_ended_employment()
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var owner = await Client(factory, f, AuthorId);
+        await using var db = f.CreateContext();
+        db.Add(new FinanceAccountLink
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            UserId = AliasAccountId,
+            PersonId = RecipientPersonId,
+            CreatedBy = AuthorId,
+            CreatedAtUtc = f.Clock.GetUtcNow().AddDays(-1),
+            Reason = "certified test alias"
+        });
+        await db.SaveChangesAsync();
+        var all = (await owner.GetFromJsonAsync<JsonElement[]>($"{Root}/team-people?{Query}"))!;
+        Assert.Equal(new[] { AuthorPersonId, ReviewerPersonId, RecipientPersonId }, all.Select(x => x.GetProperty("id").GetGuid()).Order());
+        var selected = Assert.Single(all, x => x.GetProperty("id").GetGuid() == RecipientPersonId);
+        Assert.Equal((await db.Set<IdentityUser>().SingleAsync(x => x.Id == RecipientId)).Username, selected.GetProperty("name").GetString());
+        var second = Assert.Single((await owner.GetFromJsonAsync<JsonElement[]>($"{Root}/team-people?{Query}&page=2&pageSize=1"))!);
+        Assert.Equal(ReviewerPersonId, second.GetProperty("id").GetGuid());
+        await db.Set<TPR10.Api.Attendance.Directory.EmployeeMembership>().Where(x => x.UserId == RecipientId || x.UserId == AliasAccountId)
+            .ExecuteUpdateAsync(x => x.SetProperty(p => p.ValidToUtc, f.Clock.GetUtcNow()));
+        var remaining = (await owner.GetFromJsonAsync<JsonElement[]>($"{Root}/team-people?{Query}"))!;
+        Assert.DoesNotContain(remaining, x => x.GetProperty("id").GetGuid() == RecipientPersonId);
+    }
+
+    [Fact]
+    public async Task Screen_context_exposes_authorized_prior_content_frozen_policy_and_server_actions()
+    {
+        await using var f = await L.Ready(postgres); using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var owner = await Client(factory, f, AuthorId); using var reviewer = await Client(factory, f, ReviewerId);
+        using var outsider = await Client(factory, f, RecipientId);
+        var config = await owner.GetAsync($"{Root}/configuration?{Query}");
+        Assert.Equal(HttpStatusCode.OK, config.StatusCode);
+        var first = await Create(owner); var id = first.GetProperty("id").GetGuid();
+        var initial = await owner.GetFromJsonAsync<JsonElement>($"{Root}/{id}/screen");
+        Assert.Contains("confirm", initial.GetProperty("actions").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(JsonValueKind.Null, initial.GetProperty("previousContent").ValueKind);
+        var quote = await owner.GetFromJsonAsync<JsonElement>($"{Root}/{id}/quote");
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Post, $"requests/{id}/confirm", new { confirmationHash = quote.GetProperty("confirmationHash").GetString(), meta = Meta(1) })).StatusCode);
+        var submitted = await owner.GetFromJsonAsync<JsonElement>($"{Root}/{id}/screen");
+        Assert.Equal(quote.GetProperty("policy").GetProperty("contentHash").GetString(), submitted.GetProperty("frozenPolicy").GetProperty("contentHash").GetString());
+        Assert.Equal("100.00", submitted.GetProperty("frozenPolicy").GetProperty("content").GetProperty("categories")[0].GetProperty("standardRate").GetString());
+        var current = await reviewer.GetFromJsonAsync<JsonElement>($"{Root}/{id}");
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, $"requests/{id}/review", new { decision = new RequestDecision("Return", current.GetProperty("currentStep").GetProperty("id").GetGuid()), meta = Meta(2) })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Post, $"requests/{id}/revise", Meta(3))).StatusCode);
+        var revised = await owner.GetFromJsonAsync<JsonElement>($"{Root}/{id}/screen");
+        Assert.Equal(2, revised.GetProperty("revisionNumber").GetInt32());
+        Assert.Equal("Survey", revised.GetProperty("previousContent").GetProperty("purpose").GetString());
+        Assert.Equal(JsonValueKind.Null, revised.GetProperty("frozenPolicy").ValueKind);
+        await using var db = f.CreateContext();
+        await db.Set<GrantProposal>().Where(x => x.RecipientId == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.EndsAtUtc, f.Clock.GetUtcNow()));
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync($"{Root}/{id}/screen")).StatusCode);
+    }
     private static async Task<JsonElement> Create(HttpClient client)
     {
         using var response = await Send(client, HttpMethod.Post, "requests", new { input = Input(), meta = Meta() });

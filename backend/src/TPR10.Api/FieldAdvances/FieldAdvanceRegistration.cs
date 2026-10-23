@@ -60,6 +60,9 @@ public static class FieldAdvanceRegistration
         group.MapGet("/requests/scopes", RequestEndpoints.Scopes).Produces<RequestScopeChoice[]>();
         group.MapGet("/requests/people", RequestEndpoints.People).Produces<RequestPersonChoice[]>();
         group.MapGet("/requests", RequestEndpoints.List).Produces<RequestHttpView[]>();
+        group.MapGet("/requests/team-people", RequestEndpoints.TeamPeople).Produces<RequestPersonChoice[]>();
+        group.MapGet("/requests/configuration", RequestEndpoints.Configuration);
+        group.MapGet("/requests/{id}/screen", RequestEndpoints.Screen).Produces<RequestScreen>();
         group.MapGet("/requests/review-queue", RequestEndpoints.Queue).Produces<RequestHttpView[]>();
         group.MapGet("/requests/{id}", RequestEndpoints.Details).Produces<RequestHttpView>();
         group.MapGet("/requests/{id}/history", RequestEndpoints.History).Produces<RequestHistory[]>();

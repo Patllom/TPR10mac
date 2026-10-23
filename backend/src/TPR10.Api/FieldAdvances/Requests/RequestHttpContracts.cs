@@ -32,6 +32,8 @@ public sealed record RequestHistory(Guid EventId, Guid RevisionId, string Action
     DateTimeOffset Time, string Reason, Guid? StepId, long Version, JsonElement Metadata);
 public sealed record RequestScopeChoice(FinanceScope Scope, string WorkspaceName, string ProjectName, string[] Capabilities);
 public sealed record RequestPersonChoice(Guid Id, string Name);
+public sealed record RequestScreen(Guid RequestId, Guid RevisionId, long Version, int RevisionNumber,
+    RequestContent? PreviousContent, PolicyHttpSnapshot? FrozenPolicy, string[] Actions);
 
 internal static class RequestHttp
 {
@@ -54,6 +56,7 @@ internal static class RequestHttp
     {
         RequestView v => RequestHttpView.From(v),
         RequestView[] rows => rows.Select(RequestHttpView.From).ToArray(),
+        PolicySnapshot p => new PolicyHttpSnapshot(p.CompanyVersionId, p.ProjectVersionId, PolicyWireContent.From(p.Content), p.ContentHash, p.Scope, p.RequiresReview),
         ConfirmationQuote q => new RequestQuoteHttp(q.RequestId, q.RevisionId, q.Version, q.ConfirmationHash,
             RequestEstimateHttp.From(q.Estimate), new(q.Policy.CompanyVersionId, q.Policy.ProjectVersionId,
                 PolicyWireContent.From(q.Policy.Content), q.Policy.ContentHash, q.Policy.Scope, q.Policy.RequiresReview), q.Levels),

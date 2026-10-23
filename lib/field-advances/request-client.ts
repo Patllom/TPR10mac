@@ -1,4 +1,6 @@
 import { currentAccount } from './policy-client';
+import type { PolicySnapshot } from './policy-types';
+import type { RequestScreen } from './request-types';
 import { validId, sameScope, validateContent as validatePolicyContent } from './policy-view';
 import type { FinanceScope, RequestMode, RequestCommand, RequestContent, CreateRequest, RequestView, Estimate, ConfirmationQuote, RequestDecision, RequestHistory, RequestScopeChoice, RequestPersonChoice, RequestCommandResult, QuotedRequest } from './request-types';
 
@@ -106,6 +108,29 @@ export function createRequestClient(userId: string, transport: typeof fetch = fe
   const simple = (operation: string, id: string, meta: RequestCommand, signal?: AbortSignal) => mutate(`${path(id)}/${operation}`, meta, meta, signal, 'POST', operation === 'copy' ? undefined : id);
   return {
     details,
+    async screen(row: RequestView, signal?: AbortSignal): Promise<RequestScreen> {
+      const v = await request(`${path(row.id)}/screen`, signal) as RequestScreen;
+      if (!v || v.requestId !== row.id || v.revisionId !== row.revisionId || v.version !== row.version) throw new RequestError(409);
+      if (!Number.isSafeInteger(v.revisionNumber) || v.revisionNumber < 1 || !Array.isArray(v.actions) || v.actions.some(x => !['edit', 'send-to-owner', 'confirm', 'return-to-author', 'review', 'revise', 'withdraw', 'copy'].includes(x))) return fail();
+      if (v.previousContent !== null) { try { content(v.previousContent); } catch { return fail(); } }
+      if (v.frozenPolicy !== null) {
+        try { validatePolicyContent(v.frozenPolicy.content); } catch { return fail(); }
+        if (!sameScope(v.frozenPolicy.scope, row.scope)) throw new RequestError(403);
+      }
+      return v;
+    },
+    async configuration(scope: FinanceScope, signal?: AbortSignal): Promise<PolicySnapshot> {
+      const p = await request(`/configuration?${scopeQuery(scope)}`, signal) as PolicySnapshot;
+      try { validatePolicyContent(p.content); } catch { return fail(); }
+      if (!sameScope(p.scope, scope)) throw new RequestError(403);
+      return p;
+    },
+    async teamPeople(scope: FinanceScope, prefix = '', page = 1, pageSize = 20, signal?: AbortSignal): Promise<RequestPersonChoice[]> {
+      if (typeof prefix !== 'string' || prefix.length > 100 || /[\x00-\x1f\x7f]/.test(prefix)) throw new RequestError(400);
+      const rows = await request(`/team-people?${scopeQuery(scope)}&prefix=${encodeURIComponent(prefix)}&${pageQuery(page, pageSize)}`, signal) as RequestPersonChoice[];
+      if (!Array.isArray(rows) || rows.length > pageSize || rows.some(x => !validId(x.id) || typeof x.name !== 'string')) return fail();
+      return rows;
+    },
     async list(scope: FinanceScope, mode: RequestMode = 'mine', page = 1, pageSize = 20, signal?: AbortSignal): Promise<RequestView[]> {
       if (!['mine', 'delegated', 'review', 'report'].includes(mode)) throw new RequestError(400);
       const values = await request(`${mode === 'review' ? '/review-queue' : ''}?${scopeQuery(scope)}&mode=${mode}&${pageQuery(page, pageSize)}`, signal);

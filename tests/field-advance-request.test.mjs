@@ -8,6 +8,28 @@ const scope = { workspaceId: user, projectId: id };
 const content = { kind: 'Individual', purpose: 'Survey', fieldStart: '2026-10-24', fieldEnd: '2026-10-25', neededOn: '2026-10-23', teamPersonIds: [], lines: [{ id, categoryId: id, description: 'Travel', mode: 'LumpSum', quantity: null, unitRate: null, lumpSum: '9999999999999999.99' }] };
 const row = { id, revisionId: user, version: 1, state: 'Draft', scope, ownerPersonId: user, delegatePersonId: null, content, estimate: { total: '9999999999999999.99', lines: [{ id, categoryId: id, description: 'Travel', mode: 'LumpSum', quantity: null, unitRate: null, amount: '9999999999999999.99' }] }, holdCode: null, currentStep: null };
 const meta = { commandId: id, expectedVersion: 0, reason: '' };
+const view = existsSync('lib/field-advances/request-view.ts') ? loadTs('lib/field-advances/request-view.ts') : {};
+test('Approved is awaiting payment and content diff detects lexical money edits without floating point', () => {
+  assert.equal(typeof view.requestStateLabel, 'function');
+  assert.equal(view.requestStateLabel('Approved'), 'อนุมัติแล้ว รอดำเนินการจ่าย');
+  assert.deepEqual(view.diffRequestContent(content, structuredClone(content)), []);
+  const reordered = { ...content, lines: [Object.fromEntries(Object.entries(content.lines[0]).reverse())] };
+  assert.deepEqual(view.diffRequestContent(content, reordered), []);
+  assert.deepEqual(view.diffRequestContent(content, { ...content, purpose: 'งานใหม่', lines: [{ ...content.lines[0], lumpSum: '9999999999999999.98' }] }), ['รายละเอียดงาน: Survey → งานใหม่', 'รายการประมาณการ 1 เปลี่ยนแปลง']);
+});
+test('Team picker uses separate scoped bounded endpoint and abort signal', async () => {
+  const calls = [];
+  const c = client(async (url, options) => { calls.push({ url, ...options }); return Response.json([{ id, name: 'พนักงาน' }]); });
+  assert.equal(typeof c.teamPeople, 'function');
+  assert.deepEqual(await c.teamPeople(scope, 'พน', 2, 7, new AbortController().signal), [{ id, name: 'พนักงาน' }]);
+  assert.match(calls[0].url, /\/team-people\?workspaceId=.*&projectId=.*&prefix=.*&page=2&pageSize=7/);
+  assert.ok(calls[0].signal instanceof AbortSignal);
+});
+test('Screen projection must match current request version before displaying previous content', async () => {
+  const c = client(async url => Response.json(url.endsWith('/screen') ? { requestId: id, revisionId: user, version: 2, revisionNumber: 1, previousContent: null, frozenPolicy: null, actions: ['edit'] } : row));
+  assert.equal(typeof c.screen, 'function');
+  await assert.rejects(() => c.screen(row, new AbortController().signal), e => e.status === 409);
+});
 function client(handler, account = () => user) {
   assert.equal(typeof api.createRequestClient, 'function');
   return api.createRequestClient(user, async (url, options) => url.endsWith('/session') ? Response.json({ userId: account(), stage: 'Active', permissions: [], mfaVerifiedAtUtc: null }) : url.endsWith('/csrf') ? Response.json({ token: 'csrf' }) : handler(url, options));

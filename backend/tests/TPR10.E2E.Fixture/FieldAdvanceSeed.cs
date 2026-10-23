@@ -6,9 +6,9 @@ internal static class FieldAdvanceSeed
     internal static string Sql()
     {
         var sql = new StringBuilder();
-        for (var n = 1; n <= 12; n++)
+        for (var n = 1; n <= 19; n++)
         {
-            var users = Enumerable.Range(1, n > 8 ? 6 : 5).Select(i => $"88000000-0000-4000-8000-{n * 100 + i:D12}").ToArray();
+            var users = Enumerable.Range(1, n > 12 ? 7 : n > 8 ? 6 : 5).Select(i => $"88000000-0000-4000-8000-{n * 100 + i:D12}").ToArray();
             foreach (var (user, index) in users.Select((u, i) => (u, i)))
                 sql.AppendLine($"INSERT INTO users(id,username,normalized_username) VALUES ('{user}','policy-fixture-{n}-{index}','POLICY-FIXTURE-{n}-{index}');");
             var w = $"88100000-0000-4000-8000-{n:D12}";
@@ -37,7 +37,23 @@ internal static class FieldAdvanceSeed
                     sql.AppendLine($"INSERT INTO field_advance_grant_reviews(id,workspace_id,proposal_id,reviewer_id,reviewer_person_id,outcome,created_at_utc,reason) VALUES ('{review}','{w}','{proposal}','{users[reviewer]}','{people[reviewer]}','Approved',now()-interval '1 hour','ผลตรวจทดสอบ');");
                     sql.AppendLine($"INSERT INTO field_advance_grant_assignments(id,workspace_id,project_id,proposal_id,review_id,created_by,created_at_utc,reason) VALUES (gen_random_uuid(),'{w}',{scope},'{proposal}','{review}','{users[reviewer]}',now()-interval '1 hour','มอบหมายทดสอบ');");
                 }
-            if (n > 8)
+            if (n > 12)
+            {
+                foreach (var i in new[] { 0, 1, 2, 3, 4 })
+                {
+                    var proposal = Guid.NewGuid(); var review = Guid.NewGuid();
+                    var proposer = (i + 1) % 5; var reviewer = (i + 2) % 5;
+                    var cap = i == 0 ? "request.create" : i == 3 ? "request.delegate" : "request.approve";
+                    var level = i == 1 ? "supervisor" : i == 2 ? "project-manager" : "director";
+                    var levels = cap == "request.approve" ? $"ARRAY['{level}']" : "ARRAY[]::text[]";
+                    var primary = i is 2 or 4 ? levels : "ARRAY[]::text[]";
+                    sql.AppendLine($"INSERT INTO field_advance_grant_proposals(id,workspace_id,project_id,recipient_id,recipient_person_id,proposed_by,proposed_by_person_id,state,capabilities,delegable_capabilities,approval_levels,primary_approval_levels,approval_limit,starts_at_utc,created_at_utc,reason) VALUES ('{proposal}','{w}','{p}','{users[i]}','{people[i]}','{users[proposer]}','{people[proposer]}','Approved',ARRAY['{cap}'],ARRAY[]::text[],{levels},{primary},100000,now()-interval '1 hour',now()-interval '1 hour','สิทธิ์คำขอจำลอง');");
+                    sql.AppendLine($"INSERT INTO field_advance_grant_reviews(id,workspace_id,proposal_id,reviewer_id,reviewer_person_id,outcome,created_at_utc,reason) VALUES ('{review}','{w}','{proposal}','{users[reviewer]}','{people[reviewer]}','Approved',now()-interval '1 hour','ผลตรวจจำลอง');");
+                    sql.AppendLine($"INSERT INTO field_advance_grant_assignments(id,workspace_id,project_id,proposal_id,review_id,created_by,created_at_utc,reason) VALUES (gen_random_uuid(),'{w}','{p}','{proposal}','{review}','{users[reviewer]}',now()-interval '1 hour','สิทธิ์จำลอง');");
+                }
+                sql.AppendLine($"INSERT INTO reporting_lines(id,employee_membership_id,employee_user_id,supervisor_user_id,valid_from_utc,created_by,reason) SELECT gen_random_uuid(),id,'{users[0]}','{users[1]}',now()-interval '1 day','{users[0]}','สายงานจำลอง' FROM employee_memberships WHERE user_id='{users[0]}' AND workspace_id='{w}';");
+            }
+            if (n > 8 && n <= 12)
                 foreach (var i in new[] { 0, 1, 2 })
                 {
                     var proposal = Guid.NewGuid(); var review = Guid.NewGuid();

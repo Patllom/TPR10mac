@@ -18,3 +18,4 @@ export interface RequestPersonChoice { id: string; name: string }
 // Consumers render current, never receipt. Receipt is retained command evidence only.
 export interface RequestCommandResult { receipt: RequestView; current: RequestView }
 export interface QuotedRequest { request: RequestView; quote: ConfirmationQuote }
+export interface RequestScreen { requestId: string; revisionId: string; version: number; revisionNumber: number; previousContent: RequestContent | null; frozenPolicy: PolicySnapshot | null; actions: string[] }

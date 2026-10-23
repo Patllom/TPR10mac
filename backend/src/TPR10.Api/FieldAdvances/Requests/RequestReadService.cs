@@ -6,11 +6,13 @@ using TPR10.Api.FieldAdvances.Data;
 using TPR10.Api.Identity.Data;
 using TPR10.Api.Organization.Data;
 using TPR10.Api.Scopes;
+using TPR10.Api.Attendance.Directory;
+using TPR10.Api.FieldAdvances.Policies;
 
 namespace TPR10.Api.FieldAdvances.Requests;
 
 public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, FinancePersonResolver people,
-    RequestAccess requests, RequestDraftService drafts, ScopeAccess sessions, TimeProvider clock)
+    RequestAccess requests, RequestDraftService drafts, ScopeAccess sessions, TimeProvider clock, PolicyResolver policies)
 {
     private static readonly string[] Capabilities = ["request.create", "request.delegate", "request.approve", "report.read"];
     private static FinanceResult<T> Denied<T>() => new(403, "finance-access-denied", default);
@@ -36,6 +38,84 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
             if ((await access.CheckAsync(actor, scope, capability, ct)).Allowed) found.Add(capability);
         return found.ToArray();
     }
+
+    public Task<FinanceResult<PolicySnapshot>> ConfigurationAsync(Guid actor, FinanceScope scope, CancellationToken ct) => Locked(actor, async () =>
+    {
+        var caps = await Allowed(actor, scope, ct);
+        if (!caps.Contains("request.create") && !caps.Contains("request.delegate")) return Denied<PolicySnapshot>();
+        var result = await policies.ResolveAuthorizedAsync(scope, clock.GetUtcNow(), ct);
+        if (!(await Allowed(actor, scope, ct)).SequenceEqual(caps)) return Denied<PolicySnapshot>();
+        return result;
+    }, ct);
+
+    public Task<FinanceResult<RequestScreen>> ScreenAsync(Guid actor, Guid id, CancellationToken ct) => Locked(actor, async () =>
+    {
+        if (!(await requests.CheckAsync(actor, id, "read", ct)).Allowed) return Denied<RequestScreen>();
+        var row = await View(id, ct);
+        var revision = await db.Set<AdvanceRequestRevision>().AsNoTracking().SingleAsync(x => x.Id == row.RevisionId, ct);
+        var previous = await db.Set<AdvanceRequestRevision>().AsNoTracking().Where(x => x.RequestId == id
+            && x.WorkspaceId == row.Scope.WorkspaceId && x.ProjectId == row.Scope.ProjectId && x.RevisionNumber < revision.RevisionNumber)
+            .OrderByDescending(x => x.RevisionNumber).FirstOrDefaultAsync(ct);
+        var actions = new List<string>();
+        foreach (var action in new[] { "edit", "send-to-owner", "confirm", "return-to-author", "review", "revise", "withdraw", "copy" })
+            if ((await requests.CheckAsync(actor, id, action, ct)).Allowed) actions.Add(action);
+        var frozen = revision.PolicySnapshotJson is null ? null : JsonSerializer.Deserialize<PolicySnapshot>(revision.PolicySnapshotJson);
+        if (!(await requests.CheckAsync(actor, id, "read", ct)).Allowed) return Denied<RequestScreen>();
+        return new(200, "ok", new(id, row.RevisionId, row.Version, revision.RevisionNumber,
+            previous is null ? null : JsonSerializer.Deserialize<RequestContent>(previous.ContentJson),
+            frozen is null ? null : new(frozen.CompanyVersionId, frozen.ProjectVersionId, PolicyWireContent.From(frozen.Content), frozen.ContentHash, frozen.Scope, frozen.RequiresReview), actions.ToArray()));
+    }, ct);
+
+    // Team selection grants no financial access. Only certified, currently employed aliases
+    // in this company participate; public pages contain one deterministic label per person.
+    public Task<FinanceResult<RequestPersonChoice[]>> TeamPeopleAsync(Guid actor, FinanceScope scope, string prefix, int page, int size, CancellationToken ct) => Locked(actor, async () =>
+    {
+        var caps = await Allowed(actor, scope, ct);
+        if (!caps.Contains("request.create") && !caps.Contains("request.delegate")) return Denied<RequestPersonChoice[]>();
+        if (!Page(page, size) || prefix.Length > 100 || prefix.Any(char.IsControl)) return Invalid<RequestPersonChoice[]>();
+        var now = clock.GetUtcNow();
+        var candidates = (from link in db.Set<FinanceAccountLink>().AsNoTracking()
+                          join employee in DirectoryQueries.Employment(db, now) on link.UserId equals employee.UserId
+                          where link.WorkspaceId == scope.WorkspaceId && employee.WorkspaceId == scope.WorkspaceId
+                              && link.CreatedAtUtc <= now && link.EndedAtUtc == null
+                          select link.PersonId).Distinct().OrderBy(x => x);
+        var rows = new List<RequestPersonChoice>(); long seen = 0; var skip = (long)(page - 1) * size;
+        for (var offset = 0; rows.Count < size; offset = checked(offset + 100))
+        {
+            var batch = await candidates.Skip(offset).Take(100).ToArrayAsync(ct);
+            foreach (var person in batch)
+            {
+                var aliases = from link in db.Set<FinanceAccountLink>().AsNoTracking()
+                              join u in db.Set<IdentityUser>().AsNoTracking() on link.UserId equals u.Id
+                              where link.PersonId == person && link.WorkspaceId == scope.WorkspaceId && link.CreatedAtUtc <= now && link.EndedAtUtc == null
+                              orderby u.Id
+                              select new { u.Id, u.Username };
+                string? name = null;
+                for (var offsetAlias = 0; name is null; offsetAlias = checked(offsetAlias + 100))
+                {
+                    var pageAliases = await aliases.Skip(offsetAlias).Take(100).ToArrayAsync(ct);
+                    foreach (var alias in pageAliases)
+                        if (await people.ResolveAsync(alias.Id, scope.WorkspaceId, ct) == person) { name = alias.Username; break; }
+                    if (pageAliases.Length < 100) break;
+                }
+                if (name is null || !name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || seen++ < skip) continue;
+                rows.Add(new(person, name)); if (rows.Count == size) break;
+            }
+            if (batch.Length < 100) break;
+        }
+        if (!(await Allowed(actor, scope, ct)).SequenceEqual(caps)) return Denied<RequestPersonChoice[]>();
+        // Time-based employment expiry can occur while the identity lock is held.
+        foreach (var row in rows)
+        {
+            var valid = await (from link in db.Set<FinanceAccountLink>()
+                               join u in db.Set<IdentityUser>() on link.UserId equals u.Id
+                               where link.WorkspaceId == scope.WorkspaceId && link.PersonId == row.Id && u.Username == row.Name
+                                   && link.CreatedAtUtc <= clock.GetUtcNow() && link.EndedAtUtc == null
+                               select u.Id).FirstOrDefaultAsync(ct);
+            if (await people.ResolveAsync(valid, scope.WorkspaceId, ct) != row.Id) return Denied<RequestPersonChoice[]>();
+        }
+        return new(200, "ok", rows.ToArray());
+    }, ct);
 
     // Bounded candidate batches, then authoritative filtering BEFORE counting the public page.
     // Only IDs are scanned; request contents are loaded only for the authorized result page.
