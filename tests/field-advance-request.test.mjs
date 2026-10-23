@@ -23,6 +23,55 @@ test('Unknown_result_keeps_original_command_id', async () => {
   for (let i = 0; i < 2; i++) await assert.rejects(() => c.create({ scope, ownerPersonId: user, content }, meta), e => e.commandId === id && e.unknownResult === true);
   assert.deepEqual(sent, [id, id]);
 });
+for (const failure of ['account-switch', 401, 403]) test(`POST 201 followed by account check ${failure} retains uncertainty and original payload`, async () => {
+  const sent = []; let failAccount = false; let simulateFailure = true;
+  const input = { scope, ownerPersonId: user, content };
+  const original = JSON.stringify({ input, meta });
+  const c = api.createRequestClient(user, async (url, options) => {
+    if (url.endsWith('/session')) {
+      if (failAccount && failure !== 'account-switch') return Response.json({}, { status: failure });
+      return Response.json({ userId: failAccount ? id : user, stage: 'Active', permissions: [], mfaVerifiedAtUtc: null });
+    }
+    if (url.endsWith('/csrf')) return Response.json({ token: 'csrf' });
+    if (options.method === 'POST') { sent.push(options.body); failAccount = simulateFailure; return Response.json(row, { status: 201 }); }
+    return Response.json(row);
+  });
+  await assert.rejects(() => c.create(input, meta), e => {
+    assert.equal(e.status, failure === 'account-switch' ? 403 : failure);
+    assert.equal(e.commandId, id);
+    assert.equal(e.unknownResult, true);
+    assert.equal(e.clearProtectedData, true);
+    assert.equal(e.refreshRequired, true);
+    assert.equal('receipt' in e, false);
+    return true;
+  });
+  assert.deepEqual(sent, [original]); // No automatic retry or replacement ID.
+  assert.equal(JSON.stringify({ input, meta }), original);
+  failAccount = false; simulateFailure = false;
+  await c.create(input, meta); // Explicit reconciliation only after the original account is restored.
+  assert.deepEqual(sent, [original, original]);
+});
+test('Authoritative mutation endpoint 403 is not an unknown result', async () => {
+  let sent = 0;
+  const c = client(async () => { sent++; return Response.json({}, { status: 403 }); });
+  await assert.rejects(() => c.create({ scope, ownerPersonId: user, content }, meta), e =>
+    e.status === 403 && e.commandId === id && e.clearProtectedData && !e.unknownResult && !e.refreshRequired);
+  assert.equal(sent, 1);
+});
+for (const failure of ['session-401', 'csrf-403', 'account-switch-before-send']) test(`Pre-send ${failure} is not an unknown result`, async () => {
+  let sent = 0; let csrfFetched = false;
+  const c = api.createRequestClient(user, async (url) => {
+    if (url.endsWith('/session')) {
+      if (failure === 'session-401') return Response.json({}, { status: 401 });
+      return Response.json({ userId: csrfFetched ? id : user, stage: 'Active', permissions: [], mfaVerifiedAtUtc: null });
+    }
+    if (url.endsWith('/csrf')) { csrfFetched = true; return Response.json({ token: 'csrf' }, { status: failure === 'csrf-403' ? 403 : 200 }); }
+    sent++; return Response.json(row, { status: 201 });
+  });
+  await assert.rejects(() => c.create({ scope, ownerPersonId: user, content }, meta), e =>
+    e.commandId === id && e.clearProtectedData && !e.unknownResult && !e.refreshRequired);
+  assert.equal(sent, 0);
+});
 test('Large_money_remains_string and successful commands refresh current state', async () => {
   const calls = [];
   const c = client(async (url, o) => { calls.push({ url, ...o }); return Response.json(o.method === 'POST' ? row : { ...row, version: 2 }); });

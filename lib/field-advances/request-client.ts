@@ -55,7 +55,7 @@ function command(v: RequestCommand) {
 export function createRequestClient(userId: string, transport: typeof fetch = fetch) {
   if (!validId(userId)) throw new RequestError(400);
   async function request(suffix: string, signal?: AbortSignal, method = 'GET', body?: unknown, meta?: RequestCommand): Promise<unknown> {
-    let sent = false;
+    let sent = false, endpointRejected = false;
     const bounded = () => signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
     const account = async () => { signal?.throwIfAborted(); if (await currentAccount(transport, bounded()) !== userId) throw new RequestError(403); signal?.throwIfAborted(); };
     try {
@@ -71,13 +71,19 @@ export function createRequestClient(userId: string, transport: typeof fetch = fe
       }
       signal?.throwIfAborted(); sent = method !== 'GET';
       const response = await transport(root + suffix, { ...options, signal: bounded(), method, headers, body: serialized });
-      if (!response.ok) throw new RequestError(response.status, meta?.commandId, sent && response.status >= 500);
+      if (!response.ok) {
+        // Only a rejection from the mutation endpoint settles this command. A later
+        // session/account failure cannot tell us whether the mutation committed.
+        endpointRejected = response.status >= 400 && response.status < 500;
+        throw new RequestError(response.status);
+      }
       const value: unknown = await response.json(); await account(); return value;
     } catch (e) {
-      if (e instanceof RequestError) throw new RequestError(e.status, meta?.commandId, e.unknownResult || sent && e.status >= 500);
-      if (e && typeof e === 'object' && 'status' in e && typeof e.status === 'number') throw new RequestError(e.status, meta?.commandId, sent && e.status >= 500);
+      const unknownResult = sent && !endpointRejected;
+      if (e instanceof RequestError) throw new RequestError(e.status, meta?.commandId, unknownResult, unknownResult || e.refreshRequired);
+      if (e && typeof e === 'object' && 'status' in e && typeof e.status === 'number') throw new RequestError(e.status, meta?.commandId, unknownResult, unknownResult);
       if (signal?.aborted && !sent) throw e;
-      throw new RequestError(503, meta?.commandId, sent);
+      throw new RequestError(503, meta?.commandId, unknownResult, unknownResult);
     }
   }
   async function details(id: string, signal?: AbortSignal): Promise<RequestView> {
