@@ -9,6 +9,18 @@ const content = { kind: 'Individual', purpose: 'Survey', fieldStart: '2026-10-24
 const row = { id, revisionId: user, version: 1, state: 'Draft', scope, ownerPersonId: user, delegatePersonId: null, content, estimate: { total: '9999999999999999.99', lines: [{ id, categoryId: id, description: 'Travel', mode: 'LumpSum', quantity: null, unitRate: null, amount: '9999999999999999.99' }] }, holdCode: null, currentStep: null };
 const meta = { commandId: id, expectedVersion: 0, reason: '' };
 const view = existsSync('lib/field-advances/request-view.ts') ? loadTs('lib/field-advances/request-view.ts') : {};
+test('Queue mode only selects a capability supported by the current destination and scope', () => {
+  for (const [capabilities, review, preferred, expected] of [
+    [['request.create'], true, 'review', null],
+    [['request.approve'], true, 'review', 'review'],
+    [['request.approve'], false, 'mine', null],
+    [['request.create'], false, 'delegated', 'mine'],
+    [['request.delegate'], false, 'mine', 'delegated'],
+    [['report.read'], false, 'mine', 'report'],
+    [['request.create', 'request.delegate'], false, 'delegated', 'delegated'],
+    [[], false, 'report', null],
+  ]) assert.equal(view.requestQueueMode(capabilities, review, preferred), expected);
+});
 test('Approved is awaiting payment and content diff detects lexical money edits without floating point', () => {
   assert.equal(typeof view.requestStateLabel, 'function');
   assert.equal(view.requestStateLabel('Approved'), 'อนุมัติแล้ว รอดำเนินการจ่าย');

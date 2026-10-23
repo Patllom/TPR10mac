@@ -1,4 +1,12 @@
-import type { RequestContent } from './request-types';
+import type { RequestContent, RequestMode } from './request-types';
+
+export function requestQueueMode(capabilities: string[], review: boolean, preferred: RequestMode): RequestMode | null {
+  if (review) return capabilities.includes('request.approve') ? 'review' : null;
+  const modes = ['mine', 'delegated', 'report'] as const;
+  const capability = { mine: 'request.create', delegated: 'request.delegate', report: 'report.read' };
+  const allowed = modes.filter(mode => capabilities.includes(capability[mode]));
+  return allowed.find(mode => mode === preferred) ?? allowed[0] ?? null;
+}
 
 export function requestStateLabel(state: string): string {
   return ({ Draft: 'ร่าง', AwaitingOwner: 'รอผู้รับผิดชอบยืนยัน', PendingApproval: 'รออนุมัติ', Held: 'พักสายอนุมัติ', Returned: 'ส่งกลับเพื่อแก้ไข', Approved: 'อนุมัติแล้ว รอดำเนินการจ่าย', Rejected: 'ปฏิเสธแล้ว', Withdrawn: 'ถอนแล้ว' } as Record<string, string>)[state] ?? 'ไม่ทราบสถานะ';

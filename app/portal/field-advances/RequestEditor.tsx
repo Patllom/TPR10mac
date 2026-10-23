@@ -11,7 +11,7 @@ import RequestDetails from './RequestDetails';
 const inputClass = 'block w-full min-w-0 rounded-lg border border-slate-400 bg-transparent p-2';
 const buttonClass = 'rounded-lg border border-orange-700 px-4 py-2 disabled:opacity-50';
 const emptyContent = (): RequestContent => ({ kind: 'Individual', purpose: '', fieldStart: '', fieldEnd: '', neededOn: '', teamPersonIds: [], lines: [] });
-type Pending = { id: string; run: (signal: AbortSignal) => Promise<RequestCommandResult> };
+type Pending = { id: string; committed?: boolean; run: (signal: AbortSignal) => Promise<RequestCommandResult> };
 
 export default function RequestEditor({ userId, requestId, scope }: { userId: string; requestId?: string; scope?: FinanceScope }) {
   const [row, setRow] = useState<RequestView | null>(null), [screen, setScreen] = useState<RequestScreen | null>(null);
@@ -33,7 +33,7 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
   }
   function failure(e: unknown) {
     if (e instanceof RequestError && e.clearProtectedData) clearProtected();
-    setError(e instanceof Error ? e.message : 'บริการไม่พร้อม กรุณาลองใหม่');
+    setError(pending.current?.committed ? `บันทึกแล้ว แต่โหลดข้อมูลประกอบไม่สำเร็จ กรุณาตรวจผลด้วยคำสั่งเดิม (${pending.current.id})` : e instanceof Error ? e.message : 'บริการไม่พร้อม กรุณาลองใหม่');
   }
   async function load(signal: AbortSignal, force = false, current?: RequestView) {
     const id = current?.id ?? rowRef.current?.id ?? requestId;
@@ -88,11 +88,17 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
       const signal = live.current.signal;
       const result = await command.run(signal);
       signal.throwIfAborted();
+      // The mutation and current read succeeded. Keep its identity even when a
+      // subsequent projection fails; reconciliation must never become a new create.
+      command.committed = true; rowRef.current = result.current;
       await load(signal, true, result.current);
       pending.current = null; setUncertain(false); setStatus('บันทึกสำเร็จ'); setReason('');
     } catch (e) {
       if (live.current.signal.aborted) return;
       if (e instanceof RequestError && e.clearProtectedData) failure(e);
+      else if (command.committed) {
+        setUncertain(true); setQuote(null); setDialog(null); failure(e);
+      }
       else if (e instanceof RequestError && (e.unknownResult || e.refreshRequired && e.status !== 409)) {
         setUncertain(true); setDialog(null); setError(`ไม่ทราบผลปัจจุบัน กรุณาตรวจผลด้วยคำสั่งเดิม (${command.id})`);
       } else { pending.current = null; setUncertain(false); setQuote(null); setDialog(null); failure(e); }

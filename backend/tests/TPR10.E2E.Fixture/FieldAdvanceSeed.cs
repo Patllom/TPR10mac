@@ -6,7 +6,7 @@ internal static class FieldAdvanceSeed
     internal static string Sql()
     {
         var sql = new StringBuilder();
-        for (var n = 1; n <= 19; n++)
+        for (var n = 1; n <= 21; n++)
         {
             var users = Enumerable.Range(1, n > 12 ? 7 : n > 8 ? 6 : 5).Select(i => $"88000000-0000-4000-8000-{n * 100 + i:D12}").ToArray();
             foreach (var (user, index) in users.Select((u, i) => (u, i)))

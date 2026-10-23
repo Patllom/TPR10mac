@@ -39,7 +39,7 @@ async function dwell(page: Page) {
   await polled;
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 }
-async function draft(page: Page, n: number, team = false) {
+async function draft(page: Page, n: number, team = false, save = true) {
   await page.goto(`${root}/new?workspaceId=${workspace(n)}&projectId=${project(n)}`);
   await page.clock.install();
   await page.getByLabel('ผู้รับผิดชอบเงิน (ชื่อในระบบ)').selectOption({ label: `policy-fixture-${n}-0` });
@@ -55,6 +55,7 @@ async function draft(page: Page, n: number, team = false) {
   }
   await page.getByLabel('จำนวน 1', { exact: true }).fill('1.2345');
   await page.getByLabel('รายละเอียดรายการ 1').fill('ออกสนาม');
+  if (!save) return '';
   await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
   await expect(page.getByText('ยอดจากเซิร์ฟเวอร์: 123.45 บาท', { exact: true })).toBeVisible();
   await dwell(page);
@@ -101,6 +102,109 @@ test('ยื่นแทน ทีมไม่มีสิทธิ์การ�
     await own.setViewportSize({ width: 390, height: 844 });
     expect(await own.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally { for (const c of [owner, supervisor, manager, director, teammate]) await c.close(); }
+});
+test('round1: POST สำเร็จแต่ projection ล้มเหลวยังคงคำสั่งเดิมจนตรวจผลสำเร็จ', async ({ page, context, browser }) => {
+  const n = 20, reviewer = await browser.newContext();
+  try {
+    await session(context, n, 1); await session(reviewer, n, 2); await policy(context, reviewer, n);
+    for (const fault of ['screen', 'history', 'configuration', 'version']) {
+      await draft(page, n, false, false);
+      const sent: string[] = []; let broken = true;
+      await page.route(`**${api}`, async route => {
+        if (route.request().method() === 'POST') sent.push(route.request().postData()!);
+        await route.continue();
+      });
+      const target = fault === 'version' ? 'screen' : fault;
+      const pattern = new RegExp(`${api}/(?:[^/?]+/)?${target}(?:\\?|$)`);
+      await page.route(pattern, async route => {
+        if (!broken) return route.continue();
+        if (fault !== 'version') return route.abort('failed');
+        const response = await route.fetch(), body = await response.json();
+        await route.fulfill({ response, json: { ...body, version: body.version + 1 } });
+      });
+      await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
+      await expect(page.getByRole('main').getByRole('alert')).toContainText('บันทึกแล้ว แต่โหลดข้อมูลประกอบไม่สำเร็จ');
+      await expect(page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toBeDisabled();
+      await page.clock.fastForward(16000); expect(sent).toHaveLength(1);
+      broken = false;
+      await page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true }).click();
+      await expect(page.getByTestId('request-state')).toHaveText('ร่าง');
+      expect(sent).toHaveLength(2); expect(sent[1]).toBe(sent[0]);
+      await expect(page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true })).toHaveCount(0);
+      await page.unroute(`**${api}`); await page.unroute(pattern);
+    }
+    const rows = await (await context.request.get(`${api}?workspaceId=${workspace(n)}&projectId=${project(n)}`)).json();
+    expect(rows).toHaveLength(4);
+    // A retained, known-committed command never survives an authorization boundary.
+    for (const denied of [401, 403, 'account'] as const) {
+      await session(context, n, 1); await draft(page, n, false, false);
+      let reconcile = false;
+      await page.route(`**${api}/*/screen`, async route => {
+        if (!reconcile) return route.abort('failed');
+        if (denied === 'account') return route.continue();
+        await route.fulfill({ status: denied, json: {} });
+      });
+      await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true })).toBeEnabled();
+      reconcile = true;
+      if (denied === 'account') await session(context, n, 7);
+      await page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true }).click();
+      await expect(page.getByRole('main').getByRole('alert')).toContainText(/ไม่มีสิทธิ์|session หมดอายุ/);
+      await expect(page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true })).toHaveCount(0);
+      await expect(page.getByLabel('รายละเอียดงาน')).toHaveCount(0);
+      await expect(page.getByTestId('request-id')).toHaveCount(0);
+      await page.unroute(`**${api}/*/screen`);
+    }
+  } finally { await reviewer.close(); }
+});
+
+function extraScope(n: number, actor: number, index: number, capability: string) {
+  const p = `87900000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+  const proposal = randomUUID(), review = randomUUID();
+  sql(`INSERT INTO projects(id,workspace_id,code,name,created_by) VALUES ('${p}','${workspace(n)}','ROUND1-${index}','โครงการสิทธิ์ผสม ${index}','${user(n, 1)}');
+    INSERT INTO field_advance_grant_proposals(id,workspace_id,project_id,recipient_id,recipient_person_id,proposed_by,proposed_by_person_id,state,capabilities,delegable_capabilities,approval_levels,primary_approval_levels,approval_limit,starts_at_utc,created_at_utc,reason)
+    SELECT '${proposal}',workspace_id,'${p}',recipient_id,recipient_person_id,proposed_by,proposed_by_person_id,state,ARRAY['${capability}'],ARRAY[]::text[],${capability === 'request.approve' ? "ARRAY['supervisor']" : 'ARRAY[]::text[]'},ARRAY[]::text[],approval_limit,starts_at_utc,created_at_utc,'round1 fixture'
+    FROM field_advance_grant_proposals WHERE recipient_id='${user(n, actor)}' AND project_id='${project(n)}' AND capabilities && ARRAY['request.create','request.approve','request.delegate'];
+    INSERT INTO field_advance_grant_reviews(id,workspace_id,proposal_id,reviewer_id,reviewer_person_id,outcome,created_at_utc,reason)
+    SELECT '${review}',r.workspace_id,'${proposal}',r.reviewer_id,r.reviewer_person_id,r.outcome,r.created_at_utc,'round1 fixture' FROM field_advance_grant_reviews r JOIN field_advance_grant_proposals p ON p.id=r.proposal_id WHERE p.recipient_id='${user(n, actor)}' AND p.project_id='${project(n)}' AND p.capabilities && ARRAY['request.create','request.approve','request.delegate'];
+    INSERT INTO field_advance_grant_assignments(id,workspace_id,project_id,proposal_id,review_id,created_by,created_at_utc,reason)
+    SELECT gen_random_uuid(),workspace_id,'${p}','${proposal}','${review}',reviewer_id,created_at_utc,'round1 fixture' FROM field_advance_grant_reviews WHERE id='${review}';`);
+  return p;
+}
+test('round1: คิวกรอง capability และยังไป scope หน้าถัดไปที่มีสิทธิ์ตรงหน้าได้', async ({ page, context }) => {
+  const n = 21;
+  // First page has twenty scopes irrelevant to each destination. The real matching scope is page two.
+  for (let i = 1; i <= 20; i++) extraScope(n, 2, i, 'request.create');
+  for (let i = 21; i <= 40; i++) extraScope(n, 1, i, 'request.approve');
+  for (let i = 41; i <= 60; i++) extraScope(n, 4, i, 'request.approve');
+  for (const [actor, destination, mode] of [[2, `${root}/approvals`, 'review'], [1, root, 'mine'], [4, root, 'delegated']] as const) {
+    await session(context, n, actor);
+    const lists: URL[] = [];
+    const listPath = mode === 'review' ? `${api}/review-queue` : api;
+    const track = (request: import('@playwright/test').Request) => { const u = new URL(request.url()); if ([api, `${api}/review-queue`].includes(u.pathname) && request.method() === 'GET') lists.push(u); };
+    page.on('request', track);
+    await page.goto(destination);
+    await expect(page.getByRole('button', { name: 'โครงการหน้าถัดไป', exact: true })).toBeEnabled();
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+    expect(lists).toHaveLength(0);
+    const loaded = page.waitForResponse(r => new URL(r.url()).pathname === listPath && r.status() === 200);
+    await page.getByRole('button', { name: 'โครงการหน้าถัดไป', exact: true }).click(); await loaded;
+    await expect(page.getByRole('combobox', { name: 'โครงการ', exact: true })).toHaveValue(project(n));
+    expect(lists.map(u => [u.searchParams.get('projectId'), u.searchParams.get('mode')])).toEqual([[project(n), mode]]);
+    if (mode !== 'review') await expect(page.getByRole('combobox', { name: 'รายการ', exact: true })).toHaveValue(mode);
+    page.off('request', track);
+    // Also select a matching project after an incompatible project on the SAME page.
+    const index = actor === 2 ? 2 : actor === 1 ? 22 : 42;
+    const matching = `87900000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+    const capability = mode === 'review' ? 'request.approve' : mode === 'mine' ? 'request.create' : 'request.delegate';
+    sql(`UPDATE field_advance_grant_proposals SET capabilities=ARRAY['${capability}'],approval_levels=${mode === 'review' ? "ARRAY['supervisor']" : 'ARRAY[]::text[]'} WHERE project_id='${matching}';`);
+    const mixedLoaded = page.waitForResponse(r => new URL(r.url()).pathname === listPath && new URL(r.url()).searchParams.get('projectId') === matching && r.status() === 200);
+    await page.goto(destination); await mixedLoaded;
+    await expect(page.getByRole('combobox', { name: 'โครงการ', exact: true })).toHaveValue(matching);
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+    if (mode !== 'review') await expect(page.getByRole('combobox', { name: 'รายการ', exact: true })).toHaveValue(mode);
+  }
 });
 test('ส่งกลับ แก้ฉบับ ยืนยันใหม่ และถอนด้วยเหตุผล', async ({ page, context, browser }) => {
   const n = 14, reviewer = await browser.newContext();
