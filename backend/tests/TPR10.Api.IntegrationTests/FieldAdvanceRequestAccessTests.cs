@@ -176,7 +176,9 @@ public sealed class FieldAdvanceRequestAccessTests(PostgresFixture postgres)
             CreatedBy = RecipientId,
             CreatedByPersonId = RecipientPersonId,
             CompanyPolicyRevisionId = CompanyRevisionId,
-            PolicySnapshotJson = "{}",
+            PolicySnapshotJson = JsonSerializer.Serialize(new PolicySnapshot(CompanyRevisionId, ProjectRevisionId,
+                FieldAdvancePolicyTests.Content(), new('b', 64))
+            { Scope = new(WorkspaceId, ProjectId) }),
             PolicyHash = new('b', 64)
         };
         var step = new AdvanceApprovalStep
@@ -191,6 +193,17 @@ public sealed class FieldAdvanceRequestAccessTests(PostgresFixture postgres)
             AssigneePersonId = scenario == "unassigned" ? RecipientPersonId : ReviewerPersonId
         };
         db.AddRange(request, revision, step);
+        // Assignee-only fixtures used to omit the actual route. Current read authority requires both.
+        db.Add(new TPR10.Api.Attendance.Directory.ReportingLine
+        {
+            Id = Guid.NewGuid(),
+            EmployeeMembershipId = (await db.Set<TPR10.Api.Attendance.Directory.EmployeeMembership>().SingleAsync(x => x.UserId == AuthorId)).Id,
+            EmployeeUserId = AuthorId,
+            SupervisorUserId = ReviewerId,
+            ValidFromUtc = f.Clock.GetUtcNow().AddDays(-1),
+            CreatedBy = AuthorId,
+            Reason = "current routing fixture"
+        });
         if (scenario == "current-approver") db.Add(new AdvanceApprovalStep
         {
             Id = Guid.NewGuid(),

@@ -46,6 +46,35 @@ function client(handler, account = () => user) {
   assert.equal(typeof api.createRequestClient, 'function');
   return api.createRequestClient(user, async (url, options) => url.endsWith('/session') ? Response.json({ userId: account(), stage: 'Active', permissions: [], mfaVerifiedAtUtc: null }) : url.endsWith('/csrf') ? Response.json({ token: 'csrf' }) : handler(url, options));
 }
+const revision = { requestId: id, revisionId: user, revisionNumber: 1, scope, submittedAtUtc: '2026-10-23T00:00:00Z', content, estimate: row.estimate, frozenPolicy: null,
+  steps: [{ id, levelCode: 'supervisor', order: 1, outcome: 'Returned', decidedByPersonId: user, decidedAtUtc: '2026-10-23T00:00:00Z', decisionReason: 'แก้ไข' }] };
+test('Historical revision reads are scoped GETs preserving exact money and step outcomes', async () => {
+  const calls = [];
+  const c = client(async (url, options) => { calls.push({ url, ...options }); return Response.json(url.includes('/revisions?') ? [{ requestId: id, revisionId: user, revisionNumber: 1, submittedAtUtc: revision.submittedAtUtc }] : revision); });
+  assert.equal(typeof c.revision, 'function');
+  assert.equal(typeof c.revisions, 'function');
+  assert.equal((await c.revision(row, user)).estimate.total, '9999999999999999.99');
+  assert.equal((await c.revisions(id, 2, 7))[0].revisionId, user);
+  assert.equal(calls[0].url, `/api/v1/field-advances/requests/${id}/revisions/${user}`);
+  assert.match(calls[1].url, /page=2&pageSize=7$/);
+  assert.ok(calls.every(x => x.method === 'GET' && x.cache === 'no-store'));
+});
+test('Historical revision rejects wrong request, wrong revision, scope and numeric money', async () => {
+  for (const patch of [{ requestId: user }, { revisionId: id }, { scope: { workspaceId: id, projectId: user } }, { estimate: { ...row.estimate, total: 123 } }, { steps: [{ ...revision.steps[0], outcome: 'Paid' }] }]) {
+    const c = client(async () => Response.json({ ...revision, ...patch }));
+    assert.equal(typeof c.revision, 'function');
+    await assert.rejects(() => c.revision(row, user), e => [403, 503].includes(e.status));
+  }
+});
+test('Historical read drops account-switched or revoked results and bounds revision list', async () => {
+  let account = user;
+  const c = client(async () => { account = id; return Response.json(revision); }, () => account);
+  assert.equal(typeof c.revision, 'function');
+  await assert.rejects(() => c.revision(row, user), e => e.status === 403 && e.clearProtectedData);
+  const revoked = client(async () => Response.json({}, { status: 403 }));
+  await assert.rejects(() => revoked.revision(row, user), e => e.clearProtectedData);
+  await assert.rejects(() => revoked.revisions(id, 1, 101), e => e.status === 400);
+});
 test('Drops_response_after_account_switch', async () => {
   let current = user;
   const c = client(async () => { current = id; return Response.json(row); }, () => current);

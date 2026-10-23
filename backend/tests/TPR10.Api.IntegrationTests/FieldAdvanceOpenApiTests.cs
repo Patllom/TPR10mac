@@ -38,6 +38,8 @@ public sealed class FieldAdvanceOpenApiTests
         "get /api/v1/field-advances/requests/{id}/history",
         "get /api/v1/field-advances/requests/{id}/quote",
         "get /api/v1/field-advances/requests/{id}/screen",
+        "get /api/v1/field-advances/requests/{id}/revisions",
+        "get /api/v1/field-advances/requests/{id}/revisions/{revisionId}",
         "post /api/v1/field-advances/requests",
         "put /api/v1/field-advances/requests/{id}",
         "post /api/v1/field-advances/requests/{id}/send-to-owner",

@@ -1,6 +1,6 @@
 import { currentAccount } from './policy-client';
 import type { PolicySnapshot } from './policy-types';
-import type { RequestScreen } from './request-types';
+import type { RequestScreen, RequestRevisionSummary, RequestRevisionDetail } from './request-types';
 import { validId, sameScope, validateContent as validatePolicyContent } from './policy-view';
 import type { FinanceScope, RequestMode, RequestCommand, RequestContent, CreateRequest, RequestView, Estimate, ConfirmationQuote, RequestDecision, RequestHistory, RequestScopeChoice, RequestPersonChoice, RequestCommandResult, QuotedRequest } from './request-types';
 
@@ -108,6 +108,35 @@ export function createRequestClient(userId: string, transport: typeof fetch = fe
   const simple = (operation: string, id: string, meta: RequestCommand, signal?: AbortSignal) => mutate(`${path(id)}/${operation}`, meta, meta, signal, 'POST', operation === 'copy' ? undefined : id);
   return {
     details,
+    async revisions(id: string, page = 1, pageSize = 20, signal?: AbortSignal): Promise<RequestRevisionSummary[]> {
+      const rows = await request(`${path(id)}/revisions?${pageQuery(page, pageSize)}`, signal) as RequestRevisionSummary[];
+      if (!Array.isArray(rows) || rows.length > pageSize) return fail();
+      for (const v of rows) {
+        if (v.requestId !== id) throw new RequestError(403);
+        if (!validId(v.revisionId) || !Number.isSafeInteger(v.revisionNumber) || v.revisionNumber < 1
+          || !(v.submittedAtUtc === null || typeof v.submittedAtUtc === 'string' && Number.isFinite(Date.parse(v.submittedAtUtc)))) return fail();
+      }
+      return rows;
+    },
+    async revision(row: RequestView, revisionId: string, signal?: AbortSignal): Promise<RequestRevisionDetail> {
+      const v = await request(`${path(row.id)}/revisions${path(revisionId)}`, signal) as RequestRevisionDetail;
+      if (!v || v.requestId !== row.id || v.revisionId !== revisionId || !sameScope(v.scope, row.scope)) throw new RequestError(403);
+      if (!Number.isSafeInteger(v.revisionNumber) || v.revisionNumber < 1
+        || !(v.submittedAtUtc === null || typeof v.submittedAtUtc === 'string' && Number.isFinite(Date.parse(v.submittedAtUtc)))) return fail();
+      try { content(v.content); } catch { return fail(); }
+      if (v.estimate !== null) estimate(v.estimate);
+      if (v.frozenPolicy !== null) {
+        try { validatePolicyContent(v.frozenPolicy.content); } catch { return fail(); }
+        if (!validId(v.frozenPolicy.companyVersionId) || !nullableId(v.frozenPolicy.projectVersionId)
+          || !sameScope(v.frozenPolicy.scope, row.scope)) throw new RequestError(403);
+      }
+      if (!Array.isArray(v.steps) || v.steps.some(x => !validId(x.id)
+        || typeof x.levelCode !== 'string' || !Number.isSafeInteger(x.order) || x.order < 1
+        || ![null, 'Approved', 'Returned', 'Rejected'].includes(x.outcome) || !nullableId(x.decidedByPersonId)
+        || !(x.decidedAtUtc === null || typeof x.decidedAtUtc === 'string' && Number.isFinite(Date.parse(x.decidedAtUtc)))
+        || !(x.decisionReason === null || typeof x.decisionReason === 'string'))) return fail();
+      return v;
+    },
     async screen(row: RequestView, signal?: AbortSignal): Promise<RequestScreen> {
       const v = await request(`${path(row.id)}/screen`, signal) as RequestScreen;
       if (!v || v.requestId !== row.id || v.revisionId !== row.revisionId || v.version !== row.version) throw new RequestError(409);

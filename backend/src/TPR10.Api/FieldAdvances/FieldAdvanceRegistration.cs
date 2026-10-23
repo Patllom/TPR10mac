@@ -66,6 +66,8 @@ public static class FieldAdvanceRegistration
         group.MapGet("/requests/review-queue", RequestEndpoints.Queue).Produces<RequestHttpView[]>();
         group.MapGet("/requests/{id}", RequestEndpoints.Details).Produces<RequestHttpView>();
         group.MapGet("/requests/{id}/history", RequestEndpoints.History).Produces<RequestHistory[]>();
+        group.MapGet("/requests/{id}/revisions", RequestEndpoints.Revisions).Produces<RequestRevisionSummary[]>();
+        group.MapGet("/requests/{id}/revisions/{revisionId}", RequestEndpoints.Revision).Produces<RequestRevisionDetail>();
         group.MapGet("/requests/{id}/quote", RequestEndpoints.Quote).Produces<RequestQuoteHttp>();
         group.MapPost("/requests", RequestEndpoints.Create).Accepts<CreateRequestHttp>("application/json").Produces<RequestHttpView>(201);
         group.MapPut("/requests/{id}", RequestEndpoints.Update).Accepts<UpdateRequestHttp>("application/json").Produces<RequestHttpView>();

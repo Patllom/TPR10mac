@@ -157,6 +157,37 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
         if (!(await requests.CheckAsync(actorId, id, "read", ct)).Allowed) return Denied<RequestView>();
         return new(200, "ok", row);
     }, ct);
+    public Task<FinanceResult<RequestRevisionSummary[]>> RevisionsAsync(Guid actorId, Guid id, int page, int size, CancellationToken ct) => Locked(actorId, async () =>
+    {
+        if (!(await requests.CheckAsync(actorId, id, "read", ct)).Allowed) return Denied<RequestRevisionSummary[]>();
+        if (!Page(page, size)) return Invalid<RequestRevisionSummary[]>();
+        var rows = await db.Set<AdvanceRequestRevision>().AsNoTracking().Where(x => x.RequestId == id)
+            .OrderByDescending(x => x.RevisionNumber).Skip((page - 1) * size).Take(size)
+            .Select(x => new RequestRevisionSummary(id, x.Id, x.RevisionNumber, x.SubmittedAtUtc)).ToArrayAsync(ct);
+        if (!(await requests.CheckAsync(actorId, id, "read", ct)).Allowed) return Denied<RequestRevisionSummary[]>();
+        return new(200, "ok", rows);
+    }, ct);
+    public Task<FinanceResult<RequestRevisionDetail>> RevisionAsync(Guid actorId, Guid id, Guid revisionId, CancellationToken ct) => Locked(actorId, async () =>
+    {
+        if (!(await requests.CheckAsync(actorId, id, "read", ct)).Allowed) return Denied<RequestRevisionDetail>();
+        var request = await db.Set<AdvanceRequest>().AsNoTracking().SingleAsync(x => x.Id == id, ct);
+        var revision = await db.Set<AdvanceRequestRevision>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == revisionId
+            && x.RequestId == id && x.WorkspaceId == request.WorkspaceId && x.ProjectId == request.ProjectId, ct);
+        if (revision is null) return Denied<RequestRevisionDetail>();
+        // Load one exact revision, never every revision's contents for a history page.
+        // No actions or mutable assignment are projected onto historical evidence.
+        var steps = await db.Set<AdvanceApprovalStep>().AsNoTracking().Where(x => x.RequestId == id && x.RevisionId == revisionId)
+            .OrderBy(x => x.StepOrder).Select(x => new RequestRevisionStep(x.Id, x.LevelCode, x.StepOrder, x.Outcome,
+                x.DecidedByPersonId, x.DecidedAtUtc, x.DecisionReason)).ToArrayAsync(ct);
+        var frozen = revision.PolicySnapshotJson is null ? null : JsonSerializer.Deserialize<PolicySnapshot>(revision.PolicySnapshotJson);
+        var estimate = await drafts.StoredEstimateAsync(revision, ct);
+        var row = new RequestRevisionDetail(id, revisionId, revision.RevisionNumber, new(request.WorkspaceId, request.ProjectId),
+            revision.SubmittedAtUtc, JsonSerializer.Deserialize<RequestContent>(revision.ContentJson)!,
+            estimate is null ? null : RequestEstimateHttp.From(estimate),
+            frozen is null ? null : new(frozen.CompanyVersionId, frozen.ProjectVersionId, PolicyWireContent.From(frozen.Content), frozen.ContentHash, frozen.Scope, frozen.RequiresReview), steps);
+        if (!(await requests.CheckAsync(actorId, id, "read", ct)).Allowed) return Denied<RequestRevisionDetail>();
+        return new(200, "ok", row);
+    }, ct);
     private async Task<RequestView> View(Guid id, CancellationToken ct)
     {
         var request = await db.Set<AdvanceRequest>().AsNoTracking().SingleAsync(x => x.Id == id, ct);

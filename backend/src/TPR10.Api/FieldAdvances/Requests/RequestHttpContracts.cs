@@ -34,6 +34,12 @@ public sealed record RequestScopeChoice(FinanceScope Scope, string WorkspaceName
 public sealed record RequestPersonChoice(Guid Id, string Name);
 public sealed record RequestScreen(Guid RequestId, Guid RevisionId, long Version, int RevisionNumber,
     RequestContent? PreviousContent, PolicyHttpSnapshot? FrozenPolicy, string[] Actions);
+public sealed record RequestRevisionSummary(Guid RequestId, Guid RevisionId, int RevisionNumber, DateTimeOffset? SubmittedAtUtc);
+public sealed record RequestRevisionStep(Guid Id, string LevelCode, int Order, string? Outcome,
+    Guid? DecidedByPersonId, DateTimeOffset? DecidedAtUtc, string? DecisionReason);
+public sealed record RequestRevisionDetail(Guid RequestId, Guid RevisionId, int RevisionNumber, FinanceScope Scope,
+    DateTimeOffset? SubmittedAtUtc, RequestContent Content, RequestEstimateHttp? Estimate,
+    PolicyHttpSnapshot? FrozenPolicy, RequestRevisionStep[] Steps);
 
 internal static class RequestHttp
 {

@@ -53,6 +53,10 @@ public sealed class RequestAccess(Tpr10DbContext db, FinanceAccess access, Finan
             .OrderBy(x => x.StepOrder).ToArrayAsync(ct);
         var next = steps.FirstOrDefault(x => x.Outcome != "Approved");
         if (next is null || next.Outcome is not null || next.AssigneePersonId != person || next.HoldCode is not null) return false;
+        // A retained grant and cached assignment do not authorize a former route holder.
+        // The stored-assignee check above also prevents a new candidate reading before assignment.
+        var route = await new ApprovalRouteResolver(db, people, clock).ResolveAsync(request.Id, revision.Id, next.LevelCode, ct);
+        if (route.HoldCode is not null || route.PersonId != person) return false;
         var participants = await db.Set<AdvanceRequestParticipant>().AsNoTracking().Where(x => x.RequestId == request.Id).ToArrayAsync(ct);
         Guid[] Role(string role) => participants.Where(x => x.Role == role).Select(x => x.PersonId).Distinct().ToArray();
         var approved = steps.Where(x => x.Outcome == "Approved").Select(x => x.DecidedByPersonId ?? Guid.Empty).ToArray();

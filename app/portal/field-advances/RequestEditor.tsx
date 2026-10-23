@@ -7,6 +7,8 @@ import { diffRequestContent } from '@/lib/field-advances/request-view';
 import type { PolicySnapshot } from '@/lib/field-advances/policy-types';
 import type { FinanceScope, RequestView, RequestContent, RequestScreen, RequestHistory, RequestPersonChoice, ConfirmationQuote, RequestCommandResult, RequestCommand } from '@/lib/field-advances/request-types';
 import RequestDetails from './RequestDetails';
+import RequestRevisionDetails from './RequestRevisionDetails';
+import type { RequestRevisionSummary, RequestRevisionDetail } from '@/lib/field-advances/request-types';
 
 const inputClass = 'block w-full min-w-0 rounded-lg border border-slate-400 bg-transparent p-2';
 const buttonClass = 'rounded-lg border border-orange-700 px-4 py-2 disabled:opacity-50';
@@ -25,9 +27,13 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
   const live = useRef<AbortController | null>(null), rowRef = useRef<RequestView | null>(null), pending = useRef<Pending | null>(null);
   const working = useRef(false), poll = useRef<AbortController | null>(null), dialogRef = useRef<HTMLDialogElement>(null);
   const client = useRef(createRequestClient(userId));
+  const [revisions, setRevisions] = useState<RequestRevisionSummary[]>([]), [revisionPage, setRevisionPage] = useState(1);
+  const [historical, setHistorical] = useState<RequestRevisionDetail | null>(null);
+  const selectedRevision = useRef<string | null>(null);
   const workspaceId = scope?.workspaceId, projectId = scope?.projectId;
 
   function clearProtected() {
+    selectedRevision.current = null; setHistorical(null); setRevisions([]);
     live.current?.abort(); poll.current?.abort(); pending.current = null; rowRef.current = null;
     setRow(null); setScreen(null); setContent(emptyContent()); setPolicy(null); setOwners([]); setOwner(''); setTeam([]); setTeamNames({}); setPrefix(''); setHistory([]); setQuote(null); setDialog(null); setReason(''); setStatus(''); setUncertain(false); setReady(false);
   }
@@ -41,9 +47,16 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
       const next = current ?? await client.current.details(id, signal);
       const context = await client.current.screen(next, signal);
       const events = await client.current.history(id, historyPage, 20, signal);
+      const versions = await client.current.revisions(id, revisionPage, 20, signal);
       const config = context.actions.includes('edit') ? await client.current.configuration(next.scope, signal) : null;
       signal.throwIfAborted();
       const changed = rowRef.current?.version !== next.version || rowRef.current?.revisionId !== next.revisionId;
+      if (force || changed) { selectedRevision.current = null; setHistorical(null); }
+      else if (selectedRevision.current) {
+        const evidence = await client.current.revision(next, selectedRevision.current, signal);
+        signal.throwIfAborted(); setHistorical(evidence);
+      }
+      setRevisions(versions);
       if (force || changed) { setContent(structuredClone(next.content)); setQuote(null); setDialog(null); }
       rowRef.current = next; setRow(next); setScreen(context); setHistory(events); setPolicy(config); setReady(true);
     } else if (workspaceId && projectId) {
@@ -69,7 +82,7 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
     return () => { controller.abort(); poll.current?.abort(); poll.current = null; clearInterval(timer); unsubscribe(); };
     // State used by the timer is intentionally read through rowRef; drafts survive an unchanged poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, requestId, workspaceId, projectId, refresh, historyPage, ownerPage]);
+  }, [userId, requestId, workspaceId, projectId, refresh, historyPage, ownerPage, revisionPage]);
   useEffect(() => {
     if (dialog && !dialogRef.current?.open) dialogRef.current?.showModal();
   }, [dialog]);
@@ -105,11 +118,11 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
     } finally { working.current = false; setBusy(false); }
   }
   function command(run: (meta: RequestCommand, signal: AbortSignal) => Promise<RequestCommandResult>) {
-    if (pending.current || working.current) return;
+    if (pending.current || working.current || selectedRevision.current) return;
     const meta = { commandId: crypto.randomUUID(), expectedVersion: rowRef.current?.version ?? 0, reason };
     void execute({ id: meta.commandId, run: signal => run(meta, signal) });
   }
-  const editable = ready && (!row || screen?.actions.includes('edit'));
+  const editable = !historical && ready && (!row || screen?.actions.includes('edit'));
   const dirty = !!row && diffRequestContent(row.content, content).length > 0;
   const disabled = busy || uncertain;
   const can = (action: string) => screen?.actions.includes(action) ?? false;
@@ -131,13 +144,27 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
     const selected = row?.scope ?? scope; if (!selected) return;
     void readAction(async signal => { const choices = await client.current.teamPeople(selected, prefix, page, 20, signal); signal.throwIfAborted(); setTeam(choices); setTeamPage(page); });
   }
+  function inspectRevision(id: string) {
+    void readAction(async signal => {
+      const current = rowRef.current; if (!current) return;
+      const evidence = await client.current.revision(current, id, signal);
+      const latest = await client.current.details(current.id, signal);
+      signal.throwIfAborted();
+      if (latest.version !== current.version || latest.revisionId !== current.revisionId) { await load(signal, true, latest); throw new RequestError(409); }
+      selectedRevision.current = id; setHistorical(evidence); setDialog(null); setQuote(null);
+    });
+  }
   const updateLine = (index: number, patch: Partial<RequestContent['lines'][number]>) => setContent(c => ({ ...c, lines: c.lines.map((line, i) => i === index ? { ...line, ...patch } : line) }));
   return <div className="space-y-5">
     <nav className="flex flex-wrap gap-4 underline"><a href="/portal/field-advances">คำขอของฉัน / ที่ยื่นแทน</a><a href="/portal/field-advances/approvals">งานรออนุมัติ</a></nav>
     {error && <p role="alert" className="rounded border border-red-700 p-3">{error}</p>}{status && <p role="status">{status}</p>}
     <button className={buttonClass} disabled={busy} onClick={() => { setError(''); setRefresh(x => x + 1); }}>โหลดใหม่</button>
     {uncertain && <button className={buttonClass} disabled={busy} onClick={() => { if (pending.current) void execute(pending.current); }}>ตรวจผลด้วยคำสั่งเดิม</button>}
-    {row && screen && <><RequestDetails row={row} screen={screen} history={history} quote={dirty ? null : quote} /><div className="flex gap-3"><button disabled={historyPage === 1 || busy} onClick={() => setHistoryPage(x => x - 1)}>ประวัติหน้าก่อน</button><button disabled={history.length < 20 || busy} onClick={() => setHistoryPage(x => x + 1)}>ประวัติหน้าถัดไป</button></div></>}
+    {row && screen && <><section aria-label="เลือกฉบับคำขอ" className="flex flex-wrap gap-3">
+      <button disabled={disabled} onClick={() => { selectedRevision.current = null; setHistorical(null); }}>กลับฉบับปัจจุบัน</button>
+      {revisions.map(r => <button key={r.revisionId} disabled={disabled} onClick={() => inspectRevision(r.revisionId)}>ดูฉบับที่ {r.revisionNumber}</button>)}
+      <button disabled={revisionPage === 1 || disabled} onClick={() => setRevisionPage(x => x - 1)}>ฉบับหน้าก่อน</button><button disabled={revisions.length < 20 || disabled} onClick={() => setRevisionPage(x => x + 1)}>ฉบับหน้าถัดไป</button>
+    </section>{historical ? <RequestRevisionDetails revision={historical} /> : <><RequestDetails row={row} screen={screen} history={history} quote={dirty ? null : quote} /><div className="flex gap-3"><button disabled={historyPage === 1 || busy} onClick={() => setHistoryPage(x => x - 1)}>ประวัติหน้าก่อน</button><button disabled={history.length < 20 || busy} onClick={() => setHistoryPage(x => x + 1)}>ประวัติหน้าถัดไป</button></div></>}</>}
     {editable && dirty && <p>มีข้อมูลที่ยังไม่บันทึก กรุณาบันทึกร่างก่อนทบทวนหรือส่งให้ผู้รับผิดชอบ</p>}
     {editable && policy && <form onSubmit={e => { e.preventDefault(); save(); }} className="space-y-5">
       <fieldset disabled={disabled} className="min-w-0 space-y-4"><legend className="font-semibold">จัดทำคำขอเงินทดรอง</legend>
@@ -167,7 +194,7 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
         <button type="submit" className={`${buttonClass} ml-3 bg-orange-700 text-white`}>บันทึกร่าง</button>
       </fieldset>
     </form>}
-    {row && screen && screen.actions.length > 0 && <fieldset disabled={disabled} className="min-w-0 space-y-4"><legend className="font-semibold">ดำเนินการ</legend>
+    {!historical && row && screen && screen.actions.length > 0 && <fieldset disabled={disabled} className="min-w-0 space-y-4"><legend className="font-semibold">ดำเนินการ</legend>
       <label className="block">เหตุผลดำเนินการ<textarea className={inputClass} maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>
       <div className="flex flex-wrap gap-3">
         {can('send-to-owner') && <button className={buttonClass} disabled={dirty} onClick={() => simple('sendToOwner')}>ส่งให้ผู้รับผิดชอบ</button>}

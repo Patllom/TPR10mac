@@ -19,3 +19,5 @@ export interface RequestPersonChoice { id: string; name: string }
 export interface RequestCommandResult { receipt: RequestView; current: RequestView }
 export interface QuotedRequest { request: RequestView; quote: ConfirmationQuote }
 export interface RequestScreen { requestId: string; revisionId: string; version: number; revisionNumber: number; previousContent: RequestContent | null; frozenPolicy: PolicySnapshot | null; actions: string[] }
+export interface RequestRevisionSummary { requestId: string; revisionId: string; revisionNumber: number; submittedAtUtc: string | null }
+export interface RequestRevisionDetail extends RequestRevisionSummary { scope: FinanceScope; content: RequestContent; estimate: Estimate | null; frozenPolicy: PolicySnapshot | null; steps: { id: string; levelCode: string; order: number; outcome: 'Approved' | 'Returned' | 'Rejected' | null; decidedByPersonId: string | null; decidedAtUtc: string | null; decisionReason: string | null }[] }

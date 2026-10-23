@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–9 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Task 9: Backend 2,542/2,542, Frontend 143/143, HTTPS 4000/4001 พอร์ตละ 9/9 พร้อม Build, Format และ Lint ผ่านครบบนโค้ด `eda408a` Task 10 ยังไม่เริ่ม คง M2/M3 และ Minor T7-M1 ไว้ติดตาม พักมือถือจริงและ NAS จริง รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 24 ตุลาคม 2569: Task 1–10 ผ่านครบโดยแยกผู้ลงมือและผู้ตรวจ ผลสุดท้าย Backend 2,561/2,561, Frontend 146/146, diagnostics 5/5, HTTPS ทั้ง 4000/4001 คำขอ/Policy/Grant พอร์ตละ 10/13/11 พร้อม Build, Format และ Lint ผ่าน คง M2/M3, T7-M1, Minor ใหม่ T10-M1 และข้อจำกัด 504 ที่ยังไม่ยืนยันสาเหตุ พักมือถือจริงและ NAS จริง ไม่รวม push/PR/merge/เงินจริง รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -270,14 +270,14 @@ node --input-type=module -e 'import { runHttpsSmoke } from "./infra/nginx/https-
 
 **อินเทอร์เฟซ:** ใช้public APIทั้งหมดและmigration ที่Task2/3สร้าง ไม่เพิ่มช่องทางข้ามสิทธิ์สำหรับdelivery; รายงานบันทึกcommit/คำสั่ง/exit code/จำนวนเทสต์/ข้อจำกัด/ความเสี่ยง
 
-- [ ] เขียนdelivery testsอ้างB01–B16: selfและdelegateต่างproject, revisionใหม่ใช้กติกาใหม่, whole-request SoD, ไม่มีผู้อนุมัติ→แก้สิทธิ์→ขั้นเดิม, revoke และrollbackผ่านHTTP; assertไม่มีpartial commit ไม่มีpayment rows และประวัติเดิมเท่าเดิม
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestDeliveryTests` เพิ่มregressionแดงก่อนแก้ข้อพบ ไม่สร้างการแก้dummyเพื่อให้ได้Redถ้าflowเดิมถูกอยู่แล้ว
-- [ ] ผู้ตรวจอิสระตรวจทั้งbranchเทียบspec/plan/DBguards/authorization/locks/receipt/replay เก็บข้อพบและแก้พร้อมregression; Critical/Importantต้องปิดก่อนส่งมอบ Minorใหม่ต้องแจกแจงไม่รวมเงียบกับM2/M3
-- [ ] ทดสอบmigrationupจากฐาน7Aสำเนาdisposable ตรวจจำนวนข้อมูลเดิมและrollbackของtransaction; ออกidempotent SQLด้วย `dotnet ef migrations script --idempotent --project backend/src/TPR10.Api` ไม่รันบนฐานผู้ใช้ ไม่เสนอdropข้อมูลคำขอเป็นrollbackผลิตจริง
-- [ ] รันชุดตรวจร่วมครบหลังแก้สุดท้าย พร้อมHTTPSTask9ทั้งสองพอร์ต และHTTPS7A policy/grant regressionผ่านfixtureเดิม ตรวจaccount/MFA/attendanceจากsuiteรวม ไม่มีการใช้ผลก่อนแก้มาอ้าง
-- [ ] เขียนrunbookขั้นตั้งสิทธิ์ยื่น/ระดับที่ผ่านสามคน จัดการHeldโดยแก้โครงสร้าง/สิทธิ์ ไม่overrideคำขอ วิธีตรวจunknowncommand วิธีสำรอง/restoreก่อนmigration และข้อจำกัดยังไม่มี7C/7D; ไม่ใส่บัญชีจริง/รหัสผ่าน/คีย์
-- [ ] ลงผลM2/M3เป็น“ยังติดตาม” มือถือจริง/NASจริงเป็น“พัก ยังไม่ทดสอบ” และหลักฐานperformanceของpathใหม่โดยไม่อ้างปิดM2เดิม
-- [ ] ตรวจรายงานกับผลจริงแล้ว commit: `test: verify module 7b delivery` การpush/PR/mergeหรือเปิดใช้เงินจริงต้องรอคำสั่งผู้ใช้ ไม่รวมอยู่ในTask10
+- [x] เขียนdelivery testsอ้างB01–B16: selfและdelegateต่างproject, revisionใหม่ใช้กติกาใหม่, whole-request SoD, ไม่มีผู้อนุมัติ→แก้สิทธิ์→ขั้นเดิม, revoke และrollbackผ่านHTTP; assertไม่มีpartial commit ไม่มีpayment rows และประวัติเดิมเท่าเดิม
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestDeliveryTests` เพิ่มregressionแดงก่อนแก้ข้อพบ ไม่สร้างการแก้dummyเพื่อให้ได้Redถ้าflowเดิมถูกอยู่แล้ว
+- [x] ผู้ตรวจอิสระตรวจทั้งbranchเทียบspec/plan/DBguards/authorization/locks/receipt/replay เก็บข้อพบและแก้พร้อมregression; Critical/Importantต้องปิดก่อนส่งมอบ Minorใหม่ต้องแจกแจงไม่รวมเงียบกับM2/M3
+- [x] ทดสอบmigrationupจากฐาน7Aสำเนาdisposable ตรวจจำนวนข้อมูลเดิมและrollbackของtransaction; ออกidempotent SQLด้วย `dotnet ef migrations script --idempotent --project backend/src/TPR10.Api` ไม่รันบนฐานผู้ใช้ ไม่เสนอdropข้อมูลคำขอเป็นrollbackผลิตจริง
+- [x] รันชุดตรวจร่วมครบหลังแก้สุดท้าย พร้อมHTTPSTask9ทั้งสองพอร์ต และHTTPS7A policy/grant regressionผ่านfixtureเดิม ตรวจaccount/MFA/attendanceจากsuiteรวม ไม่มีการใช้ผลก่อนแก้มาอ้าง
+- [x] เขียนrunbookขั้นตั้งสิทธิ์ยื่น/ระดับที่ผ่านสามคน จัดการHeldโดยแก้โครงสร้าง/สิทธิ์ ไม่overrideคำขอ วิธีตรวจunknowncommand วิธีสำรอง/restoreก่อนmigration และข้อจำกัดยังไม่มี7C/7D; ไม่ใส่บัญชีจริง/รหัสผ่าน/คีย์
+- [x] ลงผลM2/M3เป็น“ยังติดตาม” มือถือจริง/NASจริงเป็น“พัก ยังไม่ทดสอบ” และหลักฐานperformanceของpathใหม่โดยไม่อ้างปิดM2เดิม
+- [x] ตรวจรายงานกับผลจริงแล้ว commit: `test: verify module 7b delivery` การpush/PR/mergeหรือเปิดใช้เงินจริงต้องรอคำสั่งผู้ใช้ ไม่รวมอยู่ในTask10
 
 ## ตารางความครอบคลุมแบบและแผน
 
@@ -301,4 +301,4 @@ node --input-type=module -e 'import { runHttpsSmoke } from "./infra/nginx/https-
 - มีชื่อไฟล์ สัญญาบริการ และเทสต์เฉพาะในทุกTask; migrationใช้ชื่อที่ระบุแต่ให้EFสร้างtimestampจริง ไม่สร้างชื่อวันที่ปลอม
 - จุดเสี่ยงทั้งห้าผูกกับเทสต์Taskที่รับผิดชอบแล้ว ไม่ให้metadata/alias/retryข้ามสิทธิ์
 - ข้อมูลโครงการ/ผู้รับผิดชอบเป็นตัวตนคำขอ และข้อมูลระดับอนุมัติผ่านgrantสามคน เป็นรายละเอียดการลงมือที่ต้องตรวจพร้อมแผนนี้ก่อนเริ่ม
-- ผู้ใช้อนุมัติแผนและสั่ง Task 1–6 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 7–10 ในรอบนี้
+- ผู้ใช้อนุมัติแผนและสั่ง Task 1–10 แยกตามลำดับแล้ว ผู้ลงมือและผู้ตรวจแยกกันทุก Task ผลสุดท้ายผ่านครบตามรายงาน คง Minor และข้อจำกัดที่ระบุ ไม่รวมการ push, PR, merge หรือเปิดใช้เงินจริง

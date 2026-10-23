@@ -206,6 +206,56 @@ test('round1: คิวกรอง capability และยังไป scope �
     if (mode !== 'review') await expect(page.getByRole('combobox', { name: 'รายการ', exact: true })).toHaveValue(mode);
   }
 });
+test('WB-I2: เปิดฉบับแรกหลังสามฉบับสองกติกา อ่านอย่างเดียว และล้างเมื่อเปลี่ยนบัญชี', async ({ page, context, browser }) => {
+  const n = 22, reviewer = await browser.newContext();
+  async function send(c: BrowserContext, url: string, body: unknown) {
+    const { token } = await (await c.request.get('/api/v1/auth/csrf')).json();
+    const response = await c.request.post(url, { headers: { Origin: 'https://localhost:4443', 'X-CSRF-Token': token }, data: body });
+    expect(response.ok()).toBe(true); return response.json();
+  }
+  try {
+    await session(context, n, 1); await session(reviewer, n, 2); await policy(context, reviewer, n);
+    const id = await draft(page, n); await confirm(page);
+    let row = await (await context.request.get(`${api}/${id}`)).json();
+    const firstRevision = row.revisionId;
+    const meta = () => ({ commandId: randomUUID(), expectedVersion: row.version, reason: 'ส่งกลับเพื่อทบทวนฉบับใหม่' });
+    row = await send(reviewer, `${api}/${id}/review`, { decision: { outcome: 'Return', stepId: row.currentStep.id }, meta: meta() });
+    const base = '/api/v1/field-advances/policies';
+    const [old] = await (await context.request.get(`${base}?workspaceId=${workspace(n)}`)).json();
+    const options = { mode: 'Company', sourcePolicyRevisionId: old.id, baseCompanyVersionId: null, expectedActiveRevisionId: old.id, expectedActiveVersion: 1, expectedContentHash: null as string | null };
+    let replacement = await send(context, base, { scope: { workspaceId: workspace(n), projectId: null }, baseCompanyVersionId: null,
+      content: { ...old.content, clearingDays: 14, categories: old.content.categories.map((c: { standardRate: string }) => ({ ...c, standardRate: '200.00' })) },
+      meta: { commandId: randomUUID(), expectedVersion: 1, reason: 'กติกาใหม่จำลอง', policy: options } });
+    options.expectedContentHash = replacement.contentHash;
+    replacement = await send(context, `${base}/${replacement.id}/submit`, { commandId: randomUUID(), expectedVersion: replacement.version, reason: 'ส่งตรวจ', policy: options });
+    await send(reviewer, `${base}/${replacement.id}/review`, { decision: 'approve', meta: { commandId: randomUUID(), expectedVersion: replacement.version, reason: 'ตรวจแล้ว', policy: options } });
+    row = await send(context, `${api}/${id}/revise`, meta());
+    const quote = await (await context.request.get(`${api}/${id}/quote`)).json();
+    row = await send(context, `${api}/${id}/confirm`, { confirmationHash: quote.confirmationHash, meta: meta() });
+    row = await (await reviewer.request.get(`${api}/${id}`)).json();
+    row = await send(reviewer, `${api}/${id}/review`, { decision: { outcome: 'Return', stepId: row.currentStep.id }, meta: meta() });
+    await send(context, `${api}/${id}/revise`, meta());
+    await page.goto(`${root}/${id}`);
+    await page.getByRole('button', { name: 'ดูฉบับที่ 1', exact: true }).click();
+    const evidence = page.getByRole('region', { name: 'หลักฐานฉบับคำขอ' });
+    await expect(evidence).toContainText('ฉบับที่ 1 · อ่านอย่างเดียว');
+    await expect(evidence).toContainText('123.45'); await expect(evidence).toContainText('100.00');
+    await expect(evidence).toContainText('วันเคลียร์ 7 วัน'); await expect(evidence).toContainText('ส่งกลับ');
+    await expect(page.getByRole('button', { name: /บันทึกร่าง|ถอนคำขอ|ทบทวนและยืนยัน|อนุมัติขั้นนี้/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'ดูฉบับที่ 2', exact: true }).click();
+    await expect(evidence).toContainText('246.90'); await expect(evidence).toContainText('วันเคลียร์ 14 วัน');
+    await page.getByRole('button', { name: 'กลับฉบับปัจจุบัน', exact: true }).click();
+    await expect(page.getByText('ฉบับที่ 3', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toBeVisible();
+    await page.route(`**${api}/${id}/revisions/${firstRevision}`, async route => {
+      const response = await route.fetch(); await session(context, n, 7); await route.fulfill({ response });
+    });
+    await page.getByRole('button', { name: 'ดูฉบับที่ 1', exact: true }).click();
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('ไม่มีสิทธิ์');
+    await expect(evidence).toHaveCount(0); await expect(page.getByRole('button', { name: 'ดูฉบับที่ 1', exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('request-id')).toHaveCount(0);
+  } finally { await reviewer.close(); }
+});
 test('ส่งกลับ แก้ฉบับ ยืนยันใหม่ และถอนด้วยเหตุผล', async ({ page, context, browser }) => {
   const n = 14, reviewer = await browser.newContext();
   try {

@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createServer } from 'node:net';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { publicAssetErrors } from './public-asset-diagnostics.mjs';
 
 export async function runHttpsSmoke({ port = '4001', spec = 'tests/e2e/identity.spec.ts', e2e = false } = {}) {
 assert.ok(['4000', '4001'].includes(port), 'ใช้ port 4000 หรือ 4001 เท่านั้น');
@@ -127,6 +128,7 @@ try {
     if (diagnostics) {
       // Only paths/status/timing for public page/assets; no query, headers, bodies or private DOM.
       const proxyLog = spawnSync('docker', ['logs', proxy], { encoding: 'utf8', timeout: 10000 });
+      console.log('public asset failure phases:', JSON.stringify(publicAssetErrors(proxyLog.stderr ?? '')));
       console.log('public proxy timings:', (proxyLog.stdout ?? '').split('\n').filter(line => /^GET \/(?:login |\_next\/[^? ]* )/.test(line)).slice(-500).join('\n'));
       console.log('Next login timings:', readFileSync(join(root, 'web.log'), 'utf8').split('\n').filter(line => /^\s*GET \/login \d{3} in /.test(line)).slice(-50).join('\n'));
     }
