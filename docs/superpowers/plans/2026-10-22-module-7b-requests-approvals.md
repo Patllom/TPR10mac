@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-22-module-7b-requests-approvals-design.md` ผู้ใช้อนุมัติแล้ว ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–4 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,436 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 5–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
+**สถานะแผน:** ผู้ใช้อนุมัติแล้ว 22 ตุลาคม 2569 อัปเดต 23 ตุลาคม 2569: Task 1–5 เสร็จแล้วโดยแยกผู้ลงมือและผู้ตรวจ ผลล่าสุด Backend Test 2,477 และ Frontend Test 118 ผ่าน พร้อม Build, Format และ Lint ครบ Task 6–10 ยังไม่เริ่ม รายละเอียดใน `docs/reports/2026-10-22-module-7b-verification.md`
 
 ## ข้อกำหนดร่วม
 
@@ -182,12 +182,16 @@ actionของ RequestAccess จำกัด `read`/`edit`/`send-to-owner`/`con
 
 **อินเทอร์เฟซ:** `RouteChoice(Guid? PersonId, Guid? AccountId, string? HoldCode, Guid[] TraversedPersonIds)`; `ApprovalRouteResolver.ResolveAsync(Guid requestId, Guid revisionId, string levelCode, CancellationToken ct) : Task<RouteChoice>` ภายใต้ transaction caller; ใช้ `ApprovalLevelEvaluator.Evaluate` เดิมกำหนดลำดับ ไม่เปลี่ยนผลนั้น
 
-- [ ] เขียน `Resolves_owner_supervisor_not_delegate_supervisor`, `Same_person_escalates_without_skipping_level`, `High_limit_without_level_denied`, `Cycle_or_ambiguous_role_holds`: assert Level sequence ยังเดิม, PersonId เป็นผู้มีสิทธิ์ขั้นเดิม, HoldCode ไม่ว่างเมื่อวงวน/ไม่มีผู้เหมาะสม
-- [ ] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestRouteTests` ให้แดง
-- [ ] อ่าน ReportingLine/employee membership ที่ยังมีผลและแปลงเป็น person ผ่าน mapping ที่รับรอง; อ่าน grantsปัจจุบันโดยไม่ใช้ session ของ candidateเป็น actor ของ caller ตรวจ user active, scope, levels, limit, ช่วงเวลาและข้อห้าม
-- [ ] เริ่มต้น supervisor จากหัวหน้าของ owner; PM/ระดับเพิ่มจาก PrimaryApprovalLevels ปัจจุบัน ถ้าหลายคนต่างpersonกำกวมให้พัก; เมื่อติดข้อห้ามไล่หัวหน้าของผู้สมัครเดิมโดยมี visited set และตรวจ ApprovalLevels ของขั้นเดิม ไม่มี fallback admin; เทสต์หลักหนึ่งคนกับผู้รับช่วงหนึ่งคนต้องไม่ถูกมองว่ามีหลักสองคน
-- [ ] รันผ่านพร้อมเคสวงเงินตรงขอบ/ต่ำกว่า0.01, aliasหลายบัญชีคนเดียว, grantหลายแหล่งไม่รวมวงเงิน, สิทธิ์หมดอายุตรงเวลา และขอบเขตต่างโครงการ ไม่ mutate request ใน resolver
-- [ ] ผู้ตรวจเทียบ B05/B06/B08 ตรวจชุดร่วม และ commit: `feat: resolve current advance approval routes`
+- [x] เขียน `Resolves_owner_supervisor_not_delegate_supervisor`, `Same_person_escalates_without_skipping_level`, `High_limit_without_level_denied`, `Cycle_or_ambiguous_role_holds`: assert Level sequence ยังเดิม, PersonId เป็นผู้มีสิทธิ์ขั้นเดิม, HoldCode ไม่ว่างเมื่อวงวน/ไม่มีผู้เหมาะสม
+- [x] รัน `dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName~FieldAdvanceRequestRouteTests` ให้แดง
+- [x] อ่าน ReportingLine/employee membership ที่ยังมีผลและแปลงเป็น person ผ่าน mapping ที่รับรอง; อ่าน grantsปัจจุบันโดยไม่ใช้ session ของ candidateเป็น actor ของ caller ตรวจ user active, scope, levels, limit, ช่วงเวลาและข้อห้าม
+- [x] เริ่มต้น supervisor จากหัวหน้าของ owner; PM/ระดับเพิ่มจาก PrimaryApprovalLevels ปัจจุบัน ถ้าหลายคนต่างpersonกำกวมให้พัก; เมื่อติดข้อห้ามไล่หัวหน้าของผู้สมัครเดิมโดยมี visited set และตรวจ ApprovalLevels ของขั้นเดิม ไม่มี fallback admin; เทสต์หลักหนึ่งคนกับผู้รับช่วงหนึ่งคนต้องไม่ถูกมองว่ามีหลักสองคน
+- [x] รันผ่านพร้อมเคสวงเงินตรงขอบ/ต่ำกว่า0.01, aliasหลายบัญชีคนเดียว, grantหลายแหล่งไม่รวมวงเงิน, สิทธิ์หมดอายุตรงเวลา และขอบเขตต่างโครงการ ไม่ mutate request ใน resolver
+- [x] ผู้ตรวจเทียบ B05/B06/B08 ตรวจชุดร่วม และ commit: `feat: resolve current advance approval routes`
+
+ผล Task 5: commit `3d459b0`; Beauvoir ลงมือและ Sartre ตรวจอิสระ ผ่านโดยไม่มีข้อพบเพิ่มเติม เทสต์ routing 41 กรณีอยู่ใน regression 238 ที่ผ่าน ผลสุดท้าย Backend 2,477/2,477, Frontend 118/118 และ Build/Format/Lint ผ่านครบ รายละเอียด RED แยกข้อผิดพลาด fixture ไว้ในรายงาน ยังไม่เริ่ม Task 6
+
+ข้อกำหนดต่อ Task 6–7: caller ถือ transaction และ identity lock `7241002` ตลอดคำสั่ง บันทึก frozen snapshot/total ก่อน resolve และบันทึกเนื้อหา/เส้นทางก่อน SubmittedAtUtc; การลงผล มอบหมายใหม่ พัก/กลับมาทำขั้นเดิมและ audit ยังเป็นงานเชื่อมใน Task ถัดไป
 
 ### Task 6: ยืนยันผู้รับผิดชอบและตรึงฉบับที่ส่ง
 
@@ -287,4 +291,4 @@ node --input-type=module -e 'import { runHttpsSmoke } from "./infra/nginx/https-
 - มีชื่อไฟล์ สัญญาบริการ และเทสต์เฉพาะในทุกTask; migrationใช้ชื่อที่ระบุแต่ให้EFสร้างtimestampจริง ไม่สร้างชื่อวันที่ปลอม
 - จุดเสี่ยงทั้งห้าผูกกับเทสต์Taskที่รับผิดชอบแล้ว ไม่ให้metadata/alias/retryข้ามสิทธิ์
 - ข้อมูลโครงการ/ผู้รับผิดชอบเป็นตัวตนคำขอ และข้อมูลระดับอนุมัติผ่านgrantสามคน เป็นรายละเอียดการลงมือที่ต้องตรวจพร้อมแผนนี้ก่อนเริ่ม
-- ผู้ใช้อนุมัติแผนและสั่ง Task 1–4 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 5–10 ในรอบนี้
+- ผู้ใช้อนุมัติแผนและสั่ง Task 1–5 แยกตามลำดับแล้ว โดยคงผู้ลงมือและผู้ตรวจแยกกัน ผลผ่านบันทึกตามหลักฐานจริงข้างต้น ยังไม่มีคำสั่งเริ่ม Task 6–10 ในรอบนี้
