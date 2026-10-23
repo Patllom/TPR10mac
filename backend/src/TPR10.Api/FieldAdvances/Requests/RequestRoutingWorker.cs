@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using TPR10.Api.Data;
 using TPR10.Api.FieldAdvances.Data;
 
@@ -41,14 +42,40 @@ public sealed class RequestRoutingWorker(IServiceScopeFactory scopes, IConfigura
                             await scope.ServiceProvider.GetRequiredService<RequestReviewService>().ReevaluateAsync(id, stoppingToken);
                         }
                         catch (Exception error) when (error is DbException or DbUpdateException)
-                        { logger.LogWarning("ประเมินสายอนุมัติไม่สำเร็จ จะลองใหม่ในรอบถัดไป"); }
+                        {
+                            var (kind, sqlState) = Classify(error);
+                            logger.LogWarning("ประเมินสายอนุมัติไม่สำเร็จ จะลองใหม่ในรอบถัดไป Phase={Phase} RequestId={RequestId} ExceptionKind={ExceptionKind} SqlState={SqlState}",
+                                "reevaluate", id, kind, sqlState);
+                        }
                     }
                     if (ids.Length < batchSize) cursor = null;
                 }
                 catch (Exception error) when (error is DbException or DbUpdateException)
-                { logger.LogWarning("อ่านรายการรอประเมินสายอนุมัติไม่ได้ จะลองใหม่ในรอบถัดไป"); }
+                {
+                    var (kind, sqlState) = Classify(error);
+                    logger.LogWarning("อ่านรายการรอประเมินสายอนุมัติไม่ได้ จะลองใหม่ในรอบถัดไป Phase={Phase} ExceptionKind={ExceptionKind} SqlState={SqlState}",
+                        "batch-read", kind, sqlState);
+                }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+    }
+
+    private static (string Kind, string? SqlState) Classify(Exception error)
+    {
+        // Fixed labels only: never render an exception, runtime type name or provider message.
+        var kind = error switch
+        {
+            DbUpdateException => "DbUpdateException",
+            PostgresException => "PostgresException",
+            NpgsqlException => "NpgsqlException",
+            _ => "DbException"
+        };
+        var databaseError = error is DbUpdateException ? error.InnerException : error;
+        var sqlState = databaseError is PostgresException postgres ? postgres.SqlState : null;
+        // Even provider SQLSTATE is untrusted input; admit only the five-character code grammar.
+        if (sqlState is not { Length: 5 } || sqlState.Any(c => c is not (>= '0' and <= '9' or >= 'A' and <= 'Z')))
+            sqlState = null;
+        return (kind, sqlState);
     }
 }

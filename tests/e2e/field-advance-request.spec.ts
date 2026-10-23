@@ -242,6 +242,43 @@ test('WB-I2: เปิดฉบับแรกหลังสามฉบับ�
     await expect(evidence).toContainText('123.45'); await expect(evidence).toContainText('100.00');
     await expect(evidence).toContainText('วันเคลียร์ 7 วัน'); await expect(evidence).toContainText('ส่งกลับ');
     await expect(page.getByRole('button', { name: /บันทึกร่าง|ถอนคำขอ|ทบทวนและยืนยัน|อนุมัติขั้นนี้/ })).toHaveCount(0);
+    // T10-M1: hold a real historical poll response until the user changes selection.
+    for (const selection of ['current', 'second', 'account', 'session'] as const) {
+      await page.getByRole('button', { name: 'ดูฉบับที่ 1', exact: true }).click();
+      await expect(evidence).toContainText('ฉบับที่ 1 · อ่านอย่างเดียว');
+      await expect(page.getByRole('button', { name: 'กลับฉบับปัจจุบัน', exact: true })).toBeEnabled();
+      let arrived!: () => void, release!: () => void;
+      const held = new Promise<void>(resolve => { arrived = resolve; });
+      const resume = new Promise<void>(resolve => { release = resolve; });
+      const pattern = `**${api}/${id}/revisions/${firstRevision}`;
+      await page.route(pattern, async route => {
+        const response = await route.fetch(); arrived(); await resume;
+        await route.fulfill({ response });
+      }, { times: 1 });
+      try {
+        await page.clock.fastForward(16000); await held;
+        if (selection === 'account') await session(context, n, 7);
+        else if (selection === 'session') await context.clearCookies();
+        else await page.getByRole('button', { name: selection === 'current' ? 'กลับฉบับปัจจุบัน' : 'ดูฉบับที่ 2', exact: true }).click();
+      } finally { release(); }
+      if (selection === 'account' || selection === 'session') {
+        await expect(page.getByRole('main').getByRole('alert'), `delayed ${selection} response`).toContainText(/ไม่มีสิทธิ์|session หมดอายุ/);
+        await expect(evidence).toHaveCount(0); await expect(page.getByTestId('request-id')).toHaveCount(0);
+        await page.unroute(pattern);
+        await session(context, n, 1); await page.goto(`${root}/${id}`);
+        continue;
+      }
+      // A subsequent completed poll also proves the released callback has settled.
+      await expect(page.getByRole('button', { name: 'กลับฉบับปัจจุบัน', exact: true })).toBeEnabled();
+      await page.clock.runFor(100);
+      const polled = page.waitForResponse(r => r.url().endsWith(`${api}/${id}/screen`) && r.status() === 200);
+      await page.clock.fastForward(16000); await polled; await page.clock.runFor(100);
+      if (selection === 'current') {
+        await expect(evidence).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toBeVisible();
+      } else await expect(evidence).toContainText('ฉบับที่ 2 · อ่านอย่างเดียว');
+      await page.unroute(pattern);
+    }
     await page.getByRole('button', { name: 'ดูฉบับที่ 2', exact: true }).click();
     await expect(evidence).toContainText('246.90'); await expect(evidence).toContainText('วันเคลียร์ 14 วัน');
     await page.getByRole('button', { name: 'กลับฉบับปัจจุบัน', exact: true }).click();

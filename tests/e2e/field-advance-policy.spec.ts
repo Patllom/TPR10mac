@@ -65,6 +65,7 @@ test('ร่าง ส่งตรวจ เทียบ อนุมัติ �
   await expect(page.getByRole('button', { name: 'อนุมัติและเปิดใช้', exact: true })).toHaveCount(0);
   const reviewer = await browser.newContext(); await session(reviewer, 2); const review = await reviewer.newPage();
   try {
+    await review.clock.install();
     await review.goto(`${root}/reviews?workspaceId=${workspace(1)}`);
     await review.getByRole('button', { name: 'เปิดฉบับ', exact: true }).first().click();
     await expect(review.getByRole('heading', { name: 'เปรียบเทียบก่อน–หลัง', exact: true })).toBeVisible();
@@ -109,8 +110,22 @@ test('ร่าง ส่งตรวจ เทียบ อนุมัติ �
     await expect(review.getByText(/^ระดับที่ต้องผ่าน:/)).toHaveCount(0);
     await expect(review.getByRole('status')).toContainText('ประเมินวงเงินใหม่');
     await expect(review.getByLabel('ยอดตัวอย่าง (บาท)')).toHaveValue('100.00');
+    // M3: replacement retires (and increments) the source. Dwell must retain success.
+    for (let poll = 0; poll < 2; poll++) {
+      const sourceRead = review.waitForResponse(r => new URL(r.url()).pathname === `${api}/${pending.id}` && r.status() === 200);
+      await review.clock.fastForward(16000); await sourceRead;
+      await review.clock.runFor(100);
+      await expect(review.getByRole('main').getByRole('alert')).toHaveCount(0);
+      await expect(review.getByLabel('วันเคลียร์ (วันปฏิทิน)')).toHaveValue('7');
+      await expect(review.getByRole('status')).toContainText('อนุมัติสำเร็จ');
+    }
     await review.getByRole('button', { name: 'ประเมินวงเงิน', exact: true }).click();
     await expect(review.getByText('ระดับที่ต้องผ่าน: supervisor → project-manager → executive', { exact: true })).toBeVisible();
+    // A genuine later source change must still invalidate the retained projection.
+    fixtureSql(`UPDATE field_advance_policy_revisions SET version=version+1 WHERE id='${pending.id}';`);
+    await review.clock.fastForward(16000);
+    await expect(review.getByRole('main').getByRole('alert')).toContainText('ข้อมูลหรือฉบับเปลี่ยน');
+    await expect(review.getByLabel('วันเคลียร์ (วันปฏิทิน)')).toHaveCount(0);
   } finally { await reviewer.close(); }
 });
 

@@ -53,8 +53,11 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
       const changed = rowRef.current?.version !== next.version || rowRef.current?.revisionId !== next.revisionId;
       if (force || changed) { selectedRevision.current = null; setHistorical(null); }
       else if (selectedRevision.current) {
-        const evidence = await client.current.revision(next, selectedRevision.current, signal);
-        signal.throwIfAborted(); setHistorical(evidence);
+        const revisionId = selectedRevision.current;
+        const evidence = await client.current.revision(next, revisionId, signal);
+        signal.throwIfAborted();
+        // Returning to current can happen while this poll is awaiting historical evidence.
+        if (selectedRevision.current === revisionId) setHistorical(evidence);
       }
       setRevisions(versions);
       if (force || changed) { setContent(structuredClone(next.content)); setQuote(null); setDialog(null); }
