@@ -125,7 +125,7 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
 
     // Shares FinanceAccess grant validity, without requiring the owner's interactive session.
     // Each eligible grant must belong to one currently active, unambiguously linked account.
-    private async Task<bool> OwnerEligibleAsync(FinanceScope scope, Guid owner, CancellationToken ct)
+    internal async Task<bool> OwnerEligibleAsync(FinanceScope scope, Guid owner, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var accounts = await FinanceGrantQueries.Current(db, scope, "request.create", now)
@@ -136,7 +136,7 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
         return false;
     }
 
-    private async Task<FinanceResult<Tuple<Estimate, PolicySnapshot>>> CalculateAsync(FinanceScope scope, RequestContent content, CancellationToken ct)
+    internal async Task<FinanceResult<Tuple<Estimate, PolicySnapshot>>> CalculateAsync(FinanceScope scope, RequestContent content, CancellationToken ct)
     {
         if (content is null || content.Kind is not ("Individual" or "Team") || string.IsNullOrWhiteSpace(content.Purpose)
             || content.FieldStart > content.FieldEnd || content.TeamPersonIds is null
@@ -154,7 +154,7 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
         return estimate.Value is null ? new(estimate.Status, estimate.Code, null) : new(200, "ok", Tuple.Create(estimate.Value, policy.Value));
     }
 
-    private void AddLines(AdvanceRequest request, AdvanceRequestRevision revision, Estimate estimate, PolicySnapshot policy)
+    internal void AddLines(AdvanceRequest request, AdvanceRequestRevision revision, Estimate estimate, PolicySnapshot policy)
     {
         for (var i = 0; i < estimate.Lines.Length; i++)
         {
@@ -181,6 +181,6 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
         }
     }
 
-    private static bool ValidMeta(RequestCommand meta) => meta is not null && meta.CommandId != Guid.Empty
+    internal static bool ValidMeta(RequestCommand meta) => meta is not null && meta.CommandId != Guid.Empty
         && meta.ExpectedVersion >= 0 && meta.Reason is not null && meta.Reason.Length <= 2000;
 }
