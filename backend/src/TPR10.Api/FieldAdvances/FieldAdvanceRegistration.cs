@@ -4,6 +4,7 @@ using TPR10.Api.FieldAdvances.Policies;
 using TPR10.Api.FieldAdvances.Requests;
 using TPR10.Api.FieldAdvances.Payments;
 using TPR10.Api.Identity;
+using TPR10.Api.FieldAdvances.Evidence;
 
 namespace TPR10.Api.FieldAdvances;
 
@@ -11,6 +12,13 @@ public static class FieldAdvanceRegistration
 {
     public static IServiceCollection AddFieldAdvances(this IServiceCollection services)
     {
+        services.AddSingleton(sp => sp.GetRequiredService<IConfiguration>().GetSection("FinanceEvidence").Get<FinanceEvidenceOptions>() ?? new());
+        services.AddSingleton(sp => sp.GetRequiredService<IConfiguration>().GetSection("FinanceEvidence:Pdf").Get<PdfValidationOptions>() ?? new());
+        services.AddSingleton<IFinanceEvidenceStore, FolderFinanceEvidenceStore>();
+        services.AddSingleton<IFinancePdfValidator, PdfValidationProcess>();
+        services.AddScoped<FinanceEvidenceService>();
+        services.AddScoped<FinanceEvidenceMigration>();
+        services.AddScoped<FinanceEvidenceReconciler>();
         services.AddScoped<FinancePersonResolver>();
         services.AddScoped<FinanceAccess>();
         services.AddScoped<RequestAccess>();
