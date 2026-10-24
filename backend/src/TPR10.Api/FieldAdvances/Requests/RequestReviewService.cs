@@ -4,6 +4,7 @@ using TPR10.Api.Auditing;
 using TPR10.Api.Data;
 using TPR10.Api.FieldAdvances.Access;
 using TPR10.Api.FieldAdvances.Data;
+using TPR10.Api.FieldAdvances.Payments;
 using static TPR10.Api.FieldAdvances.Requests.RequestCommandExecutor;
 
 namespace TPR10.Api.FieldAdvances.Requests;
@@ -56,6 +57,8 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
                 });
             // Resolver ต้องเห็นผลที่เพิ่งลง เพื่อบังคับคนละคนในฉบับเดียวกัน
             await db.SaveChangesAsync(ct);
+            // Returning/rejecting is also participation; persist it in the decision transaction.
+            await FamilyParticipation.RecordAuthorizedAsync(db, request, person.Value, "Approver", actorId, clock.GetUtcNow(), ct);
             RouteChoice? nextRoute = null;
             var next = pending.Skip(1).FirstOrDefault();
             if (step.Outcome == "Approved" && next is not null)

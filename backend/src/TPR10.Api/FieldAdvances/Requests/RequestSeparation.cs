@@ -2,6 +2,13 @@ namespace TPR10.Api.FieldAdvances.Requests;
 
 public static class RequestSeparation
 {
+    internal static string? CapabilityForRole(string role) => role switch
+    {
+        "Approver" => "request.approve",
+        "Checker" => "finance.check",
+        "Payer" => "payment.record",
+        _ => null
+    };
     // Retained server history spans every revision; only duplicate approval is revision-local.
     public static FinanceDecision Check(Guid personId, string action, RequestParticipationHistory history, Guid[] approvedInRevision)
     {
