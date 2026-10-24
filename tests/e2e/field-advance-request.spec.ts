@@ -284,6 +284,97 @@ test('WB-I2: เปิดฉบับแรกหลังสามฉบับ�
     await page.getByRole('button', { name: 'กลับฉบับปัจจุบัน', exact: true }).click();
     await expect(page.getByText('ฉบับที่ 3', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toBeVisible();
+    await test.step('PR7-R1: auth broadcast clears pending historical evidence before reload commits', async () => {
+      const sender = await context.newPage();
+      await sender.goto('/');
+      type HeldResponse = { armed: boolean; held: boolean; delivered: boolean; status: number; release: () => void };
+      // Buffer the complete, real HTTP response before delaying the fetch promise.
+      // Returning it even after abort exercises the client's late-result guards;
+      // a canceled Playwright route cannot stand in for this successful delivery.
+      await page.addInitScript(({ path }) => {
+        const original = window.fetch;
+        const state = { armed: false, held: false, delivered: false, status: 0, release: () => {} };
+        Object.assign(window, { __pr7R1History: state });
+        window.fetch = async (...args) => {
+          const response = await original(...args);
+          if (!state.armed || new URL(response.url).pathname !== path) return response;
+          state.armed = false;
+          const body = await response.arrayBuffer();
+          state.status = response.status;
+          const gate = new Promise<void>(resolve => { state.release = resolve; });
+          state.held = true;
+          await gate;
+          state.delivered = true;
+          return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+        };
+      }, { path: `${api}/${id}/revisions/${firstRevision}` });
+      await page.goto(`${root}/${id}`);
+      await page.getByRole('button', { name: 'ดูฉบับที่ 1', exact: true }).click();
+      await expect(evidence).toContainText('ฉบับที่ 1 · อ่านอย่างเดียว');
+      await expect(page.getByRole('button', { name: 'กลับฉบับปัจจุบัน', exact: true })).toBeEnabled();
+      // Keep the old document alive: navigation itself must not satisfy the safety checks.
+      const observation = await page.evaluateHandle(() => {
+        const protectedCount = () => document.querySelectorAll('[aria-label="หลักฐานฉบับคำขอ"], [aria-label="เลือกฉบับคำขอ"], [data-testid="request-id"], textarea').length;
+        const state = { delivered: false, pageHidden: false, watch: false, republished: false, protectedCount,
+          historicalVisible: () => !!document.querySelector('[aria-label="หลักฐานฉบับคำขอ"]')?.getClientRects().length };
+        new MutationObserver(() => { if (state.watch && protectedCount()) state.republished = true; })
+          .observe(document.body, { childList: true, subtree: true });
+        const observer = new BroadcastChannel('tpr10-auth-change');
+        observer.onmessage = () => { state.delivered = true; observer.close(); };
+        window.addEventListener('pagehide', () => { state.pageHidden = true; }, { once: true });
+        return state;
+      });
+      const historyResponse = await page.evaluateHandle(() => (window as typeof window & { __pr7R1History: HeldResponse }).__pr7R1History);
+      let releaseDocument!: () => void;
+      const documentGate = new Promise<void>(resolve => { releaseDocument = resolve; });
+      let reloadHeld = false;
+      const documentUrl = page.url();
+      await page.route(documentUrl, async route => {
+        expect(route.request().isNavigationRequest()).toBe(true);
+        reloadHeld = true;
+        await documentGate;
+        await route.continue();
+      }, { times: 1 });
+      try {
+        await historyResponse.evaluate(s => { s.armed = true; });
+        await page.clock.fastForward(16000);
+        await expect.poll(() => historyResponse.evaluate(s => s.held), { message: 'historical poll reached its response gate' }).toBe(true);
+        expect(await historyResponse.evaluate(s => s.status)).toBe(200);
+        await session(context, n, 7);
+        await sender.evaluate(() => {
+          const channel = new BroadcastChannel('tpr10-auth-change');
+          channel.postMessage('changed');
+          channel.close();
+        });
+        await expect.poll(() => observation.evaluate(s => s.delivered), { message: 'real cross-window broadcast delivered' }).toBe(true);
+        // Retained handles inspect the old document without locator navigation auto-waits.
+        await expect.poll(() => observation.evaluate(s => s.historicalVisible()), { message: 'broadcast hides historical content before navigation' }).toBe(false);
+        await expect.poll(() => observation.evaluate(s => s.protectedCount()), { message: 'broadcast removes protected nodes, including hidden nodes' }).toBe(0);
+        expect(await observation.evaluate(s => s.pageHidden), 'old document has not fired pagehide').toBe(false);
+        await expect.poll(() => reloadHeld, { message: 'production auth listener requested a real reload' }).toBe(true);
+        await observation.evaluate(s => { s.watch = true; });
+        await historyResponse.evaluate(s => s.release());
+        await expect.poll(() => historyResponse.evaluate(s => s.delivered), { message: 'real historical response released successfully' }).toBe(true);
+        await page.clock.runFor(100);
+        expect(await observation.evaluate(s => s.protectedCount())).toBe(0);
+        expect(await observation.evaluate(s => s.republished), 'no transient republication after delayed response').toBe(false);
+        expect(await observation.evaluate(s => s.pageHidden)).toBe(false);
+        // Resume the fake clock before permitting the separate, real navigation assertion.
+        await page.clock.resume();
+        const reloaded = page.waitForEvent('domcontentloaded');
+        releaseDocument();
+        await reloaded;
+        await expect(page.getByRole('main').getByRole('alert')).toContainText('ไม่มีสิทธิ์');
+        await expect(page.getByRole('region', { name: /หลักฐานฉบับคำขอ|เลือกฉบับคำขอ/, includeHidden: true })).toHaveCount(0);
+        await expect(page.getByTestId('request-id')).toHaveCount(0);
+        await expect(page.getByLabel('รายละเอียดงาน')).toHaveCount(0);
+      } finally {
+        releaseDocument();
+        await page.unroute(documentUrl);
+        await sender.close();
+      }
+      await session(context, n, 1); await page.goto(`${root}/${id}`);
+    });
     await page.route(`**${api}/${id}/revisions/${firstRevision}`, async route => {
       const response = await route.fetch(); await session(context, n, 7); await route.fulfill({ response });
     });
