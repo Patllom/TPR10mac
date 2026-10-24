@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–3 ผ่านแล้ว (โค้ด `feff388`, `ad451aa`, `f9066d3`) Task 3 ผ่านผู้ตรวจอิสระและ Test/Build/Lint ครบ ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 4–15; ติดตาม Minor `7C-T3-M1` เทสต์สร้างงวดใหม่ใน Task 4
+**สถานะแผน:** Task 1–4 ผ่านแล้ว (โค้ด `feff388`, `ad451aa`, `f9066d3`, `18903a0`) ปิดเทสต์ `7C-T3-M1` แล้ว แยกผู้ลงมือกับผู้ตรวจและรัน Test/Build/Lint ครบ ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 5–15
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -165,11 +165,11 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** `CreateAsync(Guid actor, Guid requestId, InstallmentInput input, PaymentCommand meta, CancellationToken ct)`; `UpdateAsync(Guid actor, Guid installmentId, InstallmentInput input, PaymentCommand meta, CancellationToken ct)`; `SubmitAsync(Guid actor, Guid installmentId, PaymentCommand meta, CancellationToken ct)`; `ReviewAsync(Guid actor, Guid installmentId, string outcome, PaymentCommand meta, CancellationToken ct)` คืน `FinanceResult<PaymentView>`; outcome = `Approve`/`Return`
 
-- [ ] Step 1 `ReturnedKeepsReservation` ตรวจ `Assert.Equal(6000m, view.Reserved);` เมื่อส่งกลับ; ลดเป็น 4000 => reserved4000, เพิ่มเป็น11000 rejected; ลด/เปลี่ยนบัญชีเดิม/ช่องทางหลังตรวจผ่าน => ไม่เหลือสถานะ Reviewed
-- [ ] Step 2 filter `FieldAdvanceInstallmentTests` Red
-- [ ] Step 3 draft ไม่กันเงิน ส่งตรวจจึงกัน เก็บ revision/hash/result เก่า พร้อม reason ทุกการเปลี่ยน; ตรวจ owner-only recipient และข้อมูลบัญชีครบสำหรับ Transfer/Cash; ผลตรวจผูก revision ไม่ผูกแค่งวด
-- [ ] Step 4 Green รวม reason ว่าง, amount `0`, `-1`, `1.001`, `1e3`, numeric JSON, overflow, update จากแท็บเก่า, ผู้ตรวจเป็นผู้เตรียมเดียวกัน; reserve ไม่ถูก release เมื่อ Return
-- [ ] Step 5 ผู้ตรวจใหม่ + G + commit `feat: add installment preparation and review`
+- [x] Step 1 `ReturnedKeepsReservation` ตรวจ `Assert.Equal(6000m, view.Reserved);` เมื่อส่งกลับ; ลดเป็น 4000 => reserved4000, เพิ่มเป็น11000 rejected; ลด/เปลี่ยนบัญชีเดิม/ช่องทางหลังตรวจผ่าน => ไม่เหลือสถานะ Reviewed
+- [x] Step 2 filter `FieldAdvanceInstallmentTests` Red
+- [x] Step 3 draft ไม่กันเงิน ส่งตรวจจึงกัน เก็บ revision/hash/result เก่า พร้อม reason ทุกการเปลี่ยน; ตรวจ owner-only recipient และข้อมูลบัญชีครบสำหรับ Transfer/Cash; ผลตรวจผูก revision ไม่ผูกแค่งวด
+- [x] Step 4 Green รวม reason ว่าง, amount `0`, `-1`, `1.001`, `1e3`, numeric JSON, overflow, update จากแท็บเก่า, ผู้ตรวจเป็นผู้เตรียมเดียวกัน; reserve ไม่ถูก release เมื่อ Return
+- [x] Step 5 ผู้ตรวจใหม่ + G + commit `feat: add installment preparation and review`
 
 ### Task 5: หลักฐานการเงินส่วนตัวและย้ายที่เก็บโดยไม่เสียประวัติ
 
