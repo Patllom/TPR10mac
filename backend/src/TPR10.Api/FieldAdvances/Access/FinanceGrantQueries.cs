@@ -9,12 +9,14 @@ internal static class FinanceGrantQueries
     // Grant evidence only. Callers retain session/MFA, current account/person resolution,
     // active scope checks and the transaction/identity lock protecting their operation.
     internal static IQueryable<GrantProposal> Current(Tpr10DbContext db, FinanceScope scope,
-        string capability, DateTimeOffset now) =>
+        string capability, DateTimeOffset now) => Current(db, now)
+        .Where(x => x.WorkspaceId == scope.WorkspaceId && x.ProjectId == scope.ProjectId && x.Capabilities.Contains(capability));
+
+    internal static IQueryable<GrantProposal> Current(Tpr10DbContext db, DateTimeOffset now) =>
         from assignment in db.Set<GrantAssignment>().AsNoTracking()
         join proposal in db.Set<GrantProposal>().AsNoTracking() on assignment.ProposalId equals proposal.Id
         join review in db.Set<GrantReview>().AsNoTracking() on assignment.ReviewId equals review.Id
-        where assignment.WorkspaceId == scope.WorkspaceId && assignment.ProjectId == scope.ProjectId
-            && proposal.WorkspaceId == assignment.WorkspaceId && proposal.ProjectId == assignment.ProjectId
+        where proposal.WorkspaceId == assignment.WorkspaceId && proposal.ProjectId == assignment.ProjectId
             && review.WorkspaceId == assignment.WorkspaceId && review.ProposalId == proposal.Id
             && assignment.RevokedAtUtc == null && assignment.CreatedAtUtc <= now
             && proposal.State == "Approved" && review.Outcome == "Approved"
@@ -23,6 +25,5 @@ internal static class FinanceGrantQueries
             && review.ReviewerPersonId != proposal.RecipientPersonId
             && review.ReviewerPersonId != proposal.ProposedByPersonId
             && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
-            && proposal.Capabilities.Contains(capability)
         select proposal;
 }

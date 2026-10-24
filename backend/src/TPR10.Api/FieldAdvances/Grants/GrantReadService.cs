@@ -52,19 +52,18 @@ public sealed class GrantReadService(Tpr10DbContext db, FinanceAccess access, Gr
     public Task<FinanceResult<GrantScopeChoice[]>> ScopesAsync(int page, int size, CancellationToken ct) => Locked(async () =>
     {
         if (!Page(page, size)) return Invalid<GrantScopeChoice[]>();
-        var candidates = await db.Set<GrantProposal>().AsNoTracking().Where(x => x.RecipientId == Actor)
-            .Select(x => new { x.WorkspaceId, x.ProjectId }).Distinct().OrderBy(x => x.WorkspaceId).ThenBy(x => x.ProjectId).ToArrayAsync(ct);
+        var candidates = await FinanceScopeQueries.Candidates(db, Actor).ToArrayAsync(ct);
+        var allowed = await access.CheckManyAsync(Actor, candidates.Select(x => new FinanceScope(x.WorkspaceId, x.ProjectId)).ToArray(), Management, ct);
         var rows = new List<GrantScopeChoice>();
         foreach (var c in candidates)
         {
             var scope = new FinanceScope(c.WorkspaceId, c.ProjectId);
-            var caps = await Capabilities(scope, ct);
+            var caps = allowed[scope];
             if (caps.Length == 0) continue;
-            var company = await db.Set<Workspace>().AsNoTracking().SingleAsync(x => x.Id == c.WorkspaceId, ct);
-            var project = c.ProjectId is null ? null : await db.Set<Project>().AsNoTracking().SingleAsync(x => x.Id == c.ProjectId && x.WorkspaceId == c.WorkspaceId, ct);
-            rows.Add(new(scope, company.Name, project?.Name, caps));
+            rows.Add(new(scope, c.WorkspaceName, c.ProjectName, caps));
         }
-        foreach (var row in rows) if (!(await Capabilities(row.Scope, ct)).SequenceEqual(row.Capabilities)) return Denied<GrantScopeChoice[]>();
+        var final = await access.CheckManyAsync(Actor, rows.Select(x => x.Scope).ToArray(), Management, ct);
+        foreach (var row in rows) if (!final[row.Scope].SequenceEqual(row.Capabilities)) return Denied<GrantScopeChoice[]>();
         return new(200, "ok", rows.Skip((page - 1) * size).Take(size).ToArray());
     }, ct);
     public Task<FinanceResult<GrantPersonChoice[]>> RecipientsAsync(FinanceScope scope, string prefix, int page, int size, CancellationToken ct) => Locked(async () =>
@@ -97,11 +96,11 @@ public sealed class GrantReadService(Tpr10DbContext db, FinanceAccess access, Gr
             .OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.Id).ToArrayAsync(ct);
         var covered = await grants.CoveredAsync(Actor, scope, candidates.Select(GrantService.Spec).ToArray(), queue ? ["grant.review"] : caps, ct);
         var selected = candidates.Where((_, i) => covered[i]).Skip((page - 1) * size).Take(size).ToArray();
-        var rows = new List<GrantRecord>();
-        foreach (var p in selected) rows.Add(await Record(p, ct));
+        var rows = await Records(scope, selected, ct);
         if (!(await Capabilities(scope, ct)).SequenceEqual(caps)) return Denied<GrantRecord[]>();
-        foreach (var p in selected) if (!await Readable(p, queue, ct)) return Denied<GrantRecord[]>();
-        return new(200, "ok", rows.ToArray());
+        var final = await grants.CoveredAsync(Actor, scope, selected.Select(GrantService.Spec).ToArray(), queue ? ["grant.review"] : caps, ct);
+        if (final.Any(x => !x)) return Denied<GrantRecord[]>();
+        return new(200, "ok", rows);
     }, ct);
     private Task<GrantProposal?> Find(FinanceScope scope, Guid id, CancellationToken ct) => db.Set<GrantProposal>().AsNoTracking()
         .SingleOrDefaultAsync(x => x.Id == id && x.WorkspaceId == scope.WorkspaceId && x.ProjectId == scope.ProjectId, ct);
@@ -128,6 +127,39 @@ public sealed class GrantReadService(Tpr10DbContext db, FinanceAccess access, Gr
     }, ct);
     private Task<GrantAssignment?> Assignment(GrantProposal p, CancellationToken ct) => db.Set<GrantAssignment>().AsNoTracking()
         .SingleOrDefaultAsync(x => x.ProposalId == p.Id && x.WorkspaceId == p.WorkspaceId && x.ProjectId == p.ProjectId, ct);
+    private async Task<GrantRecord[]> Records(FinanceScope scope, GrantProposal[] proposals, CancellationToken ct)
+    {
+        var ids = proposals.Select(x => x.Id).ToArray();
+        var assignments = await db.Set<GrantAssignment>().AsNoTracking().Where(x => ids.Contains(x.ProposalId)
+            && x.WorkspaceId == scope.WorkspaceId && x.ProjectId == scope.ProjectId).ToDictionaryAsync(x => x.ProposalId, ct);
+        var recipients = proposals.Select(x => x.RecipientId).Distinct().ToArray();
+        var names = await db.Set<IdentityUser>().AsNoTracking().Where(x => recipients.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Username, ct);
+        var identities = await people.ResolveManyAsync(proposals.SelectMany(x => new[] { x.RecipientId, x.ProposedBy }).Append(Actor)
+            .Distinct().Select(x => (x, scope.WorkspaceId)).ToArray(), ct);
+        var sources = await grants.CoverageSourcesManyAsync(proposals.Select(x => x.ProposedBy).Append(Actor).ToArray(), scope, ct);
+        var caps = (await access.CheckManyAsync(Actor, [scope], Management, ct))[scope];
+        var now = clock.GetUtcNow();
+        return proposals.Select(p =>
+        {
+            var spec = GrantService.Spec(p);
+            assignments.TryGetValue(p.Id, out var a);
+            var state = a?.RevokedAtUtc is not null ? "Revoked" : p.State != "Approved" ? p.State
+                : a is null ? "Unavailable" : p.EndsAtUtc <= now ? "Expired" : p.StartsAtUtc > now ? "Scheduled" : "Active";
+            var separated = identities.TryGetValue((Actor, scope.WorkspaceId), out var actor) && actor != p.RecipientPersonId
+                && actor != p.ProposedByPersonId && p.RecipientPersonId != p.ProposedByPersonId
+                && identities.TryGetValue((p.RecipientId, scope.WorkspaceId), out var recipient) && recipient == p.RecipientPersonId
+                && identities.TryGetValue((p.ProposedBy, scope.WorkspaceId), out var proposer) && proposer == p.ProposedByPersonId;
+            var review = p.State == "Pending" && separated && caps.Contains("grant.review")
+                && GrantService.Covers(sources[Actor], spec, "grant.review", false);
+            var approve = review && !(spec.EndsAt <= now) && GrantService.Covers(sources[Actor], spec, "grant.review", true)
+                && GrantService.Covers(sources[p.ProposedBy], spec, "grant.propose", true);
+            var revoke = a is { RevokedAtUtc: null } && caps.Contains("grant.revoke")
+                && GrantService.Covers(sources[Actor], spec, "grant.revoke", false);
+            return new GrantRecord(p.Id, p.State, p.Version, GrantWireSpec.From(spec), p.ProposedBy, names[p.RecipientId],
+                a?.Id, a?.Version, state, review, approve, revoke);
+        }).ToArray();
+    }
+
     private async Task<GrantRecord> Record(GrantProposal p, CancellationToken ct)
     {
         var spec = GrantService.Spec(p);

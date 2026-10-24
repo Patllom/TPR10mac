@@ -219,11 +219,17 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
             .Concat(system.Select(x => new { x.Id, Time = x.OccurredAtUtc, System = true }))
             .OrderBy(x => x.Time).ThenBy(x => x.Id).Skip((page - 1) * size).Take(size).ToArrayAsync(ct);
         var rows = new List<RequestHistory>();
+        var humanIds = keys.Where(x => !x.System).Select(x => x.Id).ToArray();
+        var systemIds = keys.Where(x => x.System).Select(x => x.Id).ToArray();
+        var humanEvents = await human.Where(x => humanIds.Contains(x.Id)).Take(size).ToDictionaryAsync(x => x.Id, ct);
+        var systemMetadata = (await db.AuditMetadata.AsNoTracking().Where(x => systemIds.Contains(x.AuditEventId)
+            && (x.Key == "evidence-reference" || x.Key == "assignment-id" || x.Key == "reason")).ToArrayAsync(ct))
+            .ToLookup(x => x.AuditEventId);
         foreach (var key in keys)
         {
             if (!key.System)
             {
-                var e = await human.SingleAsync(x => x.Id == key.Id, ct);
+                var e = humanEvents[key.Id];
                 // Historical numeric domain evidence is exposed as strings, never JS money numbers.
                 using var data = JsonDocument.Parse(e.DataJson);
                 var metadata = JsonSerializer.SerializeToElement(data.RootElement.EnumerateObject().ToDictionary(x => x.Name,
@@ -232,8 +238,7 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
             }
             else
             {
-                var metadata = await db.AuditMetadata.AsNoTracking().Where(x => x.AuditEventId == key.Id
-                    && (x.Key == "evidence-reference" || x.Key == "assignment-id" || x.Key == "reason")).ToDictionaryAsync(x => x.Key, x => x.Value, ct);
+                var metadata = systemMetadata[key.Id].ToDictionary(x => x.Key, x => x.Value);
                 var evidence = JsonSerializer.Deserialize<JsonElement>(metadata["evidence-reference"]);
                 rows.Add(new(key.Id, evidence.GetProperty("revisionId").GetGuid(), "field-advance.request.reevaluate", null,
                     key.Time, metadata["reason"], Guid.Parse(metadata["assignment-id"]), evidence.GetProperty("version").GetInt64(), evidence));
@@ -246,23 +251,22 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
     public Task<FinanceResult<RequestScopeChoice[]>> ScopesAsync(Guid actorId, int page, int size, CancellationToken ct) => Locked(actorId, async () =>
     {
         if (!Page(page, size)) return Invalid<RequestScopeChoice[]>();
-        var candidates = db.Set<GrantProposal>().AsNoTracking().Where(x => x.RecipientId == actorId && x.ProjectId != null)
-            .Select(x => new { x.WorkspaceId, ProjectId = x.ProjectId!.Value }).Distinct().OrderBy(x => x.WorkspaceId).ThenBy(x => x.ProjectId);
+        var candidates = FinanceScopeQueries.Candidates(db, actorId, projectsOnly: true);
         var rows = new List<RequestScopeChoice>(); long seen = 0; var skip = (long)(page - 1) * size;
         for (var offset = 0; rows.Count < size; offset = checked(offset + 100))
         {
             var batch = await candidates.Skip(offset).Take(100).ToArrayAsync(ct);
+            var allowed = await access.CheckManyAsync(actorId, batch.Select(x => new FinanceScope(x.WorkspaceId, x.ProjectId)).ToArray(), Capabilities, ct);
             foreach (var c in batch)
             {
-                var scope = new FinanceScope(c.WorkspaceId, c.ProjectId); var caps = await Allowed(actorId, scope, ct);
+                var scope = new FinanceScope(c.WorkspaceId, c.ProjectId); var caps = allowed[scope];
                 if (caps.Length == 0 || seen++ < skip) continue;
-                var name = await db.Set<Workspace>().Where(x => x.Id == c.WorkspaceId).Select(x => x.Name).SingleAsync(ct);
-                var project = await db.Set<Project>().Where(x => x.Id == c.ProjectId && x.WorkspaceId == c.WorkspaceId).Select(x => x.Name).SingleAsync(ct);
-                rows.Add(new(scope, name, project, caps)); if (rows.Count == size) break;
+                rows.Add(new(scope, c.WorkspaceName, c.ProjectName!, caps)); if (rows.Count == size) break;
             }
             if (batch.Length < 100) break;
         }
-        foreach (var row in rows) if (!(await Allowed(actorId, row.Scope, ct)).SequenceEqual(row.Capabilities)) return Denied<RequestScopeChoice[]>();
+        var final = await access.CheckManyAsync(actorId, rows.Select(x => x.Scope).ToArray(), Capabilities, ct);
+        foreach (var row in rows) if (!final[row.Scope].SequenceEqual(row.Capabilities)) return Denied<RequestScopeChoice[]>();
         return new(200, "ok", rows.ToArray());
     }, ct);
 

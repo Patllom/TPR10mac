@@ -190,24 +190,26 @@ public sealed class GrantService(Tpr10DbContext db, FinanceAccess access, Financ
         var person = await people.ResolveAsync(actor, scope.WorkspaceId, ct);
         if (person is null) return [];
         var now = clock.GetUtcNow();
-        return await (from assignment in db.Set<GrantAssignment>().AsNoTracking()
-                      join proposal in db.Set<GrantProposal>() on assignment.ProposalId equals proposal.Id
-                      join review in db.Set<GrantReview>() on assignment.ReviewId equals review.Id
-                      where assignment.WorkspaceId == scope.WorkspaceId && assignment.ProjectId == scope.ProjectId
-                         && proposal.WorkspaceId == assignment.WorkspaceId && proposal.ProjectId == assignment.ProjectId
-                         && review.WorkspaceId == assignment.WorkspaceId && review.ProposalId == proposal.Id
-                         && assignment.RevokedAtUtc == null && assignment.CreatedAtUtc <= now
-                         && proposal.State == "Approved" && review.Outcome == "Approved"
-                         && proposal.CreatedAtUtc <= now && review.CreatedAtUtc <= now
-                         && proposal.RecipientId == actor && proposal.RecipientPersonId == person
-                         && proposal.ProposedByPersonId != proposal.RecipientPersonId
-                         && review.ReviewerPersonId != proposal.RecipientPersonId
-                         && review.ReviewerPersonId != proposal.ProposedByPersonId
-                         && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
-                      select proposal).ToArrayAsync(ct);
+        return await FinanceGrantQueries.Current(db, now).Where(x => x.WorkspaceId == scope.WorkspaceId
+            && x.ProjectId == scope.ProjectId && x.RecipientId == actor && x.RecipientPersonId == person).ToArrayAsync(ct);
     }
 
-    private static bool Covers(GrantProposal[] sources, GrantSpec target, string operation, bool coverPeriod)
+    internal async Task<Dictionary<Guid, GrantProposal[]>> CoverageSourcesManyAsync(Guid[] actors, FinanceScope scope, CancellationToken ct)
+    {
+        var result = new Dictionary<Guid, GrantProposal[]>();
+        foreach (var batch in actors.Distinct().Chunk(100))
+        {
+            var persons = await people.ResolveManyAsync(batch.Select(x => (x, scope.WorkspaceId)).ToArray(), ct);
+            var evidence = await FinanceGrantQueries.Current(db, clock.GetUtcNow()).Where(x => x.WorkspaceId == scope.WorkspaceId
+                && x.ProjectId == scope.ProjectId && batch.Contains(x.RecipientId)).ToArrayAsync(ct);
+            foreach (var actor in batch)
+                result[actor] = persons.TryGetValue((actor, scope.WorkspaceId), out var person)
+                    ? evidence.Where(x => x.RecipientId == actor && x.RecipientPersonId == person).ToArray() : [];
+        }
+        return result;
+    }
+
+    internal static bool Covers(GrantProposal[] sources, GrantSpec target, string operation, bool coverPeriod)
     {
         if (!sources.Any(x => x.Capabilities.Contains(operation))) return false;
         // Each capability needs one source covering the WHOLE amount and period.

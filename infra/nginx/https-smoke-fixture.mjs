@@ -9,6 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createServer } from 'node:net';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { publicAssetErrors } from './public-asset-diagnostics.mjs';
+import { httpsChildEnv } from './https-child-env.mjs';
 
 export async function runHttpsSmoke({ port = '4001', spec = 'tests/e2e/identity.spec.ts', e2e = false } = {}) {
 assert.ok(['4000', '4001'].includes(port), 'ใช้ port 4000 หรือ 4001 เท่านั้น');
@@ -21,7 +22,7 @@ let web;
 let webLog;
 const diagnostics = process.env.TPR10_SMOKE_DIAGNOSTICS === '1';
 const run = (command, args, options = {}) => {
-  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 180000, ...options });
+  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 180000, ...options, env: httpsChildEnv(options.env) });
   if (result.status !== 0) throw new Error(`${command} ${args.slice(0, 2).join(' ')} ล้มเหลว: ${result.error?.message ?? result.stderr}`);
   return result.stdout.trim();
 };
@@ -112,7 +113,7 @@ try {
   await waitFor(() => tls('/api/health/ready', ['--fail']).includes('ready'), 'API ผ่าน HTTPS');
   web = spawn(process.execPath, ['node_modules/next/dist/bin/next', port === '4000' ? 'dev' : 'start', '-p', port, '--hostname', '127.0.0.1'], {
     stdio: diagnostics ? ['ignore', webLog, webLog] : 'ignore',
-    env: { ...process.env, TPR10_API_ORIGIN: 'https://localhost:4443', NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), TPR10_SCOPE_TEST_UI: spec === 'tests/e2e/scopes.spec.ts' ? 'true' : '' }
+    env: httpsChildEnv({ ...process.env, TPR10_API_ORIGIN: 'https://localhost:4443', NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), TPR10_SCOPE_TEST_UI: spec === 'tests/e2e/scopes.spec.ts' ? 'true' : '' })
   });
   await waitFor(async () => (await fetch(`http://127.0.0.1:${port}`)).ok, 'Next');
   assert.match(tls('/', ['--fail']), /<!doctype html>/i);
@@ -123,7 +124,7 @@ try {
     const browserTests = spawnSync(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', spec,
       ...(process.env.TPR10_E2E_GREP ? ['--grep', process.env.TPR10_E2E_GREP] : [])], {
       stdio: 'inherit', timeout: 600000,
-      env: { ...process.env, NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), PLAYWRIGHT_FIREFOX_POLICIES_JSON: policies, TPR10_E2E_DATABASE: database, TPR10_E2E_API: api }
+      env: httpsChildEnv({ ...process.env, NODE_EXTRA_CA_CERTS: join(root, 'ca.pem'), PLAYWRIGHT_FIREFOX_POLICIES_JSON: policies, TPR10_E2E_DATABASE: database, TPR10_E2E_API: api })
     });
     if (diagnostics) {
       // Only paths/status/timing for public page/assets; no query, headers, bodies or private DOM.
