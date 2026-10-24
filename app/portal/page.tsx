@@ -24,6 +24,8 @@ export default async function PortalPage() {
     <nav className="my-5 flex flex-col gap-4 underline" aria-label="เมนูระบบ">
       <a href="/portal/scopes">เลือกพื้นที่ทำงาน</a>
       <a href="/portal/field-advances/settings">กติกาเงินทดรองออกสนาม</a>
+      <a href="/portal/field-advances">คำขอเงินทดรองออกสนาม</a>
+      <a href="/portal/field-advances/approvals">งานรออนุมัติเงินทดรอง</a>
       {canRecord && <a href="/portal/attendance">ลงเวลาเข้า–ออก</a>}
       <a href="/portal/attendance#history">ประวัติการลงเวลาของฉัน</a>
       <a href="/portal/attendance/corrections">คำร้องแก้ไขเวลา</a>

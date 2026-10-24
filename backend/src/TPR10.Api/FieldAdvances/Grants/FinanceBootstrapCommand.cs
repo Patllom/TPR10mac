@@ -137,6 +137,10 @@ public static class FinanceBootstrapCommand
                     State = "Approved",
                     Capabilities = spec.Capabilities,
                     DelegableCapabilities = spec.DelegableCapabilities,
+                    ApprovalLevels = spec.ApprovalLevels,
+                    DelegableApprovalLevels = spec.DelegableApprovalLevels,
+                    PrimaryApprovalLevels = spec.PrimaryApprovalLevels,
+                    DelegablePrimaryApprovalLevels = spec.DelegablePrimaryApprovalLevels,
                     ApprovalLimit = spec.ApprovalLimit,
                     StartsAtUtc = spec.StartsAtUtc.ToUniversalTime(),
                     EndsAtUtc = spec.EndsAtUtc?.ToUniversalTime(),
@@ -248,9 +252,17 @@ public static class FinanceBootstrapCommand
             && g.Capabilities is { Length: > 0 and <= 3 }
             && g.Capabilities.All(c => c is "grant.propose" or "grant.review" or "grant.revoke")
             && g.Capabilities.Distinct().Count() == g.Capabilities.Length
-            && g.DelegableCapabilities is { Length: <= 10 }
+            && g.DelegableCapabilities is { Length: <= 12 }
             && g.DelegableCapabilities.All(FinanceCapabilities.Contains)
             && g.DelegableCapabilities.Distinct().Count() == g.DelegableCapabilities.Length
+            && GrantService.ValidLevels(new(g.Recipient.UserId, new(manifest.WorkspaceId, g.ProjectId),
+                g.Capabilities, g.DelegableCapabilities, g.ApprovalLimit, g.StartsAtUtc, g.EndsAtUtc)
+            {
+                ApprovalLevels = g.ApprovalLevels,
+                DelegableApprovalLevels = g.DelegableApprovalLevels,
+                PrimaryApprovalLevels = g.PrimaryApprovalLevels,
+                DelegablePrimaryApprovalLevels = g.DelegablePrimaryApprovalLevels
+            })
             && (g.ApprovalLimit is null || g.ApprovalLimit is >= 0 and <= 9999999999999999.99m
                 && decimal.Round(g.ApprovalLimit.Value, 2) == g.ApprovalLimit)
             && g.StartsAtUtc != DateTimeOffset.MinValue && g.StartsAtUtc != DateTimeOffset.MaxValue
@@ -305,6 +317,10 @@ public static class FinanceBootstrapCommand
         public required Guid? ProjectId { get; init; }
         public required string[] Capabilities { get; init; }
         public required string[] DelegableCapabilities { get; init; }
+        public string[] ApprovalLevels { get; init; } = [];
+        public string[] DelegableApprovalLevels { get; init; } = [];
+        public string[] PrimaryApprovalLevels { get; init; } = [];
+        public string[] DelegablePrimaryApprovalLevels { get; init; } = [];
         public required decimal? ApprovalLimit { get; init; }
         public required DateTimeOffset StartsAtUtc { get; init; }
         public required DateTimeOffset? EndsAtUtc { get; init; }

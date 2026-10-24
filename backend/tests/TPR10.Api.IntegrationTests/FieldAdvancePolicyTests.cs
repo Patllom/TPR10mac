@@ -123,11 +123,49 @@ public sealed class FieldAdvancePolicyTests(PostgresFixture postgres)
         Assert.Equal(201, result.Status);
         await using var db = f.CreateContext();
         var receipt = await db.Set<FinanceCommandReceipt>().SingleAsync();
-        // Task4 serialized exactly these three command fields, before Task6 added policy options.
+        // Freeze the deployed 7A payload, not today's evolving GrantSpec: Task4 had seven
+        // spec fields and three command fields, before policy options and approval-level arrays.
+        var legacySpec = new
+        {
+            spec.RecipientId,
+            spec.Scope,
+            spec.Capabilities,
+            spec.DelegableCapabilities,
+            spec.ApprovalLimit,
+            spec.StartsAt,
+            spec.EndsAt
+        };
         receipt.PayloadSha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
-            JsonSerializer.SerializeToUtf8Bytes(new { spec, meta = new { meta.CommandId, meta.ExpectedVersion, meta.Reason } })));
+            JsonSerializer.SerializeToUtf8Bytes(new { spec = legacySpec, meta = new { meta.CommandId, meta.ExpectedVersion, meta.Reason } })));
         await db.SaveChangesAsync();
-        Assert.Equal(201, (await FieldAdvanceGrantTests.ProposeAsync(f, spec, meta)).Status);
+        var originalReceipt = await db.Set<FinanceCommandReceipt>().AsNoTracking().SingleAsync();
+        var originalProposalCount = await db.Set<GrantProposal>().CountAsync();
+        var replay = await FieldAdvanceGrantTests.ProposeAsync(f, spec, meta);
+        Assert.Equal(201, replay.Status);
+        Assert.Equal(result.Value!.Id, replay.Value!.Id);
+        Assert.Empty(replay.Value.Spec.ApprovalLevels);
+        Assert.Empty(replay.Value.Spec.DelegableApprovalLevels);
+        Assert.Empty(replay.Value.Spec.PrimaryApprovalLevels);
+        Assert.Empty(replay.Value.Spec.DelegablePrimaryApprovalLevels);
+        var explicitEmpty = spec with
+        {
+            ApprovalLevels = [],
+            DelegableApprovalLevels = [],
+            PrimaryApprovalLevels = [],
+            DelegablePrimaryApprovalLevels = []
+        };
+        Assert.Equal(201, (await FieldAdvanceGrantTests.ProposeAsync(f, explicitEmpty, meta)).Status);
+        // Null policy metadata is compatible; adding metadata or changing a command is not.
+        Assert.Equal(409, (await FieldAdvanceGrantTests.ProposeAsync(f, spec,
+            meta with { Policy = new PolicyCommandOptions("Company") })).Status);
+        Assert.Equal(409, (await FieldAdvanceGrantTests.ProposeAsync(f, spec,
+            meta with { Reason = "changed replay reason" })).Status);
+        Assert.Equal(409, (await FieldAdvanceGrantTests.ProposeAsync(f,
+            spec with { ApprovalLimit = 1m }, meta)).Status);
+        var retained = await db.Set<FinanceCommandReceipt>().AsNoTracking().SingleAsync();
+        Assert.Equal(originalReceipt.PayloadSha256, retained.PayloadSha256);
+        Assert.Equal(originalReceipt.ResultJson, retained.ResultJson);
+        Assert.Equal(originalProposalCount, await db.Set<GrantProposal>().CountAsync());
     }
 
     [Fact]

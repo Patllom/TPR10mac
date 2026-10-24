@@ -27,8 +27,60 @@ public sealed class FieldAdvanceOpenApiTests
         "get /api/v1/field-advances/grants/{id}",
         "get /api/v1/field-advances/grants/{id}/history",
         "post /api/v1/field-advances/grants/{id}/review",
-        "post /api/v1/field-advances/grants/{id}/revoke"
+        "post /api/v1/field-advances/grants/{id}/revoke",
+        "get /api/v1/field-advances/requests/scopes",
+        "get /api/v1/field-advances/requests/people",
+        "get /api/v1/field-advances/requests/team-people",
+        "get /api/v1/field-advances/requests/configuration",
+        "get /api/v1/field-advances/requests",
+        "get /api/v1/field-advances/requests/review-queue",
+        "get /api/v1/field-advances/requests/{id}",
+        "get /api/v1/field-advances/requests/{id}/history",
+        "get /api/v1/field-advances/requests/{id}/quote",
+        "get /api/v1/field-advances/requests/{id}/screen",
+        "get /api/v1/field-advances/requests/{id}/revisions",
+        "get /api/v1/field-advances/requests/{id}/revisions/{revisionId}",
+        "post /api/v1/field-advances/requests",
+        "put /api/v1/field-advances/requests/{id}",
+        "post /api/v1/field-advances/requests/{id}/send-to-owner",
+        "post /api/v1/field-advances/requests/{id}/confirm",
+        "post /api/v1/field-advances/requests/{id}/return-to-author",
+        "post /api/v1/field-advances/requests/{id}/review",
+        "post /api/v1/field-advances/requests/{id}/revise",
+        "post /api/v1/field-advances/requests/{id}/withdraw",
+        "post /api/v1/field-advances/requests/{id}/copy"
     ];
+
+    [Fact]
+    public async Task Request_contract_has_string_decimals_current_step_and_protected_commands()
+    {
+        using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory("Host=127.0.0.1;Port=1;Database=unused;Username=unused;Timeout=1", "Production", settings: keys.Settings);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost:4443") });
+        using var doc = JsonDocument.Parse(await client.GetStringAsync("/api/openapi/v1.json"));
+        var paths = doc.RootElement.GetProperty("paths");
+        foreach (var route in ExpectedOperations().Where(x => x.Contains("/requests")))
+        {
+            var split = route.Split(' '); var op = paths.GetProperty(split[1]).GetProperty(split[0]);
+            Assert.True(op.GetProperty("x-tpr10-mfa-required").GetBoolean());
+            Assert.True(op.GetProperty("security")[0].TryGetProperty("SessionCookie", out _));
+            Assert.Contains("no-store", op.GetProperty("description").GetString());
+            if (split[0] != "get")
+            {
+                Assert.True(op.TryGetProperty("requestBody", out _));
+                Assert.Contains(op.GetProperty("parameters").EnumerateArray(), x => x.GetProperty("name").GetString() == "X-CSRF-Token");
+                Assert.True(op.GetProperty("responses").TryGetProperty("400", out _));
+            }
+        }
+        var schemas = doc.RootElement.GetProperty("components").GetProperty("schemas");
+        Assert.Equal("string", schemas.GetProperty("RequestEstimateHttp").GetProperty("properties").GetProperty("total").GetProperty("type").GetString());
+        Assert.True(schemas.GetProperty("RequestHttpView").GetProperty("properties").TryGetProperty("currentStep", out _));
+        foreach (var field in new[] { "quantity", "unitRate", "lumpSum" })
+        {
+            var schema = schemas.GetProperty("EstimateLineInput").GetProperty("properties").GetProperty(field).GetRawText();
+            Assert.Contains("string", schema); Assert.DoesNotContain("number", schema);
+        }
+    }
 
     [Fact]
     public async Task Policy_and_grant_output_money_are_documented_as_strings()

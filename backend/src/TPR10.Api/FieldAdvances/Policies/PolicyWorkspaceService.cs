@@ -19,30 +19,26 @@ public sealed class PolicyWorkspaceService(Tpr10DbContext db, FinanceAccess acce
         if (identity.Status is not null || actor == Guid.Empty || identity.ActorId != actor) return PolicyReadGuard.Denied<PolicyScopeChoice[]>();
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue) return PolicyReadGuard.Invalid<PolicyScopeChoice[]>();
         // Candidate IDs belong to this account only. Authorization is re-evaluated, never inferred from proposals.
-        var candidates = await db.Set<GrantProposal>().AsNoTracking().Where(x => x.RecipientId == actor)
-            .Select(x => new { x.WorkspaceId, x.ProjectId }).Distinct().OrderBy(x => x.WorkspaceId).ThenBy(x => x.ProjectId).ToArrayAsync(ct);
+        var candidates = await FinanceScopeQueries.Candidates(db, actor).ToArrayAsync(ct);
+        var allowed = await access.CheckManyAsync(actor, candidates.Select(x => new FinanceScope(x.WorkspaceId, x.ProjectId)).ToArray(),
+            ["policy.edit.company", "policy.edit.project", "policy.review"], ct);
         var choices = new List<PolicyScopeChoice>();
         foreach (var candidate in candidates)
         {
             var scope = new FinanceScope(candidate.WorkspaceId, candidate.ProjectId);
-            var capabilities = await Capabilities(actor, scope, ct);
+            var capabilities = Relevant(scope, allowed[scope]);
             if (capabilities.Length == 0) continue;
-            var workspace = await db.Set<Workspace>().AsNoTracking().SingleAsync(x => x.Id == scope.WorkspaceId, ct);
-            var project = scope.ProjectId is null ? null : await db.Set<Project>().AsNoTracking().SingleAsync(x => x.Id == scope.ProjectId && x.WorkspaceId == scope.WorkspaceId, ct);
-            choices.Add(new(scope, workspace.Name, project?.Name, capabilities));
+            choices.Add(new(scope, candidate.WorkspaceName, candidate.ProjectName, capabilities));
         }
         var selected = choices.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+        var final = await access.CheckManyAsync(actor, choices.Select(x => x.Scope).ToArray(),
+            ["policy.edit.company", "policy.edit.project", "policy.review"], ct);
         foreach (var choice in choices)
-            if (!(await Capabilities(actor, choice.Scope, ct)).SequenceEqual(choice.Capabilities)) return PolicyReadGuard.Denied<PolicyScopeChoice[]>();
+            if (!Relevant(choice.Scope, final[choice.Scope]).SequenceEqual(choice.Capabilities)) return PolicyReadGuard.Denied<PolicyScopeChoice[]>();
         if ((await sessions.ValidateSessionAsync(true, ct)).Status is not null) return PolicyReadGuard.Denied<PolicyScopeChoice[]>();
         await tx.CommitAsync(ct);
         return new(200, "ok", selected);
     }
-    private async Task<string[]> Capabilities(Guid actor, FinanceScope scope, CancellationToken ct)
-    {
-        var result = new List<string>();
-        foreach (var capability in new[] { scope.ProjectId is null ? "policy.edit.company" : "policy.edit.project", "policy.review" })
-            if ((await access.CheckAsync(actor, scope, capability, ct)).Allowed) result.Add(capability);
-        return result.ToArray();
-    }
+    private static string[] Relevant(FinanceScope scope, string[] allowed) =>
+        allowed.Where(x => x == "policy.review" || x == (scope.ProjectId is null ? "policy.edit.company" : "policy.edit.project")).ToArray();
 }

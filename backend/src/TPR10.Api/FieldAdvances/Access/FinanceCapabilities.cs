@@ -6,5 +6,6 @@ public static class FinanceCapabilities
     public static bool Contains(string capability) => capability is
         "policy.edit.company" or "policy.edit.project" or "policy.review"
         or "grant.propose" or "grant.review" or "grant.revoke"
+        or "request.create" or "request.delegate"
         or "request.approve" or "finance.check" or "payment.record" or "report.read";
 }

@@ -4,12 +4,16 @@ import type { FinanceScope, ScopeChoice } from './policy-types';
 
 export type CommandMeta = { commandId: string; expectedVersion: number; reason: string };
 
-export type GrantSpec = { recipientId: string; scope: FinanceScope; capabilities: string[]; delegableCapabilities: string[]; approvalLimit: string | null; startsAt: string; endsAt: string | null };
+export type GrantSpec = { recipientId: string; scope: FinanceScope; capabilities: string[]; delegableCapabilities: string[]; approvalLimit: string | null; startsAt: string; endsAt: string | null; approvalLevels?: string[]; delegableApprovalLevels?: string[]; primaryApprovalLevels?: string[]; delegablePrimaryApprovalLevels?: string[] };
 export type GrantView = { id: string; state: string; version: number; spec: GrantSpec };
 export type GrantRecord = GrantView & { proposedBy: string; recipientName: string; assignmentId: string | null; assignmentVersion: number | null; effectiveState: string; canReview: boolean; canApprove: boolean; canRevoke: boolean };
 export type GrantHistory = { proposalId: string; outcome: string; actorId: string; at: string; reason: string };
 export type Recipient = { id: string; name: string };
-export const grantCapabilities = ['policy.edit.company', 'policy.edit.project', 'policy.review', 'grant.propose', 'grant.review', 'grant.revoke', 'request.approve', 'finance.check', 'payment.record', 'report.read'];
+export const grantCapabilities = ['policy.edit.company', 'policy.edit.project', 'policy.review', 'grant.propose', 'grant.review', 'grant.revoke', 'request.create', 'request.delegate', 'request.approve', 'finance.check', 'payment.record', 'report.read'];
+export const grantLevelFields = [
+  ['approvalLevels', 'ระดับที่อนุมัติได้'], ['delegableApprovalLevels', 'ระดับที่มอบอำนาจต่อได้'],
+  ['primaryApprovalLevels', 'ระดับที่แต่งตั้งเป็นผู้ดำรงบทบาทหลัก'], ['delegablePrimaryApprovalLevels', 'ระดับที่แต่งตั้งผู้ดำรงบทบาทหลักต่อได้']
+] as const;
 const management = ['grant.propose', 'grant.review', 'grant.revoke'];
 const states = ['Pending', 'Draft', 'Rejected', 'Approved', 'Revoked'];
 const root = '/api/v1/field-advances/grants';
@@ -26,9 +30,18 @@ export function validateGrant(spec: GrantSpec) {
   if (!spec) throw new GrantError(400);
   scopeQuery(spec.scope);
   if (!validId(spec.recipientId) || !Array.isArray(spec.capabilities) || !spec.capabilities.length || !Array.isArray(spec.delegableCapabilities)
-    || [spec.capabilities, spec.delegableCapabilities].some(a => a.length > 10 || new Set(a).size !== a.length || a.some(c => !grantCapabilities.includes(c)))
+    || [spec.capabilities, spec.delegableCapabilities].some(a => a.length > grantCapabilities.length || new Set(a).size !== a.length || a.some(c => !grantCapabilities.includes(c)))
     || !(spec.approvalLimit === null || money(spec.approvalLimit)) || !time(spec.startsAt)
     || !(spec.endsAt === null || time(spec.endsAt) && Date.parse(spec.endsAt) > Date.parse(spec.startsAt))) throw new GrantError(400);
+  for (const [key] of grantLevelFields) {
+    const values = spec[key] === undefined ? [] : spec[key];
+    if (!Array.isArray(values) || values.length > 100 || values.some(v => typeof v !== 'string' || !v.trim() || v !== v.trim() || v.length > 64 || /[\x00-\x1f\x7f]/.test(v))
+      || new Set(values.map(v => v.toLowerCase())).size !== values.length) throw new GrantError(400);
+  }
+  const levels = spec.approvalLevels ?? [], delegable = spec.delegableApprovalLevels ?? [];
+  if ((spec.primaryApprovalLevels ?? []).some(v => !levels.includes(v)) || (spec.delegablePrimaryApprovalLevels ?? []).some(v => !delegable.includes(v))
+    || levels.length && (!spec.scope.projectId || spec.approvalLimit === null || !spec.capabilities.includes('request.approve'))
+    || delegable.length && (!spec.scope.projectId || spec.approvalLimit === null || !spec.delegableCapabilities.includes('request.approve'))) throw new GrantError(400);
 }
 function command(meta: CommandMeta) {
   if (!meta || !validId(meta.commandId) || !Number.isSafeInteger(meta.expectedVersion) || meta.expectedVersion < 1 || typeof meta.reason !== 'string' || !meta.reason.trim() || meta.reason.length > 1000 || /[\x00-\x1f\x7f]/.test(meta.reason)) throw new GrantError(400);
@@ -129,6 +142,8 @@ export function grantDifferences(before: GrantSpec, after: GrantSpec): string[] 
     ['ผู้รับ', before.recipientId, after.recipientId], ['บริษัท', before.scope.workspaceId, after.scope.workspaceId], ['โครงการ', before.scope.projectId ?? 'ระดับบริษัท', after.scope.projectId ?? 'ระดับบริษัท'],
     ['ความสามารถ', before.capabilities.join(', '), after.capabilities.join(', ')], ['มอบต่อได้', before.delegableCapabilities.join(', '), after.delegableCapabilities.join(', ')],
     ['วงเงิน', before.approvalLimit ?? 'ไม่มีอำนาจอนุมัติยอดเงิน', after.approvalLimit ?? 'ไม่มีอำนาจอนุมัติยอดเงิน'], ['เริ่ม', before.startsAt, after.startsAt], ['สิ้นสุด', before.endsAt ?? 'ไม่กำหนด', after.endsAt ?? 'ไม่กำหนด']
-  ]; return fields.filter(([, a, b]) => a !== b).map(([label, a, b]) => `${label}: ${a || 'ไม่มี'} → ${b || 'ไม่มี'}`);
+  ];
+  for (const [key, label] of grantLevelFields) fields.push([label, (before[key] ?? []).join(', '), (after[key] ?? []).join(', ')]);
+  return fields.filter(([, a, b]) => a !== b).map(([label, a, b]) => `${label}: ${a || 'ไม่มี'} → ${b || 'ไม่มี'}`);
 }
 export function grantStatus(state: string): string { return ({ Pending: 'รอตรวจ', Draft: 'ส่งกลับ — เสนอใหม่', Rejected: 'ปฏิเสธ', Approved: 'อนุมัติ', Active: 'เริ่มใช้แล้ว', Scheduled: 'รอเวลาเริ่มใช้', Expired: 'หมดอายุ', Revoked: 'ถอนแล้ว', Unavailable: 'ยังยืนยันสิทธิ์ไม่ได้', Proposed: 'เสนอ', Returned: 'ส่งกลับ' } as Record<string, string>)[state] ?? 'ไม่ทราบสถานะ'; }

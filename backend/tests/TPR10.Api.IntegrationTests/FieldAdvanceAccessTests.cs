@@ -101,6 +101,13 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
         }
         await db.SaveChangesAsync();
         Assert.Null(await new FinancePersonResolver(db, f.Clock).ResolveAsync(userId, WorkspaceId, default));
+        await f.ApprovedGrantAsync("report.read", ProjectId);
+        if (userId != RecipientId)
+            await db.Set<GrantProposal>().ExecuteUpdateAsync(x => x.SetProperty(p => p.RecipientId, userId));
+        var current = await f.SessionAsync(userId);
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
+        await AssertBatchEquivalent(Access(db, current, f.Clock), userId, "report.read");
     }
 
     [Theory]
@@ -125,6 +132,7 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         var access = Access(db, current, f.Clock);
         Assert.True((await access.CheckAsync(RecipientId, new(WorkspaceId, ProjectId), capability, default)).Allowed);
+        await AssertBatchEquivalent(access, RecipientId, capability);
         Assert.False((await access.CheckAsync(RecipientId, new(WorkspaceId, Guid.Parse("71000000-0000-0000-0000-000000000012")), capability, default)).Allowed);
         Assert.False((await access.CheckAsync(RecipientId, new(OtherWorkspaceId, OtherProjectId), capability, default)).Allowed);
         Assert.False((await access.CheckAsync(RecipientId, new(WorkspaceId, null), capability, default)).Allowed);
@@ -173,6 +181,7 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
         await using var tx = await db.Database.BeginTransactionAsync();
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         Assert.False((await Access(db, current, f.Clock).CheckAsync(RecipientId, new(WorkspaceId, ProjectId), "payment.record", default)).Allowed);
+        await AssertBatchEquivalent(Access(db, current, f.Clock), RecipientId, "payment.record");
     }
 
     [Theory]
@@ -187,6 +196,9 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
     [InlineData("reviewer-proposer")]
     [InlineData("project-inactive")]
     [InlineData("delegable-only")]
+    [InlineData("future-assignment")]
+    [InlineData("future-review")]
+    [InlineData("future-proposal")]
     public async Task Retained_or_invalid_grant_cannot_authorize(string state)
     {
         await using var f = await CreateAsync(postgres);
@@ -211,11 +223,15 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
             case "reviewer-proposer": review.ReviewerPersonId = AuthorPersonId; break;
             case "project-inactive": (await db.Set<Project>().SingleAsync(x => x.Id == ProjectId)).IsActive = false; break;
             case "delegable-only": proposal.Capabilities = ["grant.propose"]; proposal.DelegableCapabilities = ["payment.record"]; break;
+            case "future-assignment": grant.CreatedAtUtc = now.AddSeconds(1); break;
+            case "future-review": review.CreatedAtUtc = now.AddSeconds(1); break;
+            case "future-proposal": proposal.CreatedAtUtc = now.AddSeconds(1); break;
         }
         await db.SaveChangesAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         Assert.False((await Access(db, current, f.Clock).CheckAsync(RecipientId, new(WorkspaceId, ProjectId), "payment.record", default)).Allowed);
+        await AssertBatchEquivalent(Access(db, current, f.Clock), RecipientId, "payment.record");
     }
 
     [Fact]
@@ -249,6 +265,7 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         var access = Access(db, current, f.Clock);
         Assert.True((await access.CheckAsync(RecipientId, new(WorkspaceId, null), capability, default)).Allowed);
+        await AssertBatchEquivalent(access, RecipientId, capability);
         Assert.False((await access.CheckAsync(RecipientId, new(WorkspaceId, ProjectId), capability, default)).Allowed);
         foreach (var other in new[] { "policy.edit.company", "policy.edit.project", "policy.review", "grant.propose", "grant.review",
             "grant.revoke", "request.approve", "finance.check", "payment.record", "report.read" }.Where(x => x != capability))
@@ -269,7 +286,9 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
         {
             await using var tx = await db.Database.BeginTransactionAsync();
             await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
-            return (await Access(db, current, f.Clock).CheckAsync(RecipientId, new(WorkspaceId, ProjectId), "report.read", default)).Allowed;
+            var access = Access(db, current, f.Clock);
+            await AssertBatchEquivalent(access, RecipientId, "report.read");
+            return (await access.CheckAsync(RecipientId, new(WorkspaceId, ProjectId), "report.read", default)).Allowed;
         }
         Assert.True(await AllowedAsync());
         await using (var change = f.CreateContext())
@@ -313,4 +332,17 @@ public sealed class FieldAdvanceAccessTests(PostgresFixture postgres)
 
     internal static FinanceAccess Access(Tpr10DbContext db, RequestSession current, TimeProvider clock) =>
         new(db, new ScopeAccess(db, current, new EffectiveRolePolicy(db), clock), new FinancePersonResolver(db, clock), clock);
+
+    private static async Task AssertBatchEquivalent(FinanceAccess access, Guid actor, string capability)
+    {
+        FinanceScope[] scopes = [new(WorkspaceId, ProjectId), new(WorkspaceId, null), new(OtherWorkspaceId, ProjectId),
+            new(WorkspaceId, OtherProjectId), new(OtherWorkspaceId, OtherProjectId), new(Guid.Empty, ProjectId), new(WorkspaceId, Guid.Empty)];
+        string[] capabilities = [capability, "unknown", "request.create", "request.delegate"];
+        var batch = await access.CheckManyAsync(actor, scopes, capabilities, default);
+        foreach (var scope in scopes)
+            foreach (var cap in capabilities)
+                Assert.Equal((await access.CheckAsync(actor, scope, cap, default)).Allowed, batch[scope].Contains(cap));
+        var mismatch = await access.CheckManyAsync(AuthorId, scopes, capabilities, default);
+        Assert.All(mismatch.Values, Assert.Empty);
+    }
 }

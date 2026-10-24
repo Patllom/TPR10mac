@@ -1,6 +1,7 @@
 using TPR10.Api.FieldAdvances.Access;
 using TPR10.Api.FieldAdvances.Grants;
 using TPR10.Api.FieldAdvances.Policies;
+using TPR10.Api.FieldAdvances.Requests;
 using TPR10.Api.Identity;
 
 namespace TPR10.Api.FieldAdvances;
@@ -11,6 +12,14 @@ public static class FieldAdvanceRegistration
     {
         services.AddScoped<FinancePersonResolver>();
         services.AddScoped<FinanceAccess>();
+        services.AddScoped<RequestAccess>();
+        services.AddScoped<RequestReadService>();
+        services.AddScoped<RequestDraftService>();
+        services.AddScoped<RequestSubmissionService>();
+        services.AddScoped<RequestReviewService>();
+        services.AddScoped<RequestRevisionService>();
+        services.AddHostedService<RequestRoutingWorker>();
+        services.AddScoped<ApprovalRouteResolver>();
         services.AddScoped<PolicyService>();
         services.AddScoped<PolicyResolver>();
         services.AddScoped<PolicyReadService>();
@@ -48,6 +57,27 @@ public static class FieldAdvanceRegistration
         group.MapPost("/grants", GrantHttp.Propose).Produces<GrantHttpView>(201);
         group.MapPost("/grants/{id}/review", GrantHttp.Review).Produces<GrantHttpView>();
         group.MapPost("/grants/{id}/revoke", GrantHttp.Revoke).Produces<GrantHttpView>();
+        group.MapGet("/requests/scopes", RequestEndpoints.Scopes).Produces<RequestScopeChoice[]>();
+        group.MapGet("/requests/people", RequestEndpoints.People).Produces<RequestPersonChoice[]>();
+        group.MapGet("/requests", RequestEndpoints.List).Produces<RequestHttpView[]>();
+        group.MapGet("/requests/team-people", RequestEndpoints.TeamPeople).Produces<RequestPersonChoice[]>();
+        group.MapGet("/requests/configuration", RequestEndpoints.Configuration);
+        group.MapGet("/requests/{id}/screen", RequestEndpoints.Screen).Produces<RequestScreen>();
+        group.MapGet("/requests/review-queue", RequestEndpoints.Queue).Produces<RequestHttpView[]>();
+        group.MapGet("/requests/{id}", RequestEndpoints.Details).Produces<RequestHttpView>();
+        group.MapGet("/requests/{id}/history", RequestEndpoints.History).Produces<RequestHistory[]>();
+        group.MapGet("/requests/{id}/revisions", RequestEndpoints.Revisions).Produces<RequestRevisionSummary[]>();
+        group.MapGet("/requests/{id}/revisions/{revisionId}", RequestEndpoints.Revision).Produces<RequestRevisionDetail>();
+        group.MapGet("/requests/{id}/quote", RequestEndpoints.Quote).Produces<RequestQuoteHttp>();
+        group.MapPost("/requests", RequestEndpoints.Create).Accepts<CreateRequestHttp>("application/json").Produces<RequestHttpView>(201);
+        group.MapPut("/requests/{id}", RequestEndpoints.Update).Accepts<UpdateRequestHttp>("application/json").Produces<RequestHttpView>();
+        group.MapPost("/requests/{id}/send-to-owner", RequestEndpoints.SendToOwner).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
+        group.MapPost("/requests/{id}/confirm", RequestEndpoints.Confirm).Accepts<ConfirmRequestHttp>("application/json").Produces<RequestHttpView>();
+        group.MapPost("/requests/{id}/return-to-author", RequestEndpoints.ReturnToAuthor).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
+        group.MapPost("/requests/{id}/review", RequestEndpoints.Review).Accepts<ReviewRequestHttp>("application/json").Produces<RequestHttpView>();
+        group.MapPost("/requests/{id}/revise", RequestEndpoints.Revise).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
+        group.MapPost("/requests/{id}/withdraw", RequestEndpoints.Withdraw).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
+        group.MapPost("/requests/{id}/copy", RequestEndpoints.Copy).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>(201);
         return endpoints;
     }
 }

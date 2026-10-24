@@ -127,7 +127,9 @@ export default function PolicyEditor({ userId, workspaceId, projectId, screen }:
       const history = await client.history(result.id);
       const effective = action === 'approve' ? await client.effective() : state.effective;
       const context = projectId ? await client.companyContext(result.id) : state.context;
-      return { selected, source: state.source, content: structuredClone(selected.content), policies, history, effective, context, basis: selected.baseCompanyVersionId, mode: selected.mode, editing: ['Draft', 'Returned'].includes(selected.state), reason: '', levels: action === 'approve' ? [] : state.levels,
+      // Replacement approval retires/increments the source; poll against its refreshed projection.
+      const source = selected.sourcePolicyRevisionId ? await client.details(selected.sourcePolicyRevisionId) : null;
+      return { selected, source, content: structuredClone(selected.content), policies, history, effective, context, basis: selected.baseCompanyVersionId, mode: selected.mode, editing: ['Draft', 'Returned'].includes(selected.state), reason: '', levels: action === 'approve' ? [] : state.levels,
         message: ({ save: 'บันทึกสำเร็จ', submit: 'ส่งตรวจสำเร็จ', approve: 'อนุมัติสำเร็จ กรุณาประเมินวงเงินใหม่', return: 'ส่งกลับสำเร็จ', reject: 'ปฏิเสธสำเร็จ' })[action] };
     });
   }
