@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–2 ผ่านแล้ว (โค้ด `feff388`, `ad451aa`) Task 2 ผ่านผู้ตรวจอิสระและ Test/Build/Lint ครบเมื่อ 24 ตุลาคม 2569 ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 3–15
+**สถานะแผน:** Task 1–3 ผ่านแล้ว (โค้ด `feff388`, `ad451aa`, `f9066d3`) Task 3 ผ่านผู้ตรวจอิสระและ Test/Build/Lint ครบ ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 4–15; ติดตาม Minor `7C-T3-M1` เทสต์สร้างงวดใหม่ใน Task 4
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -153,11 +153,11 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** `PaymentCommandExecutor.ExecuteAsync(Guid actor, Guid requestId, Guid? installmentId, string action, PaymentCommand meta, string payloadHash, Func<CancellationToken, Task<FinanceResult<PaymentView>>> body, CancellationToken ct): Task<FinanceResult<PaymentView>>`; `ReservationLedger.ReserveAsync/ReleaseAsync/ConsumeAsync(Guid requestId, Guid installmentId, decimal amount, Guid commandId, CancellationToken ct): Task<BalanceSnapshot>` ต้องถูกเรียกใน executor เท่านั้น
 
-- [ ] Step 1 `ConcurrentReservationsCannotExceedCeiling` วงเงิน 10000 ส่งสองงวด 6000 พร้อมกันผ่านสอง DbContext: `Assert.Equal(1, results.Count(x => x.Status == 200));` และ `Assert.Equal(6000m, account.Reserved);` เพิ่ม replay ต่าง payload/actor และ injected SaveChanges/Commit/audit failure
-- [ ] Step 2 filter `FieldAdvancePaymentAtomicityTests` Red
-- [ ] Step 3 ทำ locks/receipt/recheck สิทธิ์ก่อน commit และ clear tracked state ทั้งสำเร็จ/ล้มเหลว ยอดเป็น checked decimal, debit/credit event append-only; hash ครอบคลุมทุก input รวม evidence/version ไม่บันทึกบัญชีลง log
-- [ ] Step 4 Green ตรวจ rollback จาก context ใหม่ ledger/account/audit/receipt/participation ไม่ค้าง; replay หลังถอนสิทธิ์ denied แม้สำเร็จมาก่อน; consume ซ้ำไม่เพิ่ม paid
-- [ ] Step 5 ผู้ตรวจใหม่ + G + commit `feat: add atomic advance reservations`
+- [x] Step 1 `ConcurrentReservationsCannotExceedCeiling` วงเงิน 10000 ส่งสองงวด 6000 พร้อมกันผ่านสอง DbContext: `Assert.Equal(1, results.Count(x => x.Status == 200));` และ `Assert.Equal(6000m, account.Reserved);` เพิ่ม replay ต่าง payload/actor และ injected SaveChanges/Commit/audit failure
+- [x] Step 2 filter `FieldAdvancePaymentAtomicityTests` Red
+- [x] Step 3 ทำ locks/receipt/recheck สิทธิ์ก่อน commit และ clear tracked state ทั้งสำเร็จ/ล้มเหลว ยอดเป็น checked decimal, debit/credit event append-only; hash ครอบคลุมทุก input รวม evidence/version ไม่บันทึกบัญชีลง log
+- [x] Step 4 Green ตรวจ rollback จาก context ใหม่ ledger/account/audit/receipt/participation ไม่ค้าง; replay หลังถอนสิทธิ์ denied แม้สำเร็จมาก่อน; consume ซ้ำไม่เพิ่ม paid
+- [x] Step 5 ผู้ตรวจใหม่ + G + commit `feat: add atomic advance reservations`
 
 ### Task 4: จัดงวดและตรวจใหม่ทุกครั้งที่ข้อมูลจ่ายเปลี่ยน
 
