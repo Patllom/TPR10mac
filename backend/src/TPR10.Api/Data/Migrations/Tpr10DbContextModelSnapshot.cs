@@ -1866,6 +1866,990 @@ namespace TPR10.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("CreatedByPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_person_id");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid?>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint")
+                        .HasColumnName("length");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sha256");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("WorkspaceId", "CreatedByPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId");
+
+                    b.ToTable("field_advance_evidence", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_evidence_hash", "sha256 ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_evidence_time", "isfinite(created_at_utc)");
+
+                            t.HasCheckConstraint("ck_payment_evidence", "length>0 AND length(btrim(content_type))>0 AND state IN ('Pending','Ready','Rejected','Missing')");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceEvidenceLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("EvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_current");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("storage_key");
+
+                    b.Property<DateTimeOffset?>("VerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at_utc");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvidenceId")
+                        .IsUnique()
+                        .HasFilter("is_current");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "EvidenceId");
+
+                    b.ToTable("field_advance_evidence_locations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_evidence_location", "length(btrim(storage_key))>0 AND (NOT is_current OR verified_at_utc IS NOT NULL) AND (verified_at_utc IS NULL OR isfinite(verified_at_utc))");
+
+                            t.HasCheckConstraint("ck_evidence_locations_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceFamily", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("OwnerPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_person_id");
+
+                    b.Property<Guid?>("PendingSupplementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pending_supplement_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId", "OwnerPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "Id", "PendingSupplementId");
+
+                    b.ToTable("field_advance_families", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_families_version", "version>0");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.ToTable("field_advance_installments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_installment_state", "state IN ('Draft','PendingReview','Returned','Reviewed','Paying','OutcomePending','CancelPending','Cancelled','Paid')");
+
+                            t.HasCheckConstraint("ck_installments_time", "isfinite(created_at_utc)");
+
+                            t.HasCheckConstraint("ck_installments_version", "version>0");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceInstallmentRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AccountHolder")
+                        .HasColumnType("text")
+                        .HasColumnName("account_holder");
+
+                    b.Property<string>("AccountNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("account_number");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("BankCode")
+                        .HasColumnType("text")
+                        .HasColumnName("bank_code");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("channel");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_current");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("RecipientPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_person_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<DateTimeOffset?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<Guid?>("ReviewedByPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_person_id");
+
+                    b.Property<int>("RevisionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("revision_number");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("InstallmentId")
+                        .IsUnique()
+                        .HasFilter("is_current");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("InstallmentId", "RevisionNumber")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ReviewedByPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RecipientPersonId");
+
+                    b.ToTable("field_advance_installment_revisions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_installment_destination", "(channel='Cash' AND bank_code IS NULL AND account_number IS NULL AND account_holder IS NULL) OR (channel='Transfer' AND bank_code IS NOT NULL AND account_number IS NOT NULL AND account_holder IS NOT NULL AND length(btrim(bank_code))>0 AND length(btrim(account_number))>0 AND length(btrim(account_holder))>0)");
+
+                            t.HasCheckConstraint("ck_installment_review", "((reviewed_by IS NULL AND reviewed_by_person_id IS NULL AND reviewed_at_utc IS NULL) OR (reviewed_by IS NOT NULL AND reviewed_by_person_id IS NOT NULL AND reviewed_at_utc IS NOT NULL AND isfinite(reviewed_at_utc)))");
+
+                            t.HasCheckConstraint("ck_installment_revision", "revision_number>0 AND amount>0 AND length(btrim(reason))>0");
+
+                            t.HasCheckConstraint("ck_installment_revisions_amount", "amount>=0 AND amount<=9999999999999999.99 AND amount=trunc(amount,2)");
+
+                            t.HasCheckConstraint("ck_installment_revisions_hash", "content_hash ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_installment_revisions_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Approved")
+                        .HasColumnType("numeric")
+                        .HasColumnName("approved");
+
+                    b.Property<Guid?>("ApprovedRevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_revision_id");
+
+                    b.Property<bool>("EverPaid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("ever_paid");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<decimal>("Paid")
+                        .HasColumnType("numeric")
+                        .HasColumnName("paid");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<decimal>("Reserved")
+                        .HasColumnType("numeric")
+                        .HasColumnName("reserved");
+
+                    b.Property<decimal>("Spendable")
+                        .HasColumnType("numeric")
+                        .HasColumnName("spendable");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "RequestId", "ApprovedRevisionId");
+
+                    b.ToTable("field_advance_payment_accounts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_account_balance", "paid+reserved<=spendable AND spendable<=approved AND (paid=0 OR ever_paid) AND ((approved_revision_id IS NULL AND approved=0) OR (approved_revision_id IS NOT NULL AND approved>0))");
+
+                            t.HasCheckConstraint("ck_payment_accounts_approved", "approved>=0 AND approved<=9999999999999999.99 AND approved=trunc(approved,2)");
+
+                            t.HasCheckConstraint("ck_payment_accounts_paid", "paid>=0 AND paid<=9999999999999999.99 AND paid=trunc(paid,2)");
+
+                            t.HasCheckConstraint("ck_payment_accounts_reserved", "reserved>=0 AND reserved<=9999999999999999.99 AND reserved=trunc(reserved,2)");
+
+                            t.HasCheckConstraint("ck_payment_accounts_spendable", "spendable>=0 AND spendable<=9999999999999999.99 AND spendable=trunc(spendable,2)");
+
+                            t.HasCheckConstraint("ck_payment_accounts_version", "version>0");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("command_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<Guid>("PayerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payer_id");
+
+                    b.Property<Guid>("PayerPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payer_person_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<Guid>("RevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revision_id");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstallmentId")
+                        .IsUnique()
+                        .HasFilter("state IN ('Open','Unknown','Mismatch')");
+
+                    b.HasIndex("PayerId");
+
+                    b.HasIndex("WorkspaceId", "CommandId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "PayerPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId", "RevisionId");
+
+                    b.ToTable("field_advance_payment_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_attempt_state", "state IN ('Open','Unknown','Mismatch','Unpaid','Matched')");
+
+                            t.HasCheckConstraint("ck_payment_attempts_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid>("ActorPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_person_id");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("command_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DataJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("data_json");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<long>("FamilyVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("family_version");
+
+                    b.Property<Guid?>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<long?>("InstallmentVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("installment_version");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<long>("RequestVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("request_version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("WorkspaceId", "ActorPersonId");
+
+                    b.HasIndex("WorkspaceId", "CommandId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId");
+
+                    b.ToTable("field_advance_payment_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_event", "family_version>0 AND request_version>0 AND (installment_version IS NULL OR installment_version>0) AND length(btrim(kind))>0");
+
+                            t.HasCheckConstraint("ck_payment_events_data_json", "jsonb_typeof(data_json)='object'");
+
+                            t.HasCheckConstraint("ck_payment_events_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentHold", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("CreatedByPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_person_id");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid?>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset?>("ReleasedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("released_at_utc");
+
+                    b.Property<Guid?>("ReleasedByPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("released_by_person_id");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("WorkspaceId", "CreatedByPersonId");
+
+                    b.HasIndex("WorkspaceId", "ReleasedByPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId");
+
+                    b.ToTable("field_advance_payment_holds", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_hold", "length(btrim(code))>0 AND length(btrim(reason))>0 AND (installment_id IS NULL OR request_id IS NOT NULL) AND (code<>'PaymentMismatch' OR (request_id IS NULL AND installment_id IS NULL AND released_at_utc IS NULL)) AND ((released_at_utc IS NULL AND released_by_person_id IS NULL) OR (released_at_utc IS NOT NULL AND isfinite(released_at_utc) AND released_by_person_id IS NOT NULL))");
+
+                            t.HasCheckConstraint("ck_payment_holds_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentParticipation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("person_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("role");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("WorkspaceId", "PersonId");
+
+                    b.HasIndex("FamilyId", "PersonId", "Role")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId");
+
+                    b.ToTable("field_advance_payment_participations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_participation", "role IN ('Owner','Delegate','Approver','Checker','Payer')");
+
+                            t.HasCheckConstraint("ck_payment_participations_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentProposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("after_json");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("before_json");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("command_id");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("EvidenceIdsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence_ids_json");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<long>("FamilyVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("family_version");
+
+                    b.Property<Guid?>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<long?>("InstallmentVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("installment_version");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("ProposedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposed_by");
+
+                    b.Property<Guid>("ProposedByPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposed_by_person_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<long>("RequestVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("request_version");
+
+                    b.Property<DateTimeOffset?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by");
+
+                    b.Property<Guid?>("ReviewedByPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_person_id");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProposedBy");
+
+                    b.HasIndex("ReviewedBy");
+
+                    b.HasIndex("WorkspaceId", "CommandId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ProposedByPersonId");
+
+                    b.HasIndex("WorkspaceId", "ReviewedByPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId");
+
+                    b.ToTable("field_advance_payment_proposals", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_proposal", "family_version>0 AND request_version>0 AND (installment_version IS NULL OR installment_version>0) AND state IN ('Pending','Approved','Returned','Rejected') AND length(btrim(kind))>0 AND length(btrim(reason))>0 AND ((reviewed_by IS NULL AND reviewed_by_person_id IS NULL AND reviewed_at_utc IS NULL) OR (reviewed_by IS NOT NULL AND reviewed_by_person_id IS NOT NULL AND reviewed_at_utc IS NOT NULL AND isfinite(reviewed_at_utc)))");
+
+                            t.HasCheckConstraint("ck_payment_proposals_after_json", "jsonb_typeof(after_json)='object'");
+
+                            t.HasCheckConstraint("ck_payment_proposals_before_json", "jsonb_typeof(before_json)='object'");
+
+                            t.HasCheckConstraint("ck_payment_proposals_evidence_ids_json", "jsonb_typeof(evidence_ids_json)='array'");
+
+                            t.HasCheckConstraint("ck_payment_proposals_hash", "content_hash ~ '^[a-f0-9]{64}$'");
+
+                            t.HasCheckConstraint("ck_payment_proposals_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("AttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attempt_id");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("command_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("EvidenceIdsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence_ids_json");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date")
+                        .HasColumnName("paid_on");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("RecipientPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_person_id");
+
+                    b.Property<Guid>("RecordedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recorded_by");
+
+                    b.Property<Guid>("RecordedByPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recorded_by_person_id");
+
+                    b.Property<string>("Reference")
+                        .HasColumnType("text")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttemptId")
+                        .IsUnique();
+
+                    b.HasIndex("InstallmentId")
+                        .IsUnique();
+
+                    b.HasIndex("RecordedBy");
+
+                    b.HasIndex("WorkspaceId", "CommandId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "RecipientPersonId");
+
+                    b.HasIndex("WorkspaceId", "RecordedByPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId", "AttemptId");
+
+                    b.ToTable("field_advance_payment_results", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_result", "amount>0 AND isfinite(paid_on)");
+
+                            t.HasCheckConstraint("ck_payment_results_amount", "amount>=0 AND amount<=9999999999999999.99 AND amount=trunc(amount,2)");
+
+                            t.HasCheckConstraint("ck_payment_results_evidence_ids_json", "jsonb_typeof(evidence_ids_json)='array'");
+
+                            t.HasCheckConstraint("ck_payment_results_time", "isfinite(created_at_utc)");
+                        });
+                });
+
             modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1887,6 +2871,12 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("delegate_person_id");
 
+                    b.Property<Guid>("FamilyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
                     b.Property<string>("HoldCode")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -1900,6 +2890,14 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("project_id");
 
+                    b.Property<string>("RelationKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Normal")
+                        .HasColumnName("relation_kind");
+
                     b.Property<Guid?>("SourceRequestId")
                         .HasColumnType("uuid")
                         .HasColumnName("source_request_id");
@@ -1909,6 +2907,10 @@ namespace TPR10.Api.Data.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("state");
+
+                    b.Property<Guid?>("SupplementOfRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("supplement_of_request_id");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
@@ -1925,14 +2927,24 @@ namespace TPR10.Api.Data.Migrations
 
                     b.HasIndex("CreatedBy");
 
+                    b.HasIndex("FamilyId")
+                        .IsUnique()
+                        .HasFilter("relation_kind='Normal'");
+
                     b.HasIndex("WorkspaceId", "DelegatePersonId");
 
                     b.HasIndex("WorkspaceId", "OwnerPersonId");
 
                     b.HasIndex("WorkspaceId", "ProjectId", "SourceRequestId");
 
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "OwnerPersonId");
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "SupplementOfRequestId");
+
                     b.ToTable("field_advance_requests", null, t =>
                         {
+                            t.HasCheckConstraint("ck_advance_request_relation", "(relation_kind='Normal' AND supplement_of_request_id IS NULL) OR (relation_kind='Supplement' AND supplement_of_request_id IS NOT NULL AND supplement_of_request_id<>id AND source_request_id IS NULL)");
+
                             t.HasCheckConstraint("ck_advance_request_source", "source_request_id IS NULL OR source_request_id<>id");
 
                             t.HasCheckConstraint("ck_advance_request_version", "version>=1");
@@ -2171,6 +3183,19 @@ namespace TPR10.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal>("ApprovalBasisAmount")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("numeric")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("approval_basis_amount");
+
+                    b.Property<string>("ApprovalBasisJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("approval_basis_json")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.Property<Guid?>("CompanyPolicyRevisionId")
                         .HasColumnType("uuid")
                         .HasColumnName("company_policy_revision_id");
@@ -2273,6 +3298,8 @@ namespace TPR10.Api.Data.Migrations
 
                     b.ToTable("field_advance_request_revisions", null, t =>
                         {
+                            t.HasCheckConstraint("ck_advance_revision_basis", "approval_basis_amount>=total AND approval_basis_amount<=9999999999999999.99 AND approval_basis_amount=trunc(approval_basis_amount,2) AND jsonb_typeof(approval_basis_json)='object' AND jsonb_typeof(approval_basis_json->'Items')='array' AND jsonb_typeof(approval_basis_json->'Amount')='number' AND (approval_basis_json->>'Amount')::numeric=approval_basis_amount AND approval_basis_json ?& ARRAY['Amount','Items']");
+
                             t.HasCheckConstraint("ck_advance_revision_company_scope", "company_scope_project_id='00000000-0000-0000-0000-000000000000'::uuid");
 
                             t.HasCheckConstraint("ck_advance_revision_content", "revision_number>0 AND total>=0 AND jsonb_typeof(content_json)='object' AND content_hash ~ '^[a-f0-9]{64}$'");
@@ -2282,6 +3309,69 @@ namespace TPR10.Api.Data.Migrations
                             t.HasCheckConstraint("ck_advance_revision_submission", "(submitted_at_utc IS NULL AND confirmed_by_person_id IS NULL) OR (submitted_at_utc IS NOT NULL AND isfinite(submitted_at_utc) AND confirmed_by_person_id IS NOT NULL AND company_policy_revision_id IS NOT NULL AND policy_snapshot_json IS NOT NULL AND total>0)");
 
                             t.HasCheckConstraint("ck_field_advance_request_revisions_time", "isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceReservationEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("command_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid>("InstallmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installment_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId", "CommandId", "Action", "InstallmentId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId");
+
+                    b.ToTable("field_advance_reservation_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_reservation_entries_amount", "amount>=0 AND amount<=9999999999999999.99 AND amount=trunc(amount,2)");
+
+                            t.HasCheckConstraint("ck_reservation_entries_time", "isfinite(created_at_utc)");
+
+                            t.HasCheckConstraint("ck_reservation_entry", "action IN ('Reserve','Release','Consume') AND amount>0");
                         });
                 });
 
@@ -4683,6 +5773,603 @@ namespace TPR10.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceEvidence", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidence_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "CreatedByPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidence_1");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidence_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidence_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidence_4");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvanceEvidence_5");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceEvidenceLocation", b =>
+                {
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidenceLocation_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidenceLocation_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidenceLocation_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceEvidence", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "EvidenceId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceEvidenceLocation_3");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceFamily", b =>
+                {
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "OwnerPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceFamily_0");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceFamily_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "Id", "PendingSupplementId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvanceFamily_2");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallment_0");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallment_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallment_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallment_3");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceInstallmentRevision", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_0");
+
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_1");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ReviewedByPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_4");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RecipientPersonId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id", "OwnerPersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_5");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_6");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceInstallmentRevision_7");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentAccount", b =>
+                {
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAccount_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAccount_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAccount_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequestRevision", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "RequestId", "ApprovedRevisionId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentAccount_3");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentAttempt", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("PayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinanceCommandReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "CommandId")
+                        .HasPrincipalKey("WorkspaceId", "CommandId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "PayerPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_2");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_4");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_5");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_6");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallmentRevision", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId", "RevisionId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentAttempt_7");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentEvent", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentEvent_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ActorPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentEvent_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinanceCommandReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "CommandId")
+                        .HasPrincipalKey("WorkspaceId", "CommandId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentEvent_2");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentEvent_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentEvent_4");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentEvent_5");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentEvent_6");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentHold", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentHold_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "CreatedByPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentHold_1");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentHold_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ReleasedByPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentHold_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentHold_4");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentHold_5");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentHold_6");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentParticipation", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentParticipation_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "PersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentParticipation_1");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentParticipation_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentParticipation_3");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentProposal", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("ProposedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_0");
+
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinanceCommandReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "CommandId")
+                        .HasPrincipalKey("WorkspaceId", "CommandId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_2");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProposedByPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_4");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ReviewedByPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_5");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_6");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_7");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pay_AdvancePaymentProposal_8");
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvancePaymentResult", b =>
+                {
+                    b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_0");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinanceCommandReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "CommandId")
+                        .HasPrincipalKey("WorkspaceId", "CommandId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_1");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "RecipientPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinancePerson", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "RecordedByPersonId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_4");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_5");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_6");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_7");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvancePaymentAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId", "AttemptId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvancePaymentResult_8");
+                });
+
             modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceRequest", b =>
                 {
                     b.HasOne("TPR10.Api.Identity.Data.IdentityUser", null)
@@ -4716,6 +6403,20 @@ namespace TPR10.Api.Data.Migrations
                         .HasForeignKey("WorkspaceId", "ProjectId", "SourceRequestId")
                         .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "OwnerPersonId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id", "OwnerPersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "SupplementOfRequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_request_supplement_family");
                 });
 
             modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceRequestEvent", b =>
@@ -4856,6 +6557,49 @@ namespace TPR10.Api.Data.Migrations
                         .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.AdvanceReservationEntry", b =>
+                {
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.FinanceCommandReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "CommandId")
+                        .HasPrincipalKey("WorkspaceId", "CommandId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceReservationEntry_0");
+
+                    b.HasOne("TPR10.Api.Organization.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId")
+                        .HasPrincipalKey("WorkspaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceReservationEntry_1");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceFamily", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceReservationEntry_2");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceReservationEntry_3");
+
+                    b.HasOne("TPR10.Api.FieldAdvances.Data.AdvanceInstallment", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "InstallmentId")
+                        .HasPrincipalKey("WorkspaceId", "ProjectId", "FamilyId", "RequestId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pay_AdvanceReservationEntry_4");
                 });
 
             modelBuilder.Entity("TPR10.Api.FieldAdvances.Data.FinanceAccountLink", b =>

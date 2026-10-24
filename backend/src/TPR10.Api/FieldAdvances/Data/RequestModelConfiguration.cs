@@ -12,6 +12,14 @@ public static class RequestModelConfiguration
     {
         var request = Row<AdvanceRequest>(model, "field_advance_requests");
         request.HasAlternateKey(x => new { x.WorkspaceId, x.ProjectId, x.Id });
+        request.HasAlternateKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.Id });
+        request.Property(x => x.FamilyId).HasDefaultValueSql("gen_random_uuid()");
+        request.Property(x => x.RelationKind).HasMaxLength(30).HasDefaultValue("Normal");
+        request.HasOne<AdvanceFamily>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.OwnerPersonId })
+            .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.Id, x.OwnerPersonId }).OnDelete(DeleteBehavior.Restrict);
+        request.HasOne<AdvanceRequest>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.SupplementOfRequestId })
+            .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.Id }).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_request_supplement_family");
+        request.HasIndex(x => x.FamilyId).IsUnique().HasFilter("relation_kind='Normal'");
         request.HasOne<AdvanceRequest>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.ProjectId, x.SourceRequestId })
             .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         Person(request, "OwnerPersonId"); Person(request, "DelegatePersonId"); Account(request, "CreatedBy");
@@ -22,6 +30,7 @@ public static class RequestModelConfiguration
         {
             t.HasCheckConstraint("ck_advance_request_version", "version>=1");
             t.HasCheckConstraint("ck_advance_request_source", "source_request_id IS NULL OR source_request_id<>id");
+            t.HasCheckConstraint("ck_advance_request_relation", "(relation_kind='Normal' AND supplement_of_request_id IS NULL) OR (relation_kind='Supplement' AND supplement_of_request_id IS NOT NULL AND supplement_of_request_id<>id AND source_request_id IS NULL)");
         });
 
         var revision = Row<AdvanceRequestRevision>(model, "field_advance_request_revisions");
@@ -34,6 +43,13 @@ public static class RequestModelConfiguration
         revision.Property(x => x.PolicySnapshotJson).HasColumnType("jsonb");
         revision.Property(x => x.PolicyHash).HasMaxLength(64);
         revision.Property(x => x.Total).HasPrecision(18, 2);
+        revision.Property(x => x.ApprovalBasisAmount).HasColumnType("numeric").HasDefaultValue(0m).ValueGeneratedOnAddOrUpdate();
+        revision.Property(x => x.ApprovalBasisJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb").ValueGeneratedOnAddOrUpdate();
+        foreach (var name in new[] { nameof(AdvanceRequestRevision.ApprovalBasisAmount), nameof(AdvanceRequestRevision.ApprovalBasisJson) })
+        {
+            revision.Property(name).Metadata.SetBeforeSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Save);
+            revision.Property(name).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Save);
+        }
         revision.Property<Guid>("CompanyScopeProjectId").HasDefaultValue(Guid.Empty);
         revision.HasOne<PolicyRevision>().WithMany().HasForeignKey("WorkspaceId", "CompanyScopeProjectId", "CompanyPolicyRevisionId")
             .HasPrincipalKey("WorkspaceId", "ScopeProjectId", "Id").OnDelete(DeleteBehavior.Restrict);
@@ -44,6 +60,7 @@ public static class RequestModelConfiguration
         {
             t.HasCheckConstraint("ck_advance_revision_content", "revision_number>0 AND total>=0 AND jsonb_typeof(content_json)='object' AND content_hash ~ '^[a-f0-9]{64}$'");
             t.HasCheckConstraint("ck_advance_revision_company_scope", "company_scope_project_id='00000000-0000-0000-0000-000000000000'::uuid");
+            t.HasCheckConstraint("ck_advance_revision_basis", "approval_basis_amount>=total AND approval_basis_amount<=9999999999999999.99 AND approval_basis_amount=trunc(approval_basis_amount,2) AND jsonb_typeof(approval_basis_json)='object' AND jsonb_typeof(approval_basis_json->'Items')='array' AND jsonb_typeof(approval_basis_json->'Amount')='number' AND (approval_basis_json->>'Amount')::numeric=approval_basis_amount AND approval_basis_json ?& ARRAY['Amount','Items']");
             t.HasCheckConstraint("ck_advance_revision_policy", "(policy_snapshot_json IS NULL AND policy_hash IS NULL) OR (policy_snapshot_json IS NOT NULL AND policy_hash IS NOT NULL AND jsonb_typeof(policy_snapshot_json)='object' AND policy_hash ~ '^[a-f0-9]{64}$')");
             t.HasCheckConstraint("ck_advance_revision_submission", "(submitted_at_utc IS NULL AND confirmed_by_person_id IS NULL) OR (submitted_at_utc IS NOT NULL AND isfinite(submitted_at_utc) AND confirmed_by_person_id IS NOT NULL AND company_policy_revision_id IS NOT NULL AND policy_snapshot_json IS NOT NULL AND total>0)");
         });
