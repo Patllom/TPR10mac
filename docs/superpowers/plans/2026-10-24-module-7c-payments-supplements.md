@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–4 ผ่านแล้ว (โค้ด `feff388`, `ad451aa`, `f9066d3`, `18903a0`) ปิดเทสต์ `7C-T3-M1` แล้ว แยกผู้ลงมือกับผู้ตรวจและรัน Test/Build/Lint ครบ ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 5–15
+**สถานะแผน:** Task 1–5 ผ่านแล้ว (Task 5 โค้ด `4774d82`) แยกผู้ลงมือกับผู้ตรวจและรัน Test/Build/Format/Lint ครบ Backend 2,815 / Frontend 155 ผ่าน ไม่มี failed/skipped ปิด finding สำคัญรอบตรวจ Task 5 ทั้งสองข้อแล้ว คงรายการติดตามเดิมและ OpenAPI 500 ที่เกิดครั้งหนึ่งแต่ยังไม่ทราบสาเหตุ ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 6–15
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -173,16 +173,31 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 ### Task 5: หลักฐานการเงินส่วนตัวและย้ายที่เก็บโดยไม่เสียประวัติ
 
+**ส่วนเพิ่มที่ผู้ใช้อนุมัติ 24 ตุลาคม 2026:** เพิ่มตัวตรวจ PDF แยก process พร้อมจำกัดหน่วยความจำและเวลา ไม่ตรวจ PDF ภายใน API โดยตรง รายละเอียดทางเทคนิคต่อไปนี้เป็นค่าเริ่มต้นที่ผู้ลงมือและผู้ตรวจต้องพิสูจน์ ไม่ใช่ค่าที่ผู้ใช้กำหนดเอง
+
+- ใช้ console worker `backend/src/TPR10.PdfValidator/` (.NET 10, PdfPig 0.1.16, Apache-2.0 พร้อมประกาศ license) ใน container ชั่วคราวต่อไฟล์ เพิ่ม Dockerfile และโครงการใน solution พร้อม lockfile; เพิ่ม `FA/Evidence/PdfValidationProcess.cs` และ interface ที่จำเป็น รวมเทสต์ใน `IT/FieldAdvanceEvidenceTests.cs` หรือ `IT/FinancePdfValidationTests.cs` และ test utilities ในโฟลเดอร์เทสต์เท่านั้น
+- จำกัดด้วยระบบปฏิบัติการ: memory 512 MiB, memory+swap เท่ากับ memory, CPU 1, pids 64, deadline 15 วินาที รวมเริ่ม process/ส่งข้อมูล/รับผล; สูงสุด 2 งานพร้อมกันและไม่สะสมคิวไม่จำกัด รับผล stdout ไม่เกิน 4 KiB และจำกัด stderr เช่นกัน ค่า configuration ต้องตรวจช่วงและปฏิเสธค่าที่ทำให้ไม่มีเพดาน
+- รัน non-root, read-only root, no network, drop capabilities และ no-new-privileges; ไม่ mount โฟลเดอร์หลักฐาน socket หรือ secrets เข้า worker ส่ง bytes ทาง stdin และรับ verdict ขนาดจำกัด ไม่ใช้ shell interpolation ใช้ image ID ที่เตรียมไว้และตรวจสอบแล้ว ไม่ pull/build ระหว่างรับไฟล์
+- API ใช้ trusted host runner ที่เรียก Docker ได้ ซึ่งเป็นขอบเขตสิทธิ์สูง ต้องระบุ prerequisite และข้อจำกัดในคู่มือ ไม่เพิ่มสิทธิ์เครื่อง production ในงานนี้ ถ้า runtime/image/ข้อจำกัดทรัพยากรไม่พร้อม ให้ปฏิเสธ PDF แบบ fail closed ไม่มี fallback ตรวจใน API
+- timeout/cancellation/output เกินกำหนด/OOM/worker crash ให้ปฏิเสธ ต้องหยุดและเก็บกวาด container ของงานนั้นโดยเฉพาะ ไม่เพียง kill Docker CLI แล้วทิ้ง worker ทำงานต่อ ตรวจการเก็บกวาดหลังยกเลิกและการตรวจไฟล์ปกติครั้งถัดไป
+- ตัว parser ตรวจโครงสร้างและ graph อย่างมีขอบเขต ปฏิเสธ encryption, embedded files, JavaScript และโครงสร้างที่ตรวจไม่ได้; เพดาน container เป็นแนวป้องกันชั้นนอก ไม่ใช้แทน validation
+- TDD เพิ่มไฟล์ PDF ปกติ/เสียหาย/เนื้อหาต้องห้าม และเทสต์ resource/time/cancellation กับ container จริงโดย fixture ที่จำกัดขอบเขต เทสต์ต้องพิสูจน์การบังคับใช้และ fail closed ไม่ใช่แค่ตรวจข้อความ command; ห้าม skip เงียบเมื่อ Docker ไม่พร้อม Build worker image และรันเทสต์เหล่านี้เพิ่มจาก G
+- Locator ที่ controller เลือก: `v1:<storage-guid-N>:<object-guid-N>` ตรวจรูปแบบเข้มงวดและ mapping root จาก config ไม่รับ path จากผู้ใช้ ไม่ต้องเพิ่ม migration ฐานข้อมูล การย้ายตรวจตำแหน่งปัจจุบันซ้ำก่อน atomic switch และคงไฟล์/แถวเดิม
+- งานนี้ยังจำกัด Task 5 คง M2-R1/R2-C1, HTTPS 504 และ Minor log; พักมือถือจริง/NAS จริง ไม่เริ่ม Task 6 ไม่ push/merge/deploy
+- กติกา StageAsync สำหรับหลักฐานจ่ายใน 7C: ต้องผ่านสิทธิ์ `payment.record` และการแยกหน้าที่ปัจจุบัน (`PaymentAccess` action `record`) ไม่ใช้สิทธิ์อ่านแทนสิทธิ์เขียน ตรวจสิทธิ์ก่อน I/O แล้วปล่อย transaction ระหว่างตรวจ/เก็บไฟล์ จากนั้นตรวจสิทธิ์ซ้ำใน transaction สั้นและบันทึกหลักฐานพร้อม `Payer` participation แบบ atomic เมื่อสำเร็จเท่านั้น การตรวจไฟล์ล้มเหลว/ถอนสิทธิ์ก่อน commit/rollback ไม่สร้าง participation การเก็บกวาดรายงานไฟล์ตกค้างแต่ไม่ลบ ถือการเตรียมหลักฐานสำเร็จเป็นการลงมือในหน้าที่ตามแบบข้อ 8 ไม่เพิ่มสิทธิ์อัปโหลดให้ผู้ตรวจหรือผู้มีสิทธิ์อ่าน และยังไม่ใช่ workflow เคลียร์เงิน 7D
+
 **ไฟล์:** Create `FA/Evidence/FinanceEvidenceOptions.cs`, `FA/Evidence/FinanceEvidenceService.cs`, `FA/Evidence/IFinanceEvidenceStore.cs`, `FA/Evidence/FolderFinanceEvidenceStore.cs`, `FA/Evidence/FinanceEvidenceMigration.cs`, `FA/Evidence/FinanceEvidenceReconciler.cs`, `IT/FieldAdvanceEvidenceTests.cs`; Modify `FA/FieldAdvanceRegistration.cs` และ `backend/src/TPR10.Api/appsettings.json` เฉพาะค่าที่ไม่ใช่ secrets
 
 **Interfaces:** `StageAsync(Guid actor, Guid requestId, Stream content, string declaredType, CancellationToken ct): Task<FinanceResult<EvidenceTicket>>`; `ValidateLinksAsync(Guid actor, Guid requestId, Guid[] evidenceIds, CancellationToken ct): Task<bool>`; `ReadAsync(Guid actor, Guid evidenceId, CancellationToken ct): Task<FinanceResult<byte[]>>`; store `WriteImmutableAsync(Guid storageId, string key, Stream content, CancellationToken ct): Task<EvidenceTicket>`, `ReadVerifiedAsync(Guid storageId, string key, string sha256, long length, CancellationToken ct): Task<byte[]>`; migration `CopyAndSwitchAsync(Guid evidenceId, Guid targetStorageId, CancellationToken ct): Task<bool>` เป็นคำสั่งผู้ปฏิบัติที่มีสิทธิ์ filesystem ไม่ให้ admin สิทธิ์อ่านการเงินผ่าน API
 
-- [ ] Step 1 `MovedEvidenceKeepsIdentity` และ `PendingLinkNeverDeletesReferencedFile`: `Assert.Equal(before.Id, after.Id); Assert.Equal(before.Sha256, after.Sha256);` ทดสอบ digest ผิด/ไฟล์หาย/commit ล้มเหลวไม่ switch หรือ delete ไฟล์ที่อ้างแล้ว
-- [ ] Step 2 filter `FieldAdvanceEvidenceTests` Red
-- [ ] Step 3 ค่าเริ่มต้น configurable: JPEG/PNG/PDF เท่านั้น, 10 MiB ต่อไฟล์, 10 ไฟล์และรวม 50 MiB ต่อข้อเสนอ, ภาพไม่เกิน 25 ล้านพิกเซล PDF เป็น download attachment ไม่ render inline ตรวจโครงสร้าง/เนื้อหาไม่เชื่อ extension/MIME อย่างเดียว; ไม่รับ SVG/HTML/encrypted PDF และ PDF ฝังไฟล์/JavaScript; เลือก parser ที่ปลอดภัยและตรวจ license ก่อนเพิ่ม dependency หากยังไม่มีตัวตรวจ PDF ต้องหยุด gate ของ feature PDF ไม่อ้างรองรับด้วย magic bytes อย่างเดียว
-- [ ] Step 4 เก็บ opaque ID+storage ID, root allowlist จาก configuration, ป้องกัน traversal/symlink, immutable, no public URL; staged file ตรวจเสร็จก่อน transaction ผูกผลจ่าย ย้าย copy→verify→atomic location switch คงต้นฉบับ; reconciler รายงาน orphan เท่านั้น ระยะแรกไม่ลบอัตโนมัติ
-- [ ] Step 5 Green รวม fake MIME, oversized streaming upload, duplicate IDs, evidence ข้ามคำขอ, revoked reader, ทดสอบ local สองโฟลเดอร์และ adapter จำลอง NAS offline ไม่อ้างทดสอบ NAS จริง
-- [ ] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add private finance evidence storage`
+- [x] Step 1 `MovedEvidenceKeepsIdentity` และ `PendingLinkNeverDeletesReferencedFile`: `Assert.Equal(before.Id, after.Id); Assert.Equal(before.Sha256, after.Sha256);` ทดสอบ digest ผิด/ไฟล์หาย/commit ล้มเหลวไม่ switch หรือ delete ไฟล์ที่อ้างแล้ว
+- [x] Step 2 filter `FieldAdvanceEvidenceTests` Red
+- [x] Step 3 ค่าเริ่มต้น configurable: JPEG/PNG/PDF เท่านั้น, 10 MiB ต่อไฟล์, 10 ไฟล์และรวม 50 MiB ต่อข้อเสนอ, ภาพไม่เกิน 25 ล้านพิกเซล PDF เป็น download attachment ไม่ render inline ตรวจโครงสร้าง/เนื้อหาไม่เชื่อ extension/MIME อย่างเดียว; ไม่รับ SVG/HTML/encrypted PDF และ PDF ฝังไฟล์/JavaScript; เลือก parser ที่ปลอดภัยและตรวจ license ก่อนเพิ่ม dependency หากยังไม่มีตัวตรวจ PDF ต้องหยุด gate ของ feature PDF ไม่อ้างรองรับด้วย magic bytes อย่างเดียว
+- [x] Step 4 เก็บ opaque ID+storage ID, root allowlist จาก configuration, ป้องกัน traversal/symlink, immutable, no public URL; staged file ตรวจเสร็จก่อน transaction ผูกผลจ่าย ย้าย copy→verify→atomic location switch คงต้นฉบับ; reconciler รายงาน orphan เท่านั้น ระยะแรกไม่ลบอัตโนมัติ
+- [x] Step 5 Green รวม fake MIME, oversized streaming upload, duplicate IDs, evidence ข้ามคำขอ, revoked reader, ทดสอบ local สองโฟลเดอร์และ adapter จำลอง NAS offline ไม่อ้างทดสอบ NAS จริง
+- [x] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add private finance evidence storage`
+
+ผล Task 5: โค้ด `4774d82`, focused 74 ผ่าน, Backend 2,815 และ Frontend 155 ผ่าน, G ทุกคำสั่ง exit 0 และ 24 ไฟล์ตรงกับ checksum ที่ review แล้ว ตัวตรวจยอมรับ PDF เฉพาะ subset ที่ตรวจได้ รายการ cleanup ที่ผล create ไม่แน่นอนต้อง reconcile ก่อน recycle runner ตามคู่มือ ส่วน HTTP attachment/private/no-store/nosniff เป็น gate ของ Task 12 เมื่อเพิ่ม endpoint ยังไม่มีการเปิด route ใน Task 5
 
 ### Task 6: เริ่มจ่ายและบันทึกผลที่ตรงงวดครั้งเดียว
 
