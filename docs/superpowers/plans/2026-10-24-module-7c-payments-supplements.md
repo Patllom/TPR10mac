@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** ผู้ใช้อนุมัติแผนแล้ว 24 ตุลาคม 2569 Task 1 ผ่าน TDD, Test/Build/Lint และผู้ตรวจอิสระแล้ว (โค้ด `feff388`) ดูรายงาน `docs/reports/2026-10-24-module-7c-task1-verification.md` ยังไม่เริ่ม Task 2–15
+**สถานะแผน:** Task 1–2 ผ่านแล้ว (โค้ด `feff388`, `ad451aa`) Task 2 ผ่านผู้ตรวจอิสระและ Test/Build/Lint ครบเมื่อ 24 ตุลาคม 2569 ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 3–15
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -141,11 +141,11 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** `PaymentAccess.CheckAsync(Guid actor, Guid requestId, string action, CancellationToken ct): Task<PaymentAccessDecision>`; `FamilyParticipation.ReadAsync(Guid familyId, CancellationToken ct): Task<RequestParticipationHistory>` รวมประวัติเดิมและใหม่; `RecordAsync(Guid familyId, Guid requestId, Guid personId, string role, CancellationToken ct): Task` ใช้ใน transaction เท่านั้น action = `read`, `prepare`, `check`, `start`, `record`, `reconcile`, `takeover`, `terminate-propose`, `terminate-confirm`, `evidence-read`
 
-- [ ] Step 1 เขียน `SamePersonCannotSwitchAcrossFamily` ตั้งผู้อนุมัติใน root แล้วลองตรวจ/จ่าย supplement: `Assert.False(decision.Allowed);` รวม owner/delegate, returned checker, ผู้เตรียมงวด และ alias account; ทดสอบหมดอายุ/ถอนและให้สิทธิ์ใหม่ไม่ล้างประวัติ
-- [ ] Step 2 รัน filter `FieldAdvancePaymentAccessTests` ให้ FAIL จากขอบเขตเดิมที่ยังเป็นรายคำขอ
-- [ ] Step 3 ใช้ FinancePersonResolver + grant ของ actor ปัจจุบันและ scope จริง ไม่เอา grant บัญชีอื่นมาให้ actor; รวม history ด้วย person ID ตรวจ request.approve/finance.check/payment.record แยกกัน รายการ/รายละเอียดใช้บทบาทที่ได้รับจริง ไม่ให้ read กว้างจาก family membership
-- [ ] Step 4 Green รวมสองบทบาทแข่งกัน ต้องล็อกและบันทึก participation ตั้งแต่เตรียม/ตรวจส่งกลับ; อ่านรายงานไม่ให้อำนาจลงมือ ไม่มีผู้เข้าเงื่อนไขให้ปฏิเสธ/พัก ไม่ grant เอง
-- [ ] Step 5 ผู้ตรวจใหม่ + G + commit `feat: enforce advance family separation`
+- [x] Step 1 เขียน `SamePersonCannotSwitchAcrossFamily` ตั้งผู้อนุมัติใน root แล้วลองตรวจ/จ่าย supplement: `Assert.False(decision.Allowed);` รวม owner/delegate, returned checker, ผู้เตรียมงวด และ alias account; ทดสอบหมดอายุ/ถอนและให้สิทธิ์ใหม่ไม่ล้างประวัติ
+- [x] Step 2 รัน filter `FieldAdvancePaymentAccessTests` ให้ FAIL จากขอบเขตเดิมที่ยังเป็นรายคำขอ
+- [x] Step 3 ใช้ FinancePersonResolver + grant ของ actor ปัจจุบันและ scope จริง ไม่เอา grant บัญชีอื่นมาให้ actor; รวม history ด้วย person ID ตรวจ request.approve/finance.check/payment.record แยกกัน รายการ/รายละเอียดใช้บทบาทที่ได้รับจริง ไม่ให้ read กว้างจาก family membership
+- [x] Step 4 Green รวมสองบทบาทแข่งกัน ต้องล็อกและบันทึก participation ตั้งแต่เตรียม/ตรวจส่งกลับ; อ่านรายงานไม่ให้อำนาจลงมือ ไม่มีผู้เข้าเงื่อนไขให้ปฏิเสธ/พัก ไม่ grant เอง
+- [x] Step 5 ผู้ตรวจใหม่ + G + commit `feat: enforce advance family separation` (ลำดับหลักฐานตามรายงาน Task 2; Full G ก่อน review บนโค้ดเดียวกัน)
 
 ### Task 3: บัญชีกันวงเงินและคำสั่งที่มีผลครั้งเดียว
 
