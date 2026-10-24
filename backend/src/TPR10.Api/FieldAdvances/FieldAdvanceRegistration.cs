@@ -16,6 +16,10 @@ public static class FieldAdvanceRegistration
         services.AddScoped<RequestAccess>();
         services.AddScoped<PaymentAccess>();
         services.AddScoped<FamilyParticipation>();
+        services.AddScoped<PaymentCommandExecutor>();
+        services.AddScoped<ReservationLedger>();
+        services.AddScoped<InstallmentService>();
+        services.AddScoped<InstallmentReviewService>();
         services.AddScoped<RequestReadService>();
         services.AddScoped<RequestDraftService>();
         services.AddScoped<RequestSubmissionService>();
