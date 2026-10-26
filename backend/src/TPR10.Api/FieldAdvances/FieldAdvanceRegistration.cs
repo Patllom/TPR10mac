@@ -28,6 +28,7 @@ public static class FieldAdvanceRegistration
         services.AddScoped<ReservationLedger>();
         services.AddScoped<InstallmentService>();
         services.AddScoped<InstallmentReviewService>();
+        services.AddScoped<PaymentExecutionService>();
         services.AddScoped<RequestReadService>();
         services.AddScoped<RequestDraftService>();
         services.AddScoped<RequestSubmissionService>();
