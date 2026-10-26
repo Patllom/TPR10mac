@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–5 ผ่านแล้ว (Task 5 โค้ด `4774d82`) แยกผู้ลงมือกับผู้ตรวจและรัน Test/Build/Format/Lint ครบ Backend 2,815 / Frontend 155 ผ่าน ไม่มี failed/skipped ปิด finding สำคัญรอบตรวจ Task 5 ทั้งสองข้อแล้ว คงรายการติดตามเดิมและ OpenAPI 500 ที่เกิดครั้งหนึ่งแต่ยังไม่ทราบสาเหตุ ดูรายงานราย Task ใน `docs/reports/` ยังไม่เริ่ม Task 6–15
+**สถานะแผน:** Task 1–6 ผ่านแล้ว Task 6 โค้ด `cf84019` ผู้ตรวจแยกคนผ่าน Test Backend 2,859 / Frontend 155, Build, Format และ Lint ครบ แก้ whitespace เทสต์พร้อมพิสูจน์ Roslyn และตรวจเฉพาะซ้ำ 44 ผ่าน ดูรายละเอียดก่อน–หลังใน `docs/reports/2026-10-27-module-7c-task6-verification.md` คงรายการติดตามเดิมและ OpenAPI 500 พักมือถือจริง/NAS จริง ยังไม่เริ่ม Task 7–15
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -201,15 +201,19 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 ### Task 6: เริ่มจ่ายและบันทึกผลที่ตรงงวดครั้งเดียว
 
+**ขอบเขตลงมือ 27 ตุลาคม 2569:** ทำเฉพาะบริการเริ่ม/บันทึกผล ไม่เพิ่ม endpoint หรือโอนเงินภายนอก อนุญาตแก้ `FA/FieldAdvanceRegistration.cs` เพื่อลงทะเบียนบริการ และขยาย fixture ทดสอบเดิมเฉพาะที่จำเป็น รักษา receipt/locking/participation ของ executor เดิม กรณีต้องเปลี่ยน contract ของ executor หรือ evidence ให้แจ้ง controller พร้อมเหตุผลก่อนแก้
+
+**ข้อควรตรวจจาก Task 5:** `ValidateLinksAsync` ทำ file I/O จึงต้องเรียกก่อน financial transaction และตรวจ Ready/request/digest/length/จำนวนซ้ำอีกครั้งใน transaction ที่ผูกผลจ่าย ผลเตรียมไฟล์ไม่ใช่สิทธิ์ถาวร การ replay คำสั่งที่ commit แล้วต้องตรวจสิทธิ์ปัจจุบันและคืน receipt เดิมได้ โดยไม่ Consume ซ้ำหรือสั่งจ่ายใหม่ แม้ไฟล์ภายหลังไม่พร้อม; แยก replay จากคำสั่งใหม่ที่หลักฐานยังไม่ผ่านให้ชัดเจน กรณียอดหรือผู้รับไม่ตรงปฏิเสธผลปกติและคง attempt/ยอดกันไว้ ไม่สร้าง success หรือ implement workflow Task 7 ล่วงหน้า
+
 **ไฟล์:** Create `FA/Payments/PaymentExecutionService.cs`, `IT/FieldAdvancePaymentExecutionTests.cs`
 
 **Interfaces:** `StartAsync(Guid actor, Guid installmentId, PaymentCommand meta, CancellationToken ct)`; `RecordAsync(Guid actor, Guid installmentId, ActualPaymentInput input, PaymentCommand meta, CancellationToken ct)` คืน `FinanceResult<PaymentView>`
 
-- [ ] Step 1 `StartResponseLost` จำลอง commit start สำเร็จแต่ response หาย ส่ง command เดิมและใหม่: `Assert.Single(attempts); Assert.Equal(0m, account.Paid);` record3000 สำเร็จครั้งเดียว => `Assert.Equal(3000m, account.Paid); Assert.Equal(0m, account.Reserved);`
-- [ ] Step 2 filter `FieldAdvancePaymentExecutionTests` Red
-- [ ] Step 3 start ตรวจ revision/destination/สิทธิ์/hold ล่าสุด ล็อก payer person+actor ไม่จ่ายภายนอกใน service; record เฉพาะผู้จ่ายที่ล็อกมีสิทธิ์ปัจจุบัน ยอด/ผู้รับตรง วันจ่ายและหลักฐานครบ Consume ครั้งเดียว; ไม่ตรงส่งเข้า incident ผ่าน Task 7 ไม่ทำเป็น payment สำเร็จ
-- [ ] Step 4 Green สอง payer/สอง account/สอง command ชน, ลืม start, result ซ้ำ, revoked payer, evidence ไม่พร้อมหลังจ่าย, commit failure, clock เดินหลายวันไม่ปลดล็อก; อ่านผลเดิมก่อน retry
-- [ ] Step 5 ผู้ตรวจใหม่ + G + commit `feat: lock and record external advance payments`
+- [x] Step 1 `StartResponseLost` จำลอง commit start สำเร็จแต่ response หาย ส่ง command เดิมและใหม่: `Assert.Single(attempts); Assert.Equal(0m, account.Paid);` record3000 สำเร็จครั้งเดียว => `Assert.Equal(3000m, account.Paid); Assert.Equal(0m, account.Reserved);`
+- [x] Step 2 filter `FieldAdvancePaymentExecutionTests` Red
+- [x] Step 3 start ตรวจ revision/destination/สิทธิ์/hold ล่าสุด ล็อก payer person+actor ไม่จ่ายภายนอกใน service; record เฉพาะผู้จ่ายที่ล็อกมีสิทธิ์ปัจจุบัน ยอด/ผู้รับตรง วันจ่ายและหลักฐานครบ Consume ครั้งเดียว; ไม่ตรงส่งเข้า incident ผ่าน Task 7 ไม่ทำเป็น payment สำเร็จ
+- [x] Step 4 Green สอง payer/สอง account/สอง command ชน, ลืม start, result ซ้ำ, revoked payer, evidence ไม่พร้อมหลังจ่าย, commit failure, clock เดินหลายวันไม่ปลดล็อก; อ่านผลเดิมก่อน retry
+- [x] Step 5 ผู้ตรวจใหม่ + G + commit `feat: lock and record external advance payments`
 
 ### Task 7: สะสางผลไม่ชัด เหตุผิดปกติ และรับช่วง
 
