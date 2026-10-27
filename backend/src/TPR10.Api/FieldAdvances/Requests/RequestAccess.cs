@@ -78,7 +78,7 @@ public sealed class RequestAccess(Tpr10DbContext db, FinanceAccess access, Finan
                           && review.ReviewerPersonId != proposal.ProposedByPersonId
                           && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
                           && proposal.Capabilities.Contains("request.approve") && proposal.ApprovalLevels.Contains(next.LevelCode)
-                          && proposal.ApprovalLimit != null && proposal.ApprovalLimit >= revision.Total
+                          && proposal.ApprovalLimit != null && proposal.ApprovalLimit >= revision.ApprovalBasisAmount
                       select assignment.Id).AnyAsync(ct);
     }
 

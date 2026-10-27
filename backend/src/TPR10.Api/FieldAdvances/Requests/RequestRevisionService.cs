@@ -79,6 +79,9 @@ public sealed class RequestRevisionService(Tpr10DbContext db, FinanceAccess acce
                     // ปลด unique current ก่อนเพิ่มฉบับใหม่ โดยยังอยู่ใน transaction เดียวกัน
                     await db.SaveChangesAsync(ct);
                     revision = NewRevision(request, content, estimate, revision.RevisionNumber + 1, actor, person.Value);
+                    revision.ApprovalBasisAmount = estimate.Total;
+                    revision.ApprovalBasisJson = JsonSerializer.Serialize(new ApprovalBasis(estimate.Total,
+                        [new(request.Id, revision.Id, estimate.Total)]));
                     db.Add(revision);
                     foreach (var line in lines)
                     {
@@ -94,6 +97,7 @@ public sealed class RequestRevisionService(Tpr10DbContext db, FinanceAccess acce
                 else
                 {
                     request.State = "Withdrawn";
+                    await SupplementService.ReleaseAsync(db, request, ct);
                     var pending = await db.Set<AdvanceApprovalStep>().Where(x => x.RevisionId == revision.Id && x.Outcome == null).ToArrayAsync(ct);
                     foreach (var step in pending)
                     {

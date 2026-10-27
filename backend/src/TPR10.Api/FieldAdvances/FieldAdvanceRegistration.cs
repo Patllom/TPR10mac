@@ -38,6 +38,8 @@ public static class FieldAdvanceRegistration
         services.AddScoped<PaymentDispositionService>();
         services.AddScoped<RequestReadService>();
         services.AddScoped<RequestDraftService>();
+        services.AddScoped<SupplementService>();
+        services.AddScoped<ApprovalBasisCalculator>();
         services.AddScoped<RequestSubmissionService>();
         services.AddScoped<RequestReviewService>();
         services.AddScoped<RequestRevisionService>();

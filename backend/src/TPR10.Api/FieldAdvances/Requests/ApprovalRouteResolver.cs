@@ -38,7 +38,7 @@ public sealed class ApprovalRouteResolver(Tpr10DbContext db, FinancePersonResolv
         PolicySnapshot? snapshot;
         try { snapshot = JsonSerializer.Deserialize<PolicySnapshot>(revision.PolicySnapshotJson ?? "null"); }
         catch (JsonException) { return Hold("route-invalid-policy"); }
-        var levels = ApprovalLevelEvaluator.Evaluate(revision.Total, snapshot!);
+        var levels = ApprovalLevelEvaluator.Evaluate(revision.ApprovalBasisAmount, snapshot!);
         if (levels.Value is null || !levels.Value.Contains(levelCode, StringComparer.Ordinal)) return Hold("route-invalid-level");
 
         var decisions = await db.Set<AdvanceApprovalStep>().AsNoTracking()
@@ -46,7 +46,7 @@ public sealed class ApprovalRouteResolver(Tpr10DbContext db, FinancePersonResolv
             .Select(x => new { x.RevisionId, PersonId = x.DecidedByPersonId ?? Guid.Empty }).ToArrayAsync(ct);
         var history = await FamilyParticipation.ReadHistoryAsync(db, request.FamilyId, ct);
         var approved = decisions.Where(x => x.RevisionId == revisionId).Select(x => x.PersonId).ToArray();
-        return await ChooseAsync(request, levelCode, revision.Total, history, approved, ct);
+        return await ChooseAsync(request, levelCode, revision.ApprovalBasisAmount, history, approved, ct);
     }
 
     // Termination is not another approval vote. Use the spendable approved revision, even

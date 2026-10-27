@@ -76,6 +76,21 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
                     remaining.AssignmentReason = "ปิดขั้นค้างเมื่อจบรอบอนุมัติฉบับนี้";
                 }
             }
+            if (request.State is "Approved" or "Rejected")
+                await SupplementService.ReleaseAsync(db, request, ct);
+            if (request.State == "Approved")
+            {
+                var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == request.Id, ct);
+                // Only activate the first approval. Task9 amendments keep the old frozen account until Activate.
+                if (account.ApprovedRevisionId is null)
+                {
+                    account.ApprovedRevisionId = revision.Id;
+                    account.Approved = revision.Total; account.Spendable = revision.Total;
+                    account.Version = checked(account.Version + 1);
+                    var family = await db.Set<AdvanceFamily>().SingleAsync(x => x.Id == request.FamilyId, ct);
+                    family.Version = checked(family.Version + 1);
+                }
+            }
             request.Version++;
             var result = await executor.FinishAsync(actorId, person.Value, request, revision, action, step.Outcome, meta, hash,
                 JsonSerializer.Deserialize<RequestContent>(revision.ContentJson)!, await drafts.StoredEstimateAsync(revision, ct), 200,
@@ -138,7 +153,7 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
             || !(await access.CheckAsync(actor, scope, "request.approve", ct)).Allowed) return null;
         return await FinanceGrantQueries.Current(db, scope, "request.approve", clock.GetUtcNow())
             .AnyAsync(x => x.RecipientId == actor && x.RecipientPersonId == person && x.ApprovalLevels.Contains(step.LevelCode)
-                && x.ApprovalLimit != null && x.ApprovalLimit >= revision.Total, ct) ? person : null;
+                && x.ApprovalLimit != null && x.ApprovalLimit >= revision.ApprovalBasisAmount, ct) ? person : null;
     }
 
     private static void Assign(AdvanceRequest request, AdvanceApprovalStep step, RouteChoice route)
