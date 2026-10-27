@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–9 ผ่านแล้ว Task 9 โค้ด `ac1b085` ผู้ลงมือและผู้ตรวจแยกคน ผ่าน Test Backend 2,964 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task9-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 10–15 ยังไม่เริ่ม
+**สถานะแผน:** Task 1–10 ผ่านแล้ว Task 10 โค้ด `6b3501a` ผู้ลงมือและผู้ตรวจแยกคน ผ่าน Test Backend 2,986 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task10-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 11–15 ยังไม่เริ่ม
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -274,12 +274,12 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** `SupplementService.CreateAsync(Guid actor, Guid sourceRequestId, RequestContent content, RequestCommand meta, CancellationToken ct): Task<FinanceResult<RequestView>>`; `ApprovalBasisCalculator.CalculateAsync(Guid requestId, decimal requested, CancellationToken ct): Task<ApprovalBasis>`; ConfirmationQuote/HTTP เพิ่ม basis snapshot และ hash รวม FamilyVersion/basis; copy service เดิมไม่สร้าง membership
 
-- [ ] Step 1 `AggregateAuthorityIncrementOnlyPayout` root10000 paid2000, supplement3000: `Assert.Equal(13000m, quote.Basis.Amount); Assert.Equal(3000m, supplementAccount.Spendable);` ต่ออีก2000 basis15000 ไม่ใช่28000 และคนวงเงิน10000 อนุมัติ supplement3000 ไม่ได้
-- [ ] Step 2 filter `FieldAdvanceSupplementTests` Red
-- [ ] Step 3 server resolve family/project/owner, ต้องมี actual payment แล้วและ root ไม่ Rejected/Withdrawn/Closed; ยื่นแทนด้วยสิทธิ์เดิม owner ยืนยันเอง ตรึง basis/กติกาตอนยืนยัน ถ้าฐานเปลี่ยนก่อน submit ให้ยืนยันใหม่ ทุกฉบับลงอนุมัติใหม่
-- [ ] Step 4 ใช้ basis แทน Total เฉพาะประเมินระดับ/หา candidate/CanReview/Review/worker ทุก gate ไม่เปลี่ยน payout/estimate; one pending slot transaction รวม Returned/Held, ปลดเมื่อ Approved/Rejected/Withdrawn เท่านั้น; original payout ไม่ตั้ง hold เพราะ supplement อย่างเดียว
-- [ ] Step 5 Green สอง submit ชน, re-submit ใช้กติกาปัจจุบัน, delegate/owner ต่าง project denied, source copy ไม่เป็น family, approval histories เก่าไม่กลับมาใช้, role history ทั้งชุด, basis breakdown ไม่คืน source content/evidence
-- [ ] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add supplemental advances with cumulative authority`
+- [x] Step 1 `AggregateAuthorityIncrementOnlyPayout` root10000 paid2000, supplement3000: `Assert.Equal(13000m, quote.Basis.Amount); Assert.Equal(3000m, supplementAccount.Spendable);` ต่ออีก2000 basis15000 ไม่ใช่28000 และคนวงเงิน10000 อนุมัติ supplement3000 ไม่ได้
+- [x] Step 2 filter `FieldAdvanceSupplementTests` Red
+- [x] Step 3 server resolve family/project/owner, ต้องมี actual payment แล้วและ root ไม่ Rejected/Withdrawn/Closed; ยื่นแทนด้วยสิทธิ์เดิม owner ยืนยันเอง ตรึง basis/กติกาตอนยืนยัน ถ้าฐานเปลี่ยนก่อน submit ให้ยืนยันใหม่ ทุกฉบับลงอนุมัติใหม่
+- [x] Step 4 ใช้ basis แทน Total เฉพาะประเมินระดับ/หา candidate/CanReview/Review/worker ทุก gate ไม่เปลี่ยน payout/estimate; one pending slot transaction รวม Returned/Held, ปลดเมื่อ Approved/Rejected/Withdrawn เท่านั้น; original payout ไม่ตั้ง hold เพราะ supplement อย่างเดียว
+- [x] Step 5 Green สอง submit ชน, re-submit ใช้กติกาปัจจุบัน, delegate/owner ต่าง project denied, source copy ไม่เป็น family, approval histories เก่าไม่กลับมาใช้, role history ทั้งชุด, basis breakdown ไม่คืน source content/evidence
+- [x] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add supplemental advances with cumulative authority`
 
 ### Task 11: ยุติยอดยังไม่จ่ายและรักษาฐานอนุมัติเดิม
 
