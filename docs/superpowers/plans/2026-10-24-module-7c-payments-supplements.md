@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–11 ผ่านแล้ว Task 11 โค้ด 8e7e5a4 แยกผู้ลงมือและผู้ตรวจ Test Backend 3,006 / Frontend 155, Build, Format และ Lint ครบ ดู docs/reports/2026-10-27-module-7c-task11-verification.md คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 12–15 ยังไม่เริ่ม
+**สถานะแผน:** Task 1–12 ผ่านแล้ว Task 12 โค้ด `1bff164` แยกผู้ลงมือและผู้ตรวจ Test Backend 3,023 / Frontend 167, Build, Format และ Lint ครบ ดู docs/reports/2026-10-27-module-7c-task12-verification.md คง M2-R1/R2-C1, HTTPS 504, Minor log และ OpenAPI 500 พักมือถือจริง/NAS จริง Task 13–15 ยังไม่เริ่ม
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -299,12 +299,14 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** `PaymentReadService.GetAsync(Guid actor, Guid requestId, CancellationToken ct): Task<FinanceResult<PaymentView>>`, `ListAsync(Guid actor, FinanceScope scope, int skip, int take, CancellationToken ct): Task<FinanceResult<PaymentView[]>>`; queue paging take1–100 ค่าเริ่มต้น25; เพิ่ม read detail/revisions/proposals/evidence metadata DTO โดย whitelist ไม่ serialize EF entity; client `getPaymentSummary(requestId: string, signal?: AbortSignal): Promise<PaymentSummary>` และ `sendPaymentCommand(requestId: string, action: PaymentAction, payload: unknown, signal?: AbortSignal): Promise<PaymentSummary>` พร้อม runtime action/schema guard ชนิด `PaymentSummary` ใน payment-types.ts ตรง PaymentView แบบ camelCase แต่ GUID/decimal เป็น string, versions เป็น number ที่ตรวจ safe integer, installmentId/version nullable; `PaymentAction` เป็น union ของ action ใน routes ด้านล่าง ห้ามรับ arbitrary string
 
-- [ ] Step 1 `EveryRouteRechecksCurrentRights` ทดสอบ HTTP session/MFA, CSRF ตามโครงการ, cross-project/family/receipt/evidence: `Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);` สำหรับผู้ไม่มีสิทธิ์ และ response body ไม่ประกอบข้อมูลบัญชี/หลักฐาน
-- [ ] Step 2 filter `FieldAdvancePaymentHttpTests` และ `node --test tests/field-advance-payment.test.mjs` Red
-- [ ] Step 3 route ใต้ `/api/field-advances`: `requests/{id}/payments` GET, `requests/{id}/installments` GET/POST, `installments/{id}` GET (รวม destination/revisions ที่มีสิทธิ์), `installments/{id}/{update|submit|review|start|record|outcome|mismatch|cancel|metadata|takeover}` POST; proposal detail `payment-proposals/{id}` GET และ confirm `payment-proposals/{id}/confirm` POST; `requests/{id}/{ceiling-amendment|ceiling-activate|disposition|supplements}` POST; disposition finalize `payment-proposals/{id}/finalize` POST; `requests/{id}/payment-evidence` POST และ `payment-evidence/{id}` GET ใช้ dispatcher แบบ enum คงที่ไม่ reflection
-- [ ] Step 4 read queue `/payments` GET ตาม scope และ action จริง, command lookup `/payment-commands/{commandId}` GET ตรวจ actor+current access; DTO decimal string, errors code stable+ข้อความไทย, evidence Cache-Control private/no-store, attachment/nosniff, no public paths; source link ตรวจปลายทางแยก basis breakdown เลขคำขอ/ยอดเท่านั้น
-- [ ] Step 5 Green strict unknown fields, replayหลัง revoke, staleversion409, emptyreason400, file streaming limits, permissionเปลี่ยนตอนอ่าน/download, client abort/oldresponse ไม่ทับ actorใหม่; OpenAPI ทุก command มี contracts/error responses
-- [ ] Step 6 ผู้ตรวจใหม่ + G + commit `feat: expose scoped advance payment APIs`
+- [x] Step 1 `EveryRouteRechecksCurrentRights` ทดสอบ HTTP session/MFA, CSRF ตามโครงการ, cross-project/family/receipt/evidence: `Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);` สำหรับผู้ไม่มีสิทธิ์ และ response body ไม่ประกอบข้อมูลบัญชี/หลักฐาน
+- [x] Step 2 filter `FieldAdvancePaymentHttpTests` และ `node --test tests/field-advance-payment.test.mjs` Red
+- [x] Step 3 route ใต้ `/api/field-advances`: `requests/{id}/payments` GET, `requests/{id}/installments` GET/POST, `installments/{id}` GET (รวม destination/revisions ที่มีสิทธิ์), `installments/{id}/{update|submit|review|start|record|outcome|mismatch|cancel|metadata|takeover}` POST; proposal detail `payment-proposals/{id}` GET และ confirm `payment-proposals/{id}/confirm` POST; `requests/{id}/{ceiling-amendment|ceiling-activate|disposition|supplements}` POST; disposition finalize `payment-proposals/{id}/finalize` POST; `requests/{id}/payment-evidence` POST และ `payment-evidence/{id}` GET ใช้ dispatcher แบบ enum คงที่ไม่ reflection
+- [x] Step 4 read queue `/payments` GET ตาม scope และ action จริง, command lookup `/payment-commands/{commandId}` GET ตรวจ actor+current access; DTO decimal string, errors code stable+ข้อความไทย, evidence Cache-Control private/no-store, attachment/nosniff, no public paths; source link ตรวจปลายทางแยก basis breakdown เลขคำขอ/ยอดเท่านั้น
+- [x] Step 5 Green strict unknown fields, replayหลัง revoke, staleversion409, emptyreason400, file streaming limits, permissionเปลี่ยนตอนอ่าน/download, client abort/oldresponse ไม่ทับ actorใหม่; OpenAPI ทุก command มี contracts/error responses
+- [x] Step 6 ผู้ตรวจใหม่ + G + commit `feat: expose scoped advance payment APIs`
+
+ผล Task 12: โค้ด `1bff164` API/client ตามสิทธิ์ผ่าน review หลังแก้การตรวจสิทธิ์ให้ตรงกับข้อมูลที่เตรียมส่ง และเพิ่มรายการ API ใหม่ในเทสต์เดิม HTTP 17 / regression 62 / OpenAPI+HTTP 81 ผ่าน ชุดเต็ม Backend 3,023 / Frontend 167 ผ่าน Build/Format/Lint ครบ เพิ่ม Program.cs เฉพาะ private/no-store header และ FieldAdvanceOpenApiTests.cs เพื่อรักษาการตรวจรายการ API แบบ strict เป็นขอบเขตจำเป็นที่บันทึกอนุมัติแล้ว รวม 16 ไฟล์โค้ด/เทสต์ ไม่มี UI Task 13
 
 ### Task 13: หน้าจอฝ่ายการเงินและคำเตือนห้ามจ่ายซ้ำ
 
