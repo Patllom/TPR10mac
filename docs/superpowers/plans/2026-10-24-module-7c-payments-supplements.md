@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–8 ผ่านแล้ว Task 8 โค้ด `ed0648f` ผู้ลงมือและผู้ตรวจแยกคน ผ่าน Test Backend 2,935 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task8-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 9–15 ยังไม่เริ่ม
+**สถานะแผน:** Task 1–9 ผ่านแล้ว Task 9 โค้ด `ac1b085` ผู้ลงมือและผู้ตรวจแยกคน ผ่าน Test Backend 2,964 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task9-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 10–15 ยังไม่เริ่ม
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -259,12 +259,14 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** `BeginAsync(Guid actor, Guid requestId, RequestContent content, PaymentCommand meta, CancellationToken ct)` และ `ActivateAsync(Guid actor, Guid requestId, PaymentCommand meta, CancellationToken ct)` คืน `FinanceResult<PaymentView>`; Disposition `ProposeAsync(Guid actor, Guid requestId, string outcome, PaymentCommand meta, CancellationToken ct)` (`ResumeOriginal`/`TerminateRemaining`), `ConfirmAsync(Guid actor, Guid proposalId, PaymentCommand meta, CancellationToken ct)`
 
-- [ ] Step 1 `ActivationNeedsApprovalAndOldReservationsCleared` สลับลำดับอนุมัติ/ยกเลิกทั้งสองทาง: `Assert.Equal(10000m, beforeReady.Spendable); Assert.Equal(13000m, ready.Spendable);` ก่อน ready ห้าม start; `EverPaidBlocksOriginalAmendment` แม้อนาคตเงินคืนครบ
-- [ ] Step 2 filter `FieldAdvanceCeilingAmendmentTests` Red
-- [ ] Step 3 Begin ตั้ง hold แต่ไม่คืน reservation เอง Reuse owner confirmation/new policy snapshot/full approval; approval ใหม่ยังไม่เปลี่ยน account จนงวดเดิมยกเลิกยืนยันครบ reserved0 และไม่มี actualpaid/unknown สร้างงวดใหม่ไม่เปิดของยกเลิกกลับ
-- [ ] Step 4 ปฏิเสธ/ถอนฉบับแก้ไขคง account ฉบับอนุมัติเดิมและ hold; finance checker เสนอ Resume/Terminate ผู้ดำรง final-role เดิมปัจจุบันที่วงเงินครอบคลุม basis และ SoD ยืนยันต่างคน Resume ล้างเฉพาะ amendment hold ไม่ล้าง mismatch/เหตุอื่น; ใน Task นี้ทำ Terminate สำหรับกรณียังไม่เคยจ่ายให้ครบ: รอ cancel เดิมยืนยันและ reserved0 จึงทำ spendable0 โดยเก็บ approved เดิม Task 11 จึงขยายกรณีจ่ายบางส่วน ไม่เรียก implementation ที่ยังไม่มี
-- [ ] Step 5 Green รวม started-unknown ต้องรอ independent Unpaid, activation vs start/cancel ชน, ไม่มี eligible final holder ให้ held, policy เปลี่ยนก่อนส่งให้ยืนยันใหม่, stale revision ห้ามเริ่มจ่าย
-- [ ] Step 6 ผู้ตรวจใหม่ + G + commit `feat: amend advance ceilings only before payment`
+- [x] Step 1 `ActivationNeedsApprovalAndOldReservationsCleared` สลับลำดับอนุมัติ/ยกเลิกทั้งสองทาง: `Assert.Equal(10000m, beforeReady.Spendable); Assert.Equal(13000m, ready.Spendable);` ก่อน ready ห้าม start; `EverPaidBlocksOriginalAmendment` แม้อนาคตเงินคืนครบ
+- [x] Step 2 filter `FieldAdvanceCeilingAmendmentTests` Red
+- [x] Step 3 Begin ตั้ง hold แต่ไม่คืน reservation เอง Reuse owner confirmation/new policy snapshot/full approval; approval ใหม่ยังไม่เปลี่ยน account จนงวดเดิมยกเลิกยืนยันครบ reserved0 และไม่มี actualpaid/unknown สร้างงวดใหม่ไม่เปิดของยกเลิกกลับ
+- [x] Step 4 ปฏิเสธ/ถอนฉบับแก้ไขคง account ฉบับอนุมัติเดิมและ hold; finance checker เสนอ Resume/Terminate ผู้ดำรง final-role เดิมปัจจุบันที่วงเงินครอบคลุม basis และ SoD ยืนยันต่างคน Resume ล้างเฉพาะ amendment hold ไม่ล้าง mismatch/เหตุอื่น; ใน Task นี้ทำ Terminate สำหรับกรณียังไม่เคยจ่ายให้ครบ: รอ cancel เดิมยืนยันและ reserved0 จึงทำ spendable0 โดยเก็บ approved เดิม Task 11 จึงขยายกรณีจ่ายบางส่วน ไม่เรียก implementation ที่ยังไม่มี
+- [x] Step 5 Green รวม started-unknown ต้องรอ independent Unpaid, activation vs start/cancel ชน, ไม่มี eligible final holder ให้ held, policy เปลี่ยนก่อนส่งให้ยืนยันใหม่, stale revision ห้ามเริ่มจ่าย
+- [x] Step 6 ผู้ตรวจใหม่ + G + commit `feat: amend advance ceilings only before payment`
+
+**ผลตรวจรับ:** โค้ด `ac1b085` ผู้ลงมือ Sagan ผู้ตรวจ Arendt ผ่านตามแบบและคุณภาพ ไม่มีข้อพบเพิ่ม focused29/regression310/full Backend2,964 และ Frontend155 ผ่าน พร้อม Build/Format/Lint ตรวจ hash ตรงทั้ง10ไฟล์ รันชุดเต็มหลัง review ไม่มี API/UI ใหม่ใน Task นี้
 
 ### Task 10: ส่วนเพิ่มและการตรวจอำนาจจากยอดสะสมทุกจุด
 
