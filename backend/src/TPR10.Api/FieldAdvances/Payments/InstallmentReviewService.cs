@@ -28,7 +28,11 @@ public sealed class InstallmentReviewService(Tpr10DbContext db, PaymentCommandEx
                 var submitted = await db.Set<AdvancePaymentEvent>().AsNoTracking().SingleOrDefaultAsync(x =>
                     x.RequestId == requestId && x.InstallmentId == installmentId
                     && x.InstallmentVersion == meta.InstallmentVersion && x.Kind == "prepare", token);
-                if (submitted is null || submitted.ActorPersonId == person) return Conflict();
+                var recovery = submitted is null
+                    ? await PaymentOutcomeService.UnpaidProvenanceAsync(db, current, meta.InstallmentVersion, token) : null;
+                var proposedBy = submitted?.ActorId ?? recovery?.ProposedBy;
+                var proposedPerson = submitted?.ActorPersonId ?? recovery?.ProposedByPersonId;
+                if (proposedBy is null || proposedPerson is null || proposedPerson == person) return Conflict();
                 var at = clock.GetUtcNow();
                 // Retain every decision, including repeated Returns on the same unchanged revision.
                 // Snapshot references immutable content; account details stay in the protected revision table.
@@ -49,8 +53,8 @@ public sealed class InstallmentReviewService(Tpr10DbContext db, PaymentCommandEx
                     ContentHash = current.ContentHash,
                     BeforeJson = JsonSerializer.Serialize(new { RevisionId = current.Id, current.RevisionNumber, current.ContentHash }),
                     AfterJson = JsonSerializer.Serialize(new { RevisionId = current.Id, current.ContentHash, Outcome = outcome }),
-                    ProposedBy = submitted.ActorId,
-                    ProposedByPersonId = submitted.ActorPersonId,
+                    ProposedBy = proposedBy.Value,
+                    ProposedByPersonId = proposedPerson.Value,
                     ReviewedBy = actor,
                     ReviewedByPersonId = person.Value,
                     ReviewedAtUtc = at,

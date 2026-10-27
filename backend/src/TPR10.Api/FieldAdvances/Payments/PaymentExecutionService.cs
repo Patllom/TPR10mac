@@ -72,6 +72,7 @@ public sealed class PaymentExecutionService(Tpr10DbContext db, PaymentCommandExe
                 if (installment.State != "Paying") return Conflict();
                 var attempt = await db.Set<AdvancePaymentAttempt>().SingleOrDefaultAsync(x => x.InstallmentId == installmentId && x.State == "Open", token);
                 if (attempt is null) return Conflict();
+                if ((await PaymentRecovery.OwnerAsync(db, attempt, token)).TakeoverId is not null) return Conflict();
                 var person = await people.ResolveAsync(actor, installment.WorkspaceId, token);
                 if (person is null || attempt.PayerId != actor || attempt.PayerPersonId != person) return Denied();
                 var request = await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == requestId, token);

@@ -138,6 +138,8 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
             await db.SaveChangesAsync(ct);
             var final = await access.CheckAsync(actor, requestId, action, ct);
             if (!final.Allowed || final.PersonId != decision.PersonId) return Denied();
+            // Scheduled expiry can cross the body/persistence interval even while identity locks are held.
+            if (scope.FinalAuthorization is { } validate && !await validate(ct)) return Denied();
             await tx.CommitAsync(ct);
             return result;
         }
@@ -155,6 +157,17 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
             throw new InvalidOperationException("บัญชีกันวงเงินต้องทำภายในคำสั่งและงวดที่ได้รับอนุญาต");
     }
 
+    // Server-only authorization check for an additional participant; no file I/O or grants.
+    // Registration is bound to this command's active body, and replay never executes the body.
+    internal static void RegisterFinalAuthorization(Tpr10DbContext db, Guid request, Guid installment, Guid command,
+        Func<CancellationToken, Task<bool>> validate)
+    {
+        RequireScope(db, request, installment, command);
+        if (!Active.TryGetValue(db, out var scope) || scope.FinalAuthorization is not null)
+            throw new InvalidOperationException("ลงทะเบียนตรวจสิทธิ์สุดท้ายได้ครั้งเดียวต่อคำสั่ง");
+        scope.FinalAuthorization = validate;
+    }
+
     internal static void FailScope(Tpr10DbContext db)
     {
         if (Active.TryGetValue(db, out var scope)) scope.Failed = true;
@@ -163,6 +176,7 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
     private sealed record CommandScope(Guid Transaction, Guid Request, Guid? Installment, Guid Command)
     {
         internal bool Failed { get; set; }
+        internal Func<CancellationToken, Task<bool>>? FinalAuthorization { get; set; }
     }
     private static FinanceResult<PaymentView> Denied() => new(403, "finance-access-denied", null);
     private static FinanceResult<PaymentView> Conflict() => new(409, "payment-conflict", null);

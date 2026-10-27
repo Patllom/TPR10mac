@@ -74,12 +74,18 @@ public sealed class FinanceEvidenceService(Tpr10DbContext db, PaymentAccess acce
 
     // I/O preparation is outside financial transactions. Later command writers must recheck the
     // selected Ready rows and their request/limits within their own locked transaction before linking.
-    public async Task<bool> ValidateLinksAsync(Guid actor, Guid requestId, Guid[] evidenceIds, CancellationToken ct)
+    public Task<bool> ValidateLinksAsync(Guid actor, Guid requestId, Guid[] evidenceIds, CancellationToken ct)
+        => ValidateLinksCoreAsync(actor, requestId, evidenceIds, false, ct);
+
+    public Task<bool> ValidateCheckerLinksAsync(Guid actor, Guid requestId, Guid[] evidenceIds, CancellationToken ct)
+        => ValidateLinksCoreAsync(actor, requestId, evidenceIds, true, ct);
+
+    private async Task<bool> ValidateLinksCoreAsync(Guid actor, Guid requestId, Guid[] evidenceIds, bool checker, CancellationToken ct)
     {
         RequireNoTransaction();
         if (evidenceIds is null || evidenceIds.Length is 0 || evidenceIds.Length > options.MaxFiles
             || evidenceIds.Any(x => x == Guid.Empty) || evidenceIds.Distinct().Count() != evidenceIds.Length) return false;
-        if (!await Authorized(actor, requestId, "record", ct)) return false;
+        if (!await Authorized(actor, requestId, checker ? "reconcile" : "record", ct)) return false;
         var rows = await db.Set<AdvanceEvidence>().AsNoTracking().Where(x => evidenceIds.Contains(x.Id)).ToArrayAsync(ct);
         if (rows.Length != evidenceIds.Length || rows.Any(x => x.RequestId != requestId || x.State != "Ready")
             || rows.Sum(x => x.Length) > options.MaxTotalBytes) return false;
@@ -91,7 +97,7 @@ public sealed class FinanceEvidenceService(Tpr10DbContext db, PaymentAccess acce
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         try
         {
-            if (!(await access.CheckAsync(actor, requestId, "record", ct)).Allowed) return false;
+            if (!(await access.CheckAsync(actor, requestId, checker ? "reconcile" : "record", ct)).Allowed) return false;
             var current = await db.Set<AdvanceEvidence>().AsNoTracking().Where(x => evidenceIds.Contains(x.Id)).ToArrayAsync(ct);
             return current.Length == rows.Length && current.All(x => x.RequestId == requestId && x.State == "Ready"
                 && rows.Any(before => before.Id == x.Id && before.Sha256 == x.Sha256 && before.Length == x.Length))
