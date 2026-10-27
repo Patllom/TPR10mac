@@ -1,3 +1,4 @@
+using TPR10.Api.FieldAdvances.Payments;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Auditing;
@@ -71,6 +72,7 @@ public sealed class RequestRevisionService(Tpr10DbContext db, FinanceAccess acce
             {
                 if (operation == "revise")
                 {
+                    if (!await CeilingAmendmentService.CanProgressAsync(db, request.Id, ct)) return Conflict();
                     if (revision.SubmittedAtUtc is null || revision.RevisionNumber == int.MaxValue) return Conflict();
                     var lines = await db.Set<AdvanceRequestLine>().AsNoTracking().Where(x => x.RevisionId == revision.Id).ToArrayAsync(ct);
                     revision.IsCurrent = false;

@@ -1,3 +1,4 @@
+using TPR10.Api.FieldAdvances.Payments;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Auditing;
@@ -75,6 +76,7 @@ public sealed class RequestSubmissionService(Tpr10DbContext db, FinanceAccess ac
             if (request.Version != meta.ExpectedVersion || request.Version == long.MaxValue) return Conflict();
             var revision = await CurrentAsync(requestId, ct);
             if (revision is null || revision.SubmittedAtUtc is not null) return Conflict();
+            if (!await CeilingAmendmentService.CanProgressAsync(db, request.Id, ct)) return Conflict();
             var calculated = await QuoteLockedAsync(request, revision, ct);
             // A previously displayed quote is no longer confirmable, including when the
             // current policy disables a category or cannot cover the total. Quote reports

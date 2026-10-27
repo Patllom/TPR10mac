@@ -34,6 +34,7 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
                 "prepare" or "start" or "record" or "takeover" => "Payer",
                 "check" or "reconcile" or "terminate-propose" => "Checker",
                 "terminate-confirm" => "Approver",
+                "ceiling-amend" => "Author",
                 _ => null
             };
             if (role is null) return Denied();
@@ -64,7 +65,7 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
                 || installment?.Version != meta.InstallmentVersion) return Conflict();
 
             // RecordAsync saves participation and increments FamilyVersion, inside this same transaction.
-            await participation.RecordAsync(family.Id, requestId, decision.PersonId.Value, role, ct);
+            if (role != "Author") await participation.RecordAsync(family.Id, requestId, decision.PersonId.Value, role, ct);
             receipt = new FinanceCommandReceipt
             {
                 CommandId = meta.CommandId,
@@ -150,7 +151,7 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
 
     public static string Hash<T>(T input) => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input)));
 
-    internal static void RequireScope(Tpr10DbContext db, Guid request, Guid installment, Guid command)
+    internal static void RequireScope(Tpr10DbContext db, Guid request, Guid? installment, Guid command)
     {
         if (!Active.TryGetValue(db, out var scope) || db.Database.CurrentTransaction?.TransactionId != scope.Transaction
             || scope.Request != request || scope.Command != command || scope.Installment != installment)
@@ -159,7 +160,7 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
 
     // Server-only authorization check for an additional participant; no file I/O or grants.
     // Registration is bound to this command's active body, and replay never executes the body.
-    internal static void RegisterFinalAuthorization(Tpr10DbContext db, Guid request, Guid installment, Guid command,
+    internal static void RegisterFinalAuthorization(Tpr10DbContext db, Guid request, Guid? installment, Guid command,
         Func<CancellationToken, Task<bool>> validate)
     {
         RequireScope(db, request, installment, command);

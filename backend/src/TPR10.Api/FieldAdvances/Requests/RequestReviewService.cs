@@ -34,6 +34,7 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
             if (request.Version != meta.ExpectedVersion || request.Version == long.MaxValue) return Conflict();
             if (!revision.IsCurrent || revision.SubmittedAtUtc is null || !(await requestAccess.CheckAsync(actorId, requestId, "review", ct)).Allowed)
                 return Denied();
+            if (!await CeilingAmendmentService.CanProgressAsync(db, request.Id, ct)) return Conflict();
             var pending = await db.Set<AdvanceApprovalStep>().Where(x => x.RevisionId == revision.Id && x.Outcome == null)
                 .OrderBy(x => x.StepOrder).ToArrayAsync(ct);
             if (pending.Length == 0 || pending[0].Id != step.Id) return Conflict();

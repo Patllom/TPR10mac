@@ -34,6 +34,8 @@ public static class FieldAdvanceRegistration
         services.AddScoped<PaymentTakeoverService>();
         services.AddScoped<PaymentCancellationService>();
         services.AddScoped<PaymentMetadataService>();
+        services.AddScoped<CeilingAmendmentService>();
+        services.AddScoped<PaymentDispositionService>();
         services.AddScoped<RequestReadService>();
         services.AddScoped<RequestDraftService>();
         services.AddScoped<RequestSubmissionService>();

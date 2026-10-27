@@ -91,7 +91,7 @@ public sealed class InstallmentService(Tpr10DbContext db, PaymentCommandExecutor
             || account.Approved <= 0 || account.Spendable <= 0) return false;
         var approved = await db.Set<AdvanceRequestRevision>().SingleOrDefaultAsync(x => x.Id == account.ApprovedRevisionId
             && x.RequestId == requestId, ct);
-        if (approved is null || approved.Total != account.Approved || approved.SubmittedAtUtc is null || approved.ConfirmedByPersonId != request.OwnerPersonId
+        if (approved is null || !approved.IsCurrent || approved.Total != account.Approved || approved.SubmittedAtUtc is null || approved.ConfirmedByPersonId != request.OwnerPersonId
             || !await db.Set<AdvanceApprovalStep>().AnyAsync(x => x.RevisionId == approved.Id, ct)
             || await db.Set<AdvanceApprovalStep>().AnyAsync(x => x.RevisionId == approved.Id && x.Outcome != "Approved", ct)) return false;
         return !await db.Set<AdvancePaymentHold>().AnyAsync(x => x.FamilyId == request.FamilyId && x.ReleasedAtUtc == null

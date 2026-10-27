@@ -19,6 +19,7 @@ public sealed class PaymentAccess(Tpr10DbContext db, FinanceAccess access, Finan
             "check" or "reconcile" or "terminate-propose" => "finance.check",
             "read" or "evidence-read" => "read",
             "terminate-confirm" => "request.approve",
+            "ceiling-amend" => "amend",
             _ => null
         };
         if (capability is null) return Denied();
@@ -26,6 +27,18 @@ public sealed class PaymentAccess(Tpr10DbContext db, FinanceAccess access, Finan
         if (request is null) return Denied();
         var person = await people.ResolveAsync(actor, request.WorkspaceId, ct);
         if (person is null) return Denied();
+        if (capability == "amend")
+        {
+            // Owner/delegate identity is already part of family history; never record a finance role for authors.
+            var author = request.DelegatePersonId ?? request.OwnerPersonId;
+            var needed = request.DelegatePersonId is null ? "request.create" : "request.delegate";
+            if (person != author || !(await access.CheckAsync(actor, new(request.WorkspaceId, request.ProjectId), needed, ct)).Allowed) return Denied();
+            var owners = await FinanceGrantQueries.Current(db, new(request.WorkspaceId, request.ProjectId), "request.create", clock.GetUtcNow())
+                .Where(x => x.RecipientPersonId == request.OwnerPersonId).Select(x => x.RecipientId).Distinct().ToArrayAsync(ct);
+            foreach (var owner in owners)
+                if (await people.ResolveAsync(owner, request.WorkspaceId, ct) == request.OwnerPersonId) return new(true, person);
+            return Denied();
+        }
         if (capability == "read") return (await requests.CheckAsync(actor, requestId, "read", ct)).Allowed
             ? new(true, person) : Denied();
         if (!(await access.CheckAsync(actor, new(request.WorkspaceId, request.ProjectId), capability, ct)).Allowed) return Denied();
