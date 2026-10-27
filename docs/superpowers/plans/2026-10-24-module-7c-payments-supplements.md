@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–10 ผ่านแล้ว Task 10 โค้ด `6b3501a` ผู้ลงมือและผู้ตรวจแยกคน ผ่าน Test Backend 2,986 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task10-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 11–15 ยังไม่เริ่ม
+**สถานะแผน:** Task 1–11 ผ่านแล้ว Task 11 โค้ด 8e7e5a4 แยกผู้ลงมือและผู้ตรวจ Test Backend 3,006 / Frontend 155, Build, Format และ Lint ครบ ดู docs/reports/2026-10-27-module-7c-task11-verification.md คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 12–15 ยังไม่เริ่ม
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -287,11 +287,11 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** ใช้ `ProposeAsync`/`ConfirmAsync` ของ Task 9; เพิ่ม `FinalizeAsync(Guid actor, Guid proposalId, PaymentCommand meta, CancellationToken ct): Task<FinanceResult<PaymentView>>` ตรวจรุ่นล่าสุดและสิทธิ์ผู้ยืนยันอีกครั้ง ไม่เพิ่ม service ปิดคำขอ 7D
 
-- [ ] Step 1 `TerminationPreservesApprovalBasis` root10000 paid2000 ยุติส่วนเหลือ => `Assert.Equal(10000m, account.Approved); Assert.Equal(2000m, account.Spendable); Assert.Equal(0m, view.Available);` ขอเพิ่ม3000 basis13000 ไม่ใช่5000
-- [ ] Step 2 filter `FieldAdvancePaymentTerminationTests` Red
-- [ ] Step 3 ผู้ตรวจการเงินเสนอและ current final-role ยืนยันต่างคน ครอบคลุม stored basis ไม่ใช่แค่ยอดคงเหลือ proposal หยุด start คำขอนั้น ไม่ระงับทั้งชุดโดยไร้เหตุ; finalize รอ unknowns สะสางและ cancel unpaid ยืนยันครบ reserved0 ไม่ลดยอด paid ไม่ล้าง hold อื่น
-- [ ] Step 4 Green finalize แข่ง record, เปลี่ยน holder/หมดสิทธิ์ให้ held, cancelled items ไม่กลับมา, request ยังไม่ Closed, ประวัติ approvals ไม่เปลี่ยน, supplement ใช้ฐานเดิมหลัง termination
-- [ ] Step 5 ผู้ตรวจใหม่ + G + commit `feat: terminate only unpaid advance balances`
+- [x] Step 1 `TerminationPreservesApprovalBasis` root10000 paid2000 ยุติส่วนเหลือ => `Assert.Equal(10000m, account.Approved); Assert.Equal(2000m, account.Spendable); Assert.Equal(0m, view.Available);` ขอเพิ่ม3000 basis13000 ไม่ใช่5000
+- [x] Step 2 filter `FieldAdvancePaymentTerminationTests` Red
+- [x] Step 3 ผู้ตรวจการเงินเสนอและ current final-role ยืนยันต่างคน ครอบคลุม stored basis ไม่ใช่แค่ยอดคงเหลือ proposal หยุด start คำขอนั้น ไม่ระงับทั้งชุดโดยไร้เหตุ; finalize รอ unknowns สะสางและ cancel unpaid ยืนยันครบ reserved0 ไม่ลดยอด paid ไม่ล้าง hold อื่น
+- [x] Step 4 Green finalize แข่ง record, เปลี่ยน holder/หมดสิทธิ์ให้ held, cancelled items ไม่กลับมา, request ยังไม่ Closed, ประวัติ approvals ไม่เปลี่ยน, supplement ใช้ฐานเดิมหลัง termination
+- [x] Step 5 ผู้ตรวจใหม่ + G + commit `feat: terminate only unpaid advance balances`
 
 ### Task 12: API อ่านและ client ตามขอบเขตจริง
 
