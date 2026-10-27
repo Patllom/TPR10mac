@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–7 ผ่านแล้ว Task 7 โค้ด `44150d9` ผู้ลงมือและผู้ตรวจแยกคน ผ่านรอบแก้สิทธิ์หมดอายุ Test Backend 2,906 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task7-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 8–15 ยังไม่เริ่ม
+**สถานะแผน:** Task 1–8 ผ่านแล้ว Task 8 โค้ด `ed0648f` ผู้ลงมือและผู้ตรวจแยกคน ผ่าน Test Backend 2,935 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task8-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 9–15 ยังไม่เริ่ม
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -238,15 +238,20 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 ### Task 8: ยกเลิกงวดและแก้เฉพาะข้อมูลประกอบหลังจ่าย
 
+**การเชื่อมเหตุผิดปกติ:** metadata ไม่มีช่องยอด/ผู้รับและไม่อ่านความหมายใบเสร็จอัตโนมัติ เมื่อพบยอดหรือผู้รับผิด ให้ใช้ `ReportMismatchAsync` เดิมบันทึกเหตุก่อน แล้วโหลดรุ่นล่าสุดจึงแก้ metadata ต่อ โดยต้องคง hold ทั้งชุดและผลจ่ายเดิม เทสต์ต้องครอบคลุมลำดับนี้และแท็บเก่าที่ใช้รุ่นก่อนเกิดเหตุ งาน API/UI ใน Task 12/13 ต้องแสดงทางรายงานเหตุนี้ ไม่ใช้ metadata กลบเหตุผิดปกติ
+
+
 **ไฟล์:** Create `FA/Payments/PaymentCancellationService.cs`, `FA/Payments/PaymentMetadataService.cs`, `IT/FieldAdvancePaymentAmendmentTests.cs`
 
 **Interfaces:** Cancellation `ProposeAsync(Guid actor, Guid installmentId, PaymentCommand meta, CancellationToken ct)`, `ConfirmAsync(Guid actor, Guid proposalId, PaymentCommand meta, CancellationToken ct)`; Metadata `ProposeAsync(Guid actor, Guid installmentId, PaymentMetadataInput input, PaymentCommand meta, CancellationToken ct)`, `ConfirmAsync(...)` คืน `FinanceResult<PaymentView>`
 
-- [ ] Step 1 `CancelReleasesOnlyAfterConfirmation`: proposal ยัง reserved3000, confirm เป็น0; `MetadataNeverChangesMoney` => `Assert.Equal(before.Paid, after.Paid); Assert.Equal("Paid", after.State);` ทั้งหลักฐานก่อน/หลังยังอ่านได้ตามสิทธิ์
-- [ ] Step 2 filter `FieldAdvancePaymentAmendmentTests` Red
-- [ ] Step 3 CancelPending บล็อก start; Paying/Unknown ต้องสะสางยืนยัน Unpaid ก่อนยกเลิก; Paid ห้ามยกเลิก ร่างที่ยังไม่ส่งให้ยุติแบบเก็บประวัติ ไม่ลบ referenced rows; metadata จำกัดวันที่/reference/evidence ห้ามยอด/ผู้รับ/ช่องทาง/บัญชี
-- [ ] Step 4 Green cancel vs start/record แข่งได้ผลเดียว, ส่งคืน reserved ครั้งเดียว, same checker denied, metadata หลักฐานพบผิดตั้ง family hold ไม่ใช่ช่องทางล้างเหตุ
-- [ ] Step 5 ผู้ตรวจใหม่ + G + commit `feat: cancel unpaid installments and retain payment corrections`
+- [x] Step 1 `CancelReleasesOnlyAfterConfirmation`: proposal ยัง reserved3000, confirm เป็น0; `MetadataNeverChangesMoney` => `Assert.Equal(before.Paid, after.Paid); Assert.Equal("Paid", after.State);` ทั้งหลักฐานก่อน/หลังยังอ่านได้ตามสิทธิ์
+- [x] Step 2 filter `FieldAdvancePaymentAmendmentTests` Red
+- [x] Step 3 CancelPending บล็อก start; Paying/Unknown ต้องสะสางยืนยัน Unpaid ก่อนยกเลิก; Paid ห้ามยกเลิก ร่างที่ยังไม่ส่งให้ยุติแบบเก็บประวัติ ไม่ลบ referenced rows; metadata จำกัดวันที่/reference/evidence ห้ามยอด/ผู้รับ/ช่องทาง/บัญชี
+- [x] Step 4 Green cancel vs start/record แข่งได้ผลเดียว, ส่งคืน reserved ครั้งเดียว, same checker denied, metadata หลักฐานพบผิดตั้ง family hold ไม่ใช่ช่องทางล้างเหตุ
+- [x] Step 5 ผู้ตรวจใหม่ + G + commit `feat: cancel unpaid installments and retain payment corrections`
+
+**ผลตรวจรับ:** โค้ด `ed0648f` ผู้ลงมือ Euler ผู้ตรวจ Helmholtz ผ่าน ไม่มี Critical/Important; Minor หัว snapshot แก้แล้ว focused29/regression253/full Backend2,935 และ Frontend155 ผ่าน ตรวจ hash ตรงทั้ง4ไฟล์ ยังไม่มี endpoint/UI ใน Task นี้
 
 ### Task 9: ปรับวงเงินเดิมเฉพาะก่อนจ่ายจริง
 
