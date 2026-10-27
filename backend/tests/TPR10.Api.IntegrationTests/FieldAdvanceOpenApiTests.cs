@@ -48,7 +48,32 @@ public sealed class FieldAdvanceOpenApiTests
         "post /api/v1/field-advances/requests/{id}/review",
         "post /api/v1/field-advances/requests/{id}/revise",
         "post /api/v1/field-advances/requests/{id}/withdraw",
-        "post /api/v1/field-advances/requests/{id}/copy"
+        "post /api/v1/field-advances/requests/{id}/copy",
+        "get /api/v1/field-advances/requests/{id}/payments",
+        "get /api/v1/field-advances/payments",
+        "get /api/v1/field-advances/requests/{id}/installments",
+        "get /api/v1/field-advances/installments/{id}",
+        "get /api/v1/field-advances/payment-proposals/{id}",
+        "get /api/v1/field-advances/payment-commands/{commandId}",
+        "post /api/v1/field-advances/requests/{id}/installments",
+        "post /api/v1/field-advances/installments/{id}/update",
+        "post /api/v1/field-advances/installments/{id}/submit",
+        "post /api/v1/field-advances/installments/{id}/review",
+        "post /api/v1/field-advances/installments/{id}/start",
+        "post /api/v1/field-advances/installments/{id}/record",
+        "post /api/v1/field-advances/installments/{id}/outcome",
+        "post /api/v1/field-advances/installments/{id}/mismatch",
+        "post /api/v1/field-advances/installments/{id}/cancel",
+        "post /api/v1/field-advances/installments/{id}/metadata",
+        "post /api/v1/field-advances/installments/{id}/takeover",
+        "post /api/v1/field-advances/payment-proposals/{id}/confirm",
+        "post /api/v1/field-advances/requests/{id}/ceiling-amendment",
+        "post /api/v1/field-advances/requests/{id}/ceiling-activate",
+        "post /api/v1/field-advances/requests/{id}/disposition",
+        "post /api/v1/field-advances/payment-proposals/{id}/finalize",
+        "post /api/v1/field-advances/requests/{id}/payment-evidence",
+        "get /api/v1/field-advances/payment-evidence/{id}",
+        "post /api/v1/field-advances/requests/{id}/supplements"
     ];
 
     [Fact]

@@ -23,6 +23,7 @@ public static class FieldAdvanceRegistration
         services.AddScoped<FinanceAccess>();
         services.AddScoped<RequestAccess>();
         services.AddScoped<PaymentAccess>();
+        services.AddScoped<PaymentReadService>();
         services.AddScoped<FamilyParticipation>();
         services.AddScoped<PaymentCommandExecutor>();
         services.AddScoped<ReservationLedger>();
@@ -103,6 +104,9 @@ public static class FieldAdvanceRegistration
         group.MapPost("/requests/{id}/revise", RequestEndpoints.Revise).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
         group.MapPost("/requests/{id}/withdraw", RequestEndpoints.Withdraw).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
         group.MapPost("/requests/{id}/copy", RequestEndpoints.Copy).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>(201);
+        group.MapPayments();
+        group.MapFinanceEvidence();
+        PaymentEndpoints.Contract(group.MapPost("/requests/{id}/supplements", RequestEndpoints.Supplement)).Accepts<SupplementHttp>("application/json").Produces<RequestHttpView>(201);
         return endpoints;
     }
 }

@@ -1,6 +1,6 @@
 import { currentAccount } from './policy-client';
 import type { PolicySnapshot } from './policy-types';
-import type { RequestScreen, RequestRevisionSummary, RequestRevisionDetail } from './request-types';
+import type { ApprovalBasis, RequestScreen, RequestRevisionSummary, RequestRevisionDetail } from './request-types';
 import { validId, sameScope, validateContent as validatePolicyContent } from './policy-view';
 import type { FinanceScope, RequestMode, RequestCommand, RequestContent, CreateRequest, RequestView, Estimate, ConfirmationQuote, RequestDecision, RequestHistory, RequestScopeChoice, RequestPersonChoice, RequestCommandResult, QuotedRequest } from './request-types';
 
@@ -39,12 +39,18 @@ function estimate(v: Estimate) {
   if (!v || !decimal(v.total, 2) || !Array.isArray(v.lines) || !v.lines.length || v.lines.some(x => !validId(x.id) || !validId(x.categoryId)
     || !decimal(x.amount, 2) || !(x.quantity === null || decimal(x.quantity, 4)) || !(x.unitRate === null || decimal(x.unitRate, 2)))) fail();
 }
+function basis(value: unknown) {
+  if (value === undefined || value === null) return;
+  const v = value as ApprovalBasis;
+  if (!v || !decimal(v.amount, 2) || !Array.isArray(v.items) || v.items.some(x => !x || !validId(x.requestId) || !validId(x.revisionId) || !decimal(x.approvedAmount, 2))) fail();
+}
 function parse(value: unknown): RequestView {
   const v = value as RequestView;
   try { scopeQuery(v.scope); content(v.content); } catch { return fail(); }
   if (!validId(v.id) || !validId(v.revisionId) || !validId(v.ownerPersonId) || !nullableId(v.delegatePersonId)
     || !Number.isSafeInteger(v.version) || v.version < 1 || !states.includes(v.state) || !(v.holdCode === null || typeof v.holdCode === 'string')) fail();
   if (v.estimate !== null) estimate(v.estimate);
+  basis(v.basis);
   if (v.currentStep !== null && (!v.currentStep || !validId(v.currentStep.id) || !nullableId(v.currentStep.assigneePersonId)
     || !Number.isInteger(v.currentStep.order) || v.currentStep.order < 1 || typeof v.currentStep.levelCode !== 'string'
     || !(v.currentStep.holdCode === null || typeof v.currentStep.holdCode === 'string') || !['PendingApproval', 'Held'].includes(v.state))) fail();
@@ -108,6 +114,11 @@ export function createRequestClient(userId: string, transport: typeof fetch = fe
   const simple = (operation: string, id: string, meta: RequestCommand, signal?: AbortSignal) => mutate(`${path(id)}/${operation}`, meta, meta, signal, 'POST', operation === 'copy' ? undefined : id);
   return {
     details,
+    async supplement(sourceRequestId: string, value: RequestContent, meta: RequestCommand, signal?: AbortSignal): Promise<RequestCommandResult> {
+      content(value); command(meta);
+      if (meta.expectedVersion !== 0 || !meta.reason.trim()) throw new RequestError(400);
+      return mutate(`${path(sourceRequestId)}/supplements`, { content: value, meta }, meta, signal);
+    },
     async revisions(id: string, page = 1, pageSize = 20, signal?: AbortSignal): Promise<RequestRevisionSummary[]> {
       const rows = await request(`${path(id)}/revisions?${pageQuery(page, pageSize)}`, signal) as RequestRevisionSummary[];
       if (!Array.isArray(rows) || rows.length > pageSize) return fail();
@@ -125,6 +136,7 @@ export function createRequestClient(userId: string, transport: typeof fetch = fe
         || !(v.submittedAtUtc === null || typeof v.submittedAtUtc === 'string' && Number.isFinite(Date.parse(v.submittedAtUtc)))) return fail();
       try { content(v.content); } catch { return fail(); }
       if (v.estimate !== null) estimate(v.estimate);
+      basis(v.basis);
       if (v.frozenPolicy !== null) {
         try { validatePolicyContent(v.frozenPolicy.content); } catch { return fail(); }
         if (!validId(v.frozenPolicy.companyVersionId) || !nullableId(v.frozenPolicy.projectVersionId)
@@ -171,7 +183,8 @@ export function createRequestClient(userId: string, transport: typeof fetch = fe
       const q = await request(`${path(id)}/quote`, signal) as ConfirmationQuote;
       if (!q || q.requestId !== current.id || q.revisionId !== current.revisionId || q.version !== current.version) throw new RequestError(409);
       if (typeof q.confirmationHash !== 'string' || !/^[a-f0-9]{64}$/.test(q.confirmationHash) || !Array.isArray(q.levels) || !q.levels.length || q.levels.some(x => typeof x !== 'string')) fail();
-      estimate(q.estimate);
+      estimate(q.estimate); basis(q.basis);
+      if (q.familyVersion !== undefined && (!Number.isSafeInteger(q.familyVersion) || q.familyVersion < 1)) fail();
       try { validatePolicyContent(q.policy.content); } catch { return fail(); }
       if (!sameScope(q.policy.scope, current.scope)) throw new RequestError(403);
       return { request: current, quote: q };

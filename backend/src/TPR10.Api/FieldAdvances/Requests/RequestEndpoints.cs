@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TPR10.Api.FieldAdvances.Payments;
 using TPR10.Api.Identity.Sessions;
 
 namespace TPR10.Api.FieldAdvances.Requests;
@@ -15,6 +16,15 @@ public static class RequestEndpoints
         RequestHttp.Result(await s.ScreenAsync(Actor(session), id, ct));
     public static async Task<IResult> TeamPeople(RequestReadService s, RequestSession session, Guid workspaceId, Guid? projectId, string? prefix, int? page, int? pageSize, CancellationToken ct) =>
         RequestHttp.Result(await s.TeamPeopleAsync(Actor(session), new(workspaceId, projectId), prefix ?? "", page ?? 1, pageSize ?? 20, ct));
+    public static async Task<IResult> Supplement(SupplementService service, RequestSession session, Guid id, HttpRequest request, CancellationToken ct)
+    {
+        SupplementHttp? body;
+        try { body = await request.ReadFromJsonAsync<SupplementHttp>(RequestHttp.InputOptions, ct); }
+        catch (Exception e) when (e is JsonException or BadHttpRequestException or InvalidOperationException) { return PaymentHttp.Error(400, "invalid-request"); }
+        if (body?.Meta is null || string.IsNullOrWhiteSpace(body.Meta.Reason)) return PaymentHttp.Error(400, "invalid-request");
+        var result = await service.CreateAsync(Actor(session), id, body.Content, body.Meta, ct);
+        return result.Value is null ? RequestHttp.Result(result) : PaymentHttp.Protect(Actor(session), result.Value.Id, RequestHttp.Result(result));
+    }
     private static Guid Actor(RequestSession session) => session.Entity?.UserId ?? Guid.Empty;
     public static Task<IResult> Create(RequestDraftService s, RequestSession session, HttpRequest request, CancellationToken ct) =>
         Command<CreateRequestHttp>(request, x => s.CreateAsync(Actor(session), x.Input, x.Meta, ct), ct);
