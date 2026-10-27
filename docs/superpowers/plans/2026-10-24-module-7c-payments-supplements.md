@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–6 ผ่านแล้ว Task 6 โค้ด `cf84019` ผู้ตรวจแยกคนผ่าน Test Backend 2,859 / Frontend 155, Build, Format และ Lint ครบ แก้ whitespace เทสต์พร้อมพิสูจน์ Roslyn และตรวจเฉพาะซ้ำ 44 ผ่าน ดูรายละเอียดก่อน–หลังใน `docs/reports/2026-10-27-module-7c-task6-verification.md` คงรายการติดตามเดิมและ OpenAPI 500 พักมือถือจริง/NAS จริง ยังไม่เริ่ม Task 7–15
+**สถานะแผน:** Task 1–7 ผ่านแล้ว Task 7 โค้ด `44150d9` ผู้ลงมือและผู้ตรวจแยกคน ผ่านรอบแก้สิทธิ์หมดอายุ Test Backend 2,906 / Frontend 155, Build, Format และ Lint ครบ ดู `docs/reports/2026-10-27-module-7c-task7-verification.md` คงรายการติดตามเดิม พักมือถือจริง/NAS จริง Task 8–15 ยังไม่เริ่ม
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -217,16 +217,24 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 ### Task 7: สะสางผลไม่ชัด เหตุผิดปกติ และรับช่วง
 
+**ขอบเขตลงมือ 27 ตุลาคม 2569:** ทำบริการและเทสต์เท่านั้น ไม่เพิ่ม endpoint หรือโอนเงินจริง อนุญาตลงทะเบียนบริการใน `FA/FieldAdvanceRegistration.cs` และปรับจุดเชื่อมของบริการเดิมเท่าที่จำเป็นเพื่อให้ Unpaid กลับตรวจใหม่และรับช่วงได้ตามแบบ โดยต้องรักษาประวัติฉบับ/ผลตรวจ/ผู้จ่ายเดิม ไม่ปลอม prepare event หรือแก้ผลเดิมเพื่อข้ามการตรวจ ให้ผู้ลงมือเสนอรายละเอียด contract ที่ต้องปรับแก่ controller ก่อนลงมือส่วนร่วม
+
+**ข้อกำหนดต่อเนื่อง:** ใช้ executor/ledger/สิทธิ์/ประวัติตัวบุคคลเดิม การ replay ตรวจสิทธิ์ปัจจุบันก่อนคืนผล ไม่มี file I/O ขณะถือธุรกรรมการเงิน และตรวจ metadata หลักฐานซ้ำก่อน commit ผู้ตรวจยืนยันด้วยสิทธิ์ตรวจการเงินจริง ไม่เพิ่มสิทธิ์เป็นผู้จ่ายเพื่อให้ตรวจไฟล์ได้ การรับช่วงไม่แก้ผู้ปฏิบัติเดิมใน attempt และไม่เปิดทาง Record ปกติของผู้จ่ายเดิมหรือคนใหม่ให้ข้ามขั้นตรวจผล
+
+**ลำดับตรวจ:** ผู้ลงมือทำ TDD ชุดเฉพาะและตรวจตัวเอง รวม Format ให้ผ่านก่อนส่งผู้ตรวจใหม่ จากนั้นแก้ข้อพบแล้วรัน G บนโค้ดสุดท้ายครั้งเดียวก่อน commit ไม่ทำ Task 8 ต่อโดยปริยาย
+
 **ไฟล์:** Create `FA/Payments/PaymentOutcomeService.cs`, `FA/Payments/PaymentHoldService.cs`, `FA/Payments/PaymentTakeoverService.cs`, `IT/FieldAdvancePaymentRecoveryTests.cs`
 
 **Interfaces:** Outcome `ProposeAsync(Guid actor, Guid installmentId, PaymentOutcomeInput input, PaymentCommand meta, CancellationToken ct)` และ `ConfirmAsync(Guid actor, Guid proposalId, PaymentCommand meta, CancellationToken ct)`; Hold `ReportMismatchAsync(Guid actor, Guid installmentId, ActualPaymentInput observed, PaymentCommand meta, CancellationToken ct)`; Takeover `ProposeAsync(Guid actor, Guid installmentId, Guid[] evidenceIds, PaymentCommand meta, CancellationToken ct)` และ `ConfirmAsync(...)` รูปเดียวกับ Outcome คืน `FinanceResult<PaymentView>` ทั้งหมด
 
-- [ ] Step 1 `ThreeOutcomesNeverAutoRetry`: Matched=>paid ครั้งเดียว, Unpaid=>PendingReview คง reserved, Unknown=>OutcomePending; `MismatchHoldsEntireFamily` ตรวจ `Assert.Contains("PaymentMismatch", view.HoldCodes);` ทั้ง root/supplement ก่อนและหลัง paid
-- [ ] Step 2 filter `FieldAdvancePaymentRecoveryTests` Red
-- [ ] Step 3 ทุกข้อเสนอมี reason+evidence ผู้ตรวจอีกคนยืนยัน hash/version; mismatch หยุดเริ่มทั้งชุดทันทีเมื่อบันทึกเหตุ แต่ยอมให้ reconcile attempt ที่เริ่มแล้ว ไม่ปรับยอด paid/reserved ให้เท่าความจริงที่ยังไม่รับรอง เก็บ observed amount/person แยก
-- [ ] Step 4 Takeover ผู้จ่ายใหม่มีสิทธิ์อยู่แล้วเสนอ ผู้ตรวจต่างคนยืนยัน เปลี่ยนผู้เสนอสะสางปัจจุบันหนึ่งคน ไม่ลบ operator เดิม ไม่ grant/ปลด hold/เริ่มใหม่ อดีตผู้จ่ายส่งผลแข่งต้อง conflict; Unpaid ต้องตรวจใหม่ก่อนเริ่มครั้งใหม่
-- [ ] Step 5 Green ทดสอบไม่มีผู้ตรวจเข้าเงื่อนไข, ไฟล์หาย/ย้ายหลังเงินจริง, hold ซ้อน, สิทธิ์หมดอายุก่อน confirm, ทั้งสามผลแข่งกัน, mismatch ที่พบผ่าน metadata ไม่มี endpoint ปลดใน 7C
-- [ ] Step 6 ผู้ตรวจใหม่ + G + commit `feat: reconcile payment uncertainty without duplicate payouts`
+- [x] Step 1 `ThreeOutcomesNeverAutoRetry`: Matched=>paid ครั้งเดียว, Unpaid=>PendingReview คง reserved, Unknown=>OutcomePending; `MismatchHoldsEntireFamily` ตรวจ `Assert.Contains("PaymentMismatch", view.HoldCodes);` ทั้ง root/supplement ก่อนและหลัง paid
+- [x] Step 2 filter `FieldAdvancePaymentRecoveryTests` Red
+- [x] Step 3 ทุกข้อเสนอมี reason+evidence ผู้ตรวจอีกคนยืนยัน hash/version; mismatch หยุดเริ่มทั้งชุดทันทีเมื่อบันทึกเหตุ แต่ยอมให้ reconcile attempt ที่เริ่มแล้ว ไม่ปรับยอด paid/reserved ให้เท่าความจริงที่ยังไม่รับรอง เก็บ observed amount/person แยก
+- [x] Step 4 Takeover ผู้จ่ายใหม่มีสิทธิ์อยู่แล้วเสนอ ผู้ตรวจต่างคนยืนยัน เปลี่ยนผู้เสนอสะสางปัจจุบันหนึ่งคน ไม่ลบ operator เดิม ไม่ grant/ปลด hold/เริ่มใหม่ อดีตผู้จ่ายส่งผลแข่งต้อง conflict; Unpaid ต้องตรวจใหม่ก่อนเริ่มครั้งใหม่
+- [x] Step 5 Green ทดสอบไม่มีผู้ตรวจเข้าเงื่อนไข, ไฟล์หาย/ย้ายหลังเงินจริง, hold ซ้อน, สิทธิ์หมดอายุก่อน confirm, ทั้งสามผลแข่งกัน, mismatch ที่พบผ่าน metadata ไม่มี endpoint ปลดใน 7C
+- [x] Step 6 ผู้ตรวจใหม่ + G + commit `feat: reconcile payment uncertainty without duplicate payouts`
+
+**ผลตรวจรับ:** โค้ด `44150d9` ผู้ตรวจ Kepler ผ่านรอบแก้ 1; เพิ่ม final proposer authorization ใน executor ตาม ruling เพื่อปฏิเสธสิทธิ์ที่หมดอายุระหว่างธุรกรรม RED8/GREEN8, focused47, full Backend2,906/Frontend155 ผ่าน ไม่มีการขยายไป Task 8
 
 ### Task 8: ยกเลิกงวดและแก้เฉพาะข้อมูลประกอบหลังจ่าย
 
