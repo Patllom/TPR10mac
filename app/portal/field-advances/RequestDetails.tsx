@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import type { RequestView, RequestScreen, RequestHistory, ConfirmationQuote } from '@/lib/field-advances/request-types';
 import { diffRequestContent, requestStateLabel } from '@/lib/field-advances/request-view';
 
@@ -8,6 +9,7 @@ export default function RequestDetails({ row, screen, history, quote }: { row: R
   const holdReasons: Record<string, string> = { 'route-no-candidate': 'ไม่มีผู้อนุมัติที่เข้าเงื่อนไข', 'route-cycle': 'สายบังคับบัญชาวนซ้ำ', 'route-ambiguous-role': 'ผู้ดำรงบทบาทอนุมัติไม่ชัดเจน', 'route-identity-unavailable': 'ตรวจสอบตัวบุคคลผู้อนุมัติไม่ได้', 'route-invalid-policy': 'กติกาฉบับนี้ใช้กำหนดสายอนุมัติไม่ได้', 'route-invalid-level': 'ระดับอนุมัติไม่ตรงกับกติกาฉบับนี้', 'route-invalid-context': 'ข้อมูลสายอนุมัติไม่พร้อม' };
   const actions: Record<string, string> = { DraftCreated: 'สร้างร่าง', DraftUpdated: 'แก้ไขร่าง', ReturnedToAuthor: 'ส่งกลับผู้จัดทำ', SentToOwner: 'ส่งให้ผู้รับผิดชอบ', Confirmed: 'ยืนยันและส่ง', Approved: 'อนุมัติขั้น', Returned: 'ส่งกลับ', Rejected: 'ปฏิเสธ', Withdrawn: 'ถอนคำขอ', Revised: 'สร้างฉบับแก้ไข', Copied: 'คัดลอก', 'field-advance.request.reevaluate': 'ประเมินสายอนุมัติใหม่' };
   return <section className="space-y-4" aria-label="รายละเอียดคำขอ">
+    <Link className="underline" href={`/portal/field-advances/payments?requestId=${row.id}`}>ดูยอดและรายละเอียดการจ่ายตามสิทธิ์</Link>
     <p>รหัสคำขอ <span data-testid="request-id" className="break-all">{row.id}</span></p>
     <p>ฉบับที่ {screen.revisionNumber}</p><p data-testid="request-state" className="font-semibold">{requestStateLabel(row.state)}</p>
     <p>{row.content.purpose}</p><p>ออกสนาม {row.content.fieldStart} ถึง {row.content.fieldEnd} · ต้องการเงิน {row.content.neededOn}</p>

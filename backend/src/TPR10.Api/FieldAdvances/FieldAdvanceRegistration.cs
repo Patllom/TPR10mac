@@ -12,7 +12,23 @@ public static class FieldAdvanceRegistration
 {
     public static IServiceCollection AddFieldAdvances(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetRequiredService<IConfiguration>().GetSection("FinanceEvidence").Get<FinanceEvidenceOptions>() ?? new());
+        services.AddSingleton(sp =>
+        {
+            var section = sp.GetRequiredService<IConfiguration>().GetSection("FinanceEvidence");
+            var options = section.Get<FinanceEvidenceOptions>() ?? new();
+            // ConfigurationBinder does not bind GUID dictionary keys. Parse explicitly, never silently
+            // omit an invalid root or let two textual representations overwrite the same storage ID.
+            var roots = section.GetSection("Roots").GetChildren().ToArray();
+            options.Roots = [];
+            foreach (var root in roots)
+                if (!Guid.TryParse(root.Key, out var id) || id == Guid.Empty || root.Value is null
+                    || !options.Roots.TryAdd(id, root.Value))
+                    throw new InvalidOperationException("Invalid or duplicate finance evidence storage identifier.");
+            // An entirely unconfigured store remains unavailable at the existing evidence boundary;
+            // configured stores must meet exactly the existing limits and absolute-root validation.
+            if (roots.Length != 0 || options.ActiveStorageId != Guid.Empty) options.Validate();
+            return options;
+        });
         services.AddSingleton(sp => sp.GetRequiredService<IConfiguration>().GetSection("FinanceEvidence:Pdf").Get<PdfValidationOptions>() ?? new());
         services.AddSingleton<IFinanceEvidenceStore, FolderFinanceEvidenceStore>();
         services.AddSingleton<IFinancePdfValidator, PdfValidationProcess>();
@@ -24,6 +40,7 @@ public static class FieldAdvanceRegistration
         services.AddScoped<RequestAccess>();
         services.AddScoped<PaymentAccess>();
         services.AddScoped<PaymentReadService>();
+        services.AddScoped<PaymentUiService>();
         services.AddScoped<FamilyParticipation>();
         services.AddScoped<PaymentCommandExecutor>();
         services.AddScoped<ReservationLedger>();

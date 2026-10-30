@@ -33,6 +33,9 @@ public sealed class FieldAdvanceOpenApiTransformer : IOpenApiOperationTransforme
         if (context.Description.RelativePath?.StartsWith("api/v1/field-advances/payment-evidence/", StringComparison.Ordinal) == true
             && operation.Responses?.TryGetValue("200", out var download) == true && download.Content is { } content)
             foreach (var media in content.Values) media.Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
+        if (context.Description.RelativePath?.EndsWith("/payment-context", StringComparison.Ordinal) == true
+            || context.Description.RelativePath == "api/v1/field-advances/payment-scopes")
+            operation.Description += " payment-scopes page เริ่ม1 pageSize1–100 default25 เฉพาะ finance.check/payment.record ตรงโครงการ; payment-context คืน allowedActions ตามสิทธิ์และสถานะปัจจุบัน ไม่มี raw identity/history. ตรวจ projection ทั้งชุดซ้ำก่อนส่ง แม้สิทธิ์อ่านยังอยู่แต่สิทธิ์จ่ายเปลี่ยน; hints ไม่แทน transaction authorization.";
         return Task.CompletedTask;
     }
 }

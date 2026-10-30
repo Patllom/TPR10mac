@@ -29,6 +29,132 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
             grant.Capabilities = grant.RecipientId == RecipientId ? ["payment.record"] : grant.RecipientId == AuthorId ? ["request.create"] : [];
         await db.SaveChangesAsync(); return f;
     }
+    [Fact]
+    public async Task Ui_context_and_scopes_use_current_payment_rights()
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial();
+        var id = await new FieldAdvancePaymentFixture(f).SeedApprovedAsync(10000, default);
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var payer = await Client(factory, f, RecipientId);
+        var response = await payer.GetAsync(Root + $"requests/{id}/payment-context");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var context = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("installments", context.GetProperty("allowedActions").EnumerateArray().Select(x => x.GetString()));
+        var scopes = await payer.GetFromJsonAsync<JsonElement[]>(Root + "payment-scopes");
+        Assert.Single(scopes!); Assert.Contains("payment.record", scopes![0].GetProperty("capabilities").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(HttpStatusCode.BadRequest, (await payer.GetAsync(Root + "payment-scopes?page=0")).StatusCode);
+        await using (var db = f.CreateContext())
+            await db.Set<GrantProposal>().Where(x => x.RecipientId == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "report.read" }));
+        context = await payer.GetFromJsonAsync<JsonElement>(Root + $"requests/{id}/payment-context");
+        Assert.Empty(context.GetProperty("allowedActions").EnumerateArray());
+        Assert.Empty((await payer.GetFromJsonAsync<JsonElement[]>(Root + "payment-scopes"))!);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Ui_prepared_actions_are_not_delivered_after_capability_loss_even_with_report_read(bool scopes)
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial();
+        var id = await new FieldAdvancePaymentFixture(f).SeedApprovedAsync(10000, default);
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        var session = await f.SessionAsync(RecipientId); await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<RequestSession>().Entity = session.Entity;
+        var ui = scope.ServiceProvider.GetRequiredService<PaymentUiService>();
+        var result = scopes ? await ui.ScopesAsync(RecipientId, 1, 25, default) : await ui.ContextAsync(RecipientId, id, default);
+        await using (var db = f.CreateContext())
+            await db.Set<GrantProposal>().Where(x => x.RecipientId == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "report.read" }));
+        Assert.Equal(200, (await scope.ServiceProvider.GetRequiredService<PaymentReadService>().GetAsync(RecipientId, id, default)).Status);
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; context.Response.Body = new MemoryStream();
+        await result.ExecuteAsync(context); Assert.Equal(403, context.Response.StatusCode);
+        context.Response.Body.Position = 0; var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        Assert.DoesNotContain("allowedActions", body); Assert.DoesNotContain("payment.record", body);
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("person")]
+    [InlineData("hold")]
+    public async Task Ui_prepared_context_rechecks_expiry_person_and_family_hold(string change)
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial();
+        var id = await new FieldAdvancePaymentFixture(f).SeedApprovedAsync(10000, default);
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        var session = await f.SessionAsync(RecipientId); await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<RequestSession>().Entity = session.Entity;
+        var result = await scope.ServiceProvider.GetRequiredService<PaymentUiService>().ContextAsync(RecipientId, id, default);
+        await using (var db = f.CreateContext())
+        {
+            if (change == "expired") f.Clock.Advance(TimeSpan.FromMinutes(20));
+            else if (change == "person") await db.Set<FinanceAccountLink>().Where(x => x.UserId == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.EndedAtUtc, f.Clock.GetUtcNow()).SetProperty(p => p.Version, p => p.Version + 1).SetProperty(p => p.EndedBy, AuthorId).SetProperty(p => p.EndReason, "test identity ended"));
+            else
+            {
+                var request = await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == id);
+                db.Add(new AdvancePaymentHold
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = WorkspaceId,
+                    ProjectId = ProjectId,
+                    FamilyId = request.FamilyId,
+                    Code = "PaymentMismatch",
+                    Reason = "test family hold",
+                    CreatedBy = RecipientId,
+                    CreatedByPersonId = RecipientPersonId,
+                    CreatedAtUtc = f.Clock.GetUtcNow()
+                });
+                await db.SaveChangesAsync();
+            }
+        }
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; context.Response.Body = new MemoryStream();
+        await result.ExecuteAsync(context); Assert.Equal(403, context.Response.StatusCode);
+        context.Response.Body.Position = 0; Assert.DoesNotContain("allowedActions", await new StreamReader(context.Response.Body).ReadToEndAsync());
+    }
+
+    [Fact]
+    public async Task Evidence_configuration_binds_GUID_roots_through_real_registration()
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial();
+        var storage = Guid.NewGuid(); var archive = Guid.NewGuid();
+        var settings = new Dictionary<string, string?>(keys.Settings)
+        {
+            ["FinanceEvidence:ActiveStorageId"] = storage.ToString(),
+            [$"FinanceEvidence:Roots:{storage}"] = "/private/tmp",
+            [$"FinanceEvidence:Roots:{archive}"] = "/private/var/tmp"
+        };
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, settings);
+        var options = factory.Services.GetRequiredService<FinanceEvidenceOptions>();
+        Assert.Equal(storage, options.ActiveStorageId); Assert.Equal(2, options.Roots.Count);
+        Assert.Equal("/private/tmp", options.Roots[storage]); Assert.Equal("/private/var/tmp", options.Roots[archive]);
+        options.Validate(); Assert.Equal(10 * 1024 * 1024, options.MaxFileBytes);
+    }
+
+    [Theory]
+    [InlineData("malformed")]
+    [InlineData("duplicate")]
+    [InlineData("empty-guid")]
+    [InlineData("relative-root")]
+    [InlineData("blank-root")]
+    [InlineData("missing-active")]
+    [InlineData("limit")]
+    public async Task Evidence_registration_rejects_invalid_keys_roots_and_limits(string invalid)
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial(); var storage = Guid.NewGuid();
+        var settings = new Dictionary<string, string?>(keys.Settings)
+        {
+            ["FinanceEvidence:ActiveStorageId"] = storage.ToString(),
+            [$"FinanceEvidence:Roots:{storage}"] = "/private/tmp"
+        };
+        if (invalid == "malformed") settings["FinanceEvidence:Roots:not-a-guid"] = "/private/tmp";
+        if (invalid == "duplicate") settings[$"FinanceEvidence:Roots:{storage:N}"] = "/private/tmp";
+        if (invalid == "empty-guid") settings[$"FinanceEvidence:Roots:{Guid.Empty}"] = "/private/tmp";
+        if (invalid == "relative-root") settings[$"FinanceEvidence:Roots:{storage}"] = "relative";
+        if (invalid == "blank-root") settings[$"FinanceEvidence:Roots:{storage}"] = " ";
+        if (invalid == "missing-active") settings["FinanceEvidence:ActiveStorageId"] = Guid.NewGuid().ToString();
+        if (invalid == "limit") settings["FinanceEvidence:MaxFiles"] = "11";
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, settings);
+        Assert.Throws<InvalidOperationException>(() => factory.Services.GetRequiredService<FinanceEvidenceOptions>());
+    }
+
     private static PaymentCommand Meta() => new(Guid.NewGuid(), 1, 1, null, "ทดสอบ");
     private static object Input() => new { amount = "100.00", destination = new PaymentDestination("Cash", AuthorPersonId, null, null, null) };
 
@@ -332,8 +458,16 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         current = (await submitted.Content.ReadFromJsonAsync<PaymentHttpView>())!;
         Assert.Equal("100.00", current.Reserved);
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(payer, HttpMethod.Post, $"installments/{installmentId}/review", new { outcome = "Approve", meta = Command(current) })).StatusCode);
+        var payerUi = await payer.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
+        var checkerUi = await checker.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
+        Assert.DoesNotContain("review", payerUi!.Installments.Single().AllowedActions);
+        Assert.Empty(checkerUi!.AllowedActions); Assert.Equal(new[] { "review" }, checkerUi.Installments.Single().AllowedActions);
         var reviewed = await Send(checker, HttpMethod.Post, $"installments/{installmentId}/review", new { outcome = "Approve", meta = Command(current) });
         Assert.Equal(HttpStatusCode.OK, reviewed.StatusCode); current = (await reviewed.Content.ReadFromJsonAsync<PaymentHttpView>())!;
+        checkerUi = await checker.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
+        Assert.Empty(checkerUi!.Installments.Single().AllowedActions);
+        payerUi = await payer.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
+        Assert.Contains("start", payerUi!.Installments.Single().AllowedActions);
         var start = Command(current);
         var started = await Send(payer, HttpMethod.Post, $"installments/{installmentId}/start", start); Assert.Equal(HttpStatusCode.OK, started.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Send(payer, HttpMethod.Post, $"installments/{installmentId}/start", start)).StatusCode);
@@ -341,7 +475,20 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         Assert.Equal("Paying", recovered!.State); Assert.Equal("0.00", recovered.Paid); Assert.Equal("100.00", recovered.Reserved);
         var detail = await payer.GetFromJsonAsync<JsonElement>(Root + $"installments/{installmentId}");
         Assert.Equal("InstallmentReview", detail.GetProperty("proposals")[0].GetProperty("kind").GetString());
+        payerUi = await payer.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
+        Assert.Contains("record", payerUi!.Installments.Single().AllowedActions);
+        Assert.Contains("outcome", payerUi.Installments.Single().AllowedActions);
+        Assert.DoesNotContain("start", payerUi.Installments.Single().AllowedActions);
+        Assert.DoesNotContain("takeover", payerUi.Installments.Single().AllowedActions);
         await using var verify = f.CreateContext(); Assert.Single(await verify.Set<AdvancePaymentAttempt>().ToArrayAsync());
+        // A second account with its own finance person may take over, never record the original payer's result.
+        await verify.Set<GrantProposal>().Where(x => x.RecipientId == AliasAccountId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "payment.record", "report.read" }));
+        checkerUi = await checker.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
+        Assert.Empty(checkerUi!.Installments.Single().AllowedActions); // prior checker history forbids switching role
+        await verify.Set<GrantProposal>().Where(x => x.RecipientId == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "finance.check", "report.read" }));
+        payerUi = await payer.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
+        Assert.Empty(payerUi!.AllowedActions); Assert.Empty(payerUi.Installments.Single().AllowedActions);
+
     }
 
     [Fact]
@@ -415,7 +562,7 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var document = await response.Content.ReadFromJsonAsync<JsonElement>();
         var paths = document.GetProperty("paths");
-        Assert.Equal(25, paths.EnumerateObject().Sum(x => x.Value.EnumerateObject().Count()));
+        Assert.Equal(27, paths.EnumerateObject().Sum(x => x.Value.EnumerateObject().Count()));
         foreach (var path in paths.EnumerateObject())
             foreach (var operation in path.Value.EnumerateObject())
             {
@@ -441,8 +588,13 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         try
         {
             var storage = Guid.NewGuid();
-            await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings,
-                configureServices: services => services.AddSingleton(new FinanceEvidenceOptions { ActiveStorageId = storage, Roots = new() { [storage] = root }, MaxFileBytes = 1024 }));
+            var settings = new Dictionary<string, string?>(keys.Settings)
+            {
+                ["FinanceEvidence:ActiveStorageId"] = storage.ToString(),
+                [$"FinanceEvidence:Roots:{storage}"] = root,
+                ["FinanceEvidence:MaxFileBytes"] = "1024"
+            };
+            await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, settings);
             using var payer = await Client(factory, f, RecipientId);
             using var bitmap = new SkiaSharp.SKBitmap(2, 2); bitmap.Erase(SkiaSharp.SKColors.White);
             using var image = SkiaSharp.SKImage.FromBitmap(bitmap); using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100); var png = data.ToArray();

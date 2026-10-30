@@ -14,6 +14,10 @@ public static class PaymentEndpoints
     public static void MapPayments(this RouteGroupBuilder group)
     {
         Contract(group.MapGet("/requests/{id}/payments", Summary)).Produces<PaymentHttpView>();
+        Contract(group.MapGet("/payment-scopes", (int? page, int? pageSize, PaymentUiService s, HttpContext c, CancellationToken ct) =>
+            s.ScopesAsync(Actor(c), page ?? 1, pageSize ?? 25, ct))).Produces<RequestScopeChoice[]>();
+        Contract(group.MapGet("/requests/{id}/payment-context", (Guid id, PaymentUiService s, HttpContext c, CancellationToken ct) =>
+            s.ContextAsync(Actor(c), id, ct))).Produces<PaymentUiContext>();
         Contract(group.MapGet("/payments", Queue)).Produces<PaymentHttpView[]>();
         Contract(group.MapGet("/requests/{id}/installments", Installments)).Produces<PaymentCatalogHttp>();
         Contract(group.MapGet("/installments/{id}", Installment)).Produces<InstallmentDetailHttp>();

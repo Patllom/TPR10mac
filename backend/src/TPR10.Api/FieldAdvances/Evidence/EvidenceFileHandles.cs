@@ -64,8 +64,11 @@ internal static class EvidenceFileHandles
         try { return new FileStream(handle, create ? FileAccess.Write : FileAccess.Read); }
         catch { handle.Dispose(); throw; }
     }
-    private static int NoFollow => OperatingSystem.IsMacOS() ? 0x100 : 0x20000;
+    // Linux ARM64 UAPI overrides asm-generic flags (arch/arm64/include/uapi/asm/fcntl.h).
+    // Keep Darwin and Linux x64 behavior; never substitute O_DIRECT for O_DIRECTORY on ARM64.
+    private static bool LinuxArm64 => OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+    private static int NoFollow => OperatingSystem.IsMacOS() ? 0x100 : LinuxArm64 ? 0x8000 : 0x20000;
     private static int CloseOnExec => OperatingSystem.IsMacOS() ? 0x1000000 : 0x80000;
-    private static int DirectoryFlags => NoFollow | CloseOnExec | (OperatingSystem.IsMacOS() ? 0x100000 : 0x10000);
+    private static int DirectoryFlags => NoFollow | CloseOnExec | (OperatingSystem.IsMacOS() ? 0x100000 : LinuxArm64 ? 0x4000 : 0x10000);
     private static SafeFileHandle Handle(int fd) => fd < 0 ? throw new IOException("Secure evidence filesystem operation failed.", Marshal.GetLastPInvokeError()) : new(new IntPtr(fd), true);
 }

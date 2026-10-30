@@ -16,3 +16,6 @@ export type InstallmentDetail = { summary: PaymentSummary; revisions: { id: stri
 export type SupplementInput = { content: RequestContent; meta: RequestCommand };
 
 export type PaymentCatalog = { installments: PaymentSummary[]; proposals: PaymentProposal[]; evidence: EvidenceTicket[] };
+
+export type PaymentUiContext = { requestId: string; familyVersion: number; requestVersion: number; allowedActions: PaymentAction[]; installments: { installmentId: string; installmentVersion: number; allowedActions: PaymentAction[] }[]; proposals: { proposalId: string; allowedActions: PaymentAction[] }[] };
+export type PaymentScopeChoice = { scope: import('./request-types').FinanceScope; workspaceName: string; projectName: string; capabilities: ('finance.check' | 'payment.record')[] };

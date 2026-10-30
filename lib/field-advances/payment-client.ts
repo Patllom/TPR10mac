@@ -3,7 +3,7 @@ import { validId } from './policy-view';
 import { parsePaymentSummary, paymentMoney, paymentVersion } from './payment-view';
 import { createRequestClient } from './request-client';
 import type { FinanceScope, RequestContent } from './request-types';
-import type { PaymentAction, PaymentSummary, PaymentCommand, EvidenceTicket, PaymentProposal, InstallmentDetail, PaymentCatalog } from './payment-types';
+import type { PaymentAction, PaymentSummary, PaymentCommand, EvidenceTicket, PaymentProposal, InstallmentDetail, PaymentCatalog, PaymentUiContext, PaymentScopeChoice } from './payment-types';
 const root = '/api/v1/field-advances';
 const options = { credentials: 'same-origin', cache: 'no-store', redirect: 'error' } as const;
 const actions: PaymentAction[] = ['installments', 'update', 'submit', 'review', 'start', 'record', 'outcome', 'mismatch', 'cancel', 'metadata', 'takeover', 'confirm', 'ceiling-amendment', 'ceiling-activate', 'disposition', 'finalize', 'supplements'];
@@ -74,7 +74,7 @@ function ticket(v: unknown): EvidenceTicket {
 }
 function proposal(v: unknown, requestId: string): PaymentProposal {
   const r = object(v); if (r.requestId !== requestId || !validId(r.id) || !(r.installmentId === null || validId(r.installmentId))) throw new PaymentError(403);
-  if (!paymentVersion(r.familyVersion) || !paymentVersion(r.requestVersion) || !(r.installmentVersion === null || paymentVersion(r.installmentVersion)) || !['InstallmentReview', 'PaymentCancellation', 'PaymentMetadata', 'PaymentOutcome', 'PaymentTakeover', 'PaymentDisposition'].includes(r.kind as string) || typeof r.state !== 'string' || typeof r.reason !== 'string' || !Array.isArray(r.evidence)) return fail();
+  if (!paymentVersion(r.familyVersion) || !paymentVersion(r.requestVersion) || !(r.installmentVersion === null || paymentVersion(r.installmentVersion)) || !['InstallmentReview', 'PaymentCancellation', 'PaymentMetadata', 'PaymentOutcome', 'PaymentTakeover', 'PaymentMismatch', 'PaymentDisposition'].includes(r.kind as string) || typeof r.state !== 'string' || typeof r.reason !== 'string' || !Array.isArray(r.evidence)) return fail();
   for (const side of [r.before, r.after]) { const x = fields(side, ['outcome', 'state', 'reserved', 'metadata', 'payment', 'revisionId', 'approved', 'basis']); if (!nullableText(x.outcome) || !nullableText(x.state) || !(x.revisionId === null || validId(x.revisionId)) || ![x.reserved, x.approved, x.basis].every(n => n === null || paymentMoney(n))) return fail(); if (x.metadata !== null) metadata(x.metadata); if (x.payment !== null) outcome(x.payment); }
   r.evidence.forEach(ticket); return r as PaymentProposal;
 }
@@ -111,6 +111,25 @@ export function createPaymentClient(userId: string, transport: typeof fetch = fe
   }
   return {
     getPaymentSummary,
+    async getPaymentContext(requestId: string, signal?: AbortSignal): Promise<PaymentUiContext> {
+      if (!validId(requestId)) invalid();
+      const r = fields(await request(`/requests/${requestId}/payment-context`, signal), ['requestId', 'familyVersion', 'requestVersion', 'allowedActions', 'installments', 'proposals']);
+      if (r.requestId !== requestId) throw new PaymentError(403);
+      const allowed = (v: unknown, names: string[]) => Array.isArray(v) && new Set(v).size === v.length && v.every(x => typeof x === 'string' && names.includes(x));
+      if (!paymentVersion(r.familyVersion) || !paymentVersion(r.requestVersion) || !allowed(r.allowedActions, ['installments']) || !Array.isArray(r.installments) || !Array.isArray(r.proposals)) return fail();
+      for (const value of r.installments) { const x = fields(value, ['installmentId', 'installmentVersion', 'allowedActions']); if (!validId(x.installmentId) || !paymentVersion(x.installmentVersion) || !allowed(x.allowedActions, ['update', 'submit', 'review', 'start', 'record', 'outcome', 'mismatch', 'cancel', 'metadata', 'takeover'])) return fail(); }
+      for (const value of r.proposals) { const x = fields(value, ['proposalId', 'allowedActions']); if (!validId(x.proposalId) || !allowed(x.allowedActions, ['confirm'])) return fail(); }
+      if (new Set(r.installments.map(x => x.installmentId)).size !== r.installments.length || new Set(r.proposals.map(x => x.proposalId)).size !== r.proposals.length) return fail();
+      return r as PaymentUiContext;
+    },
+    async paymentScopes(page = 1, pageSize = 25, signal?: AbortSignal): Promise<PaymentScopeChoice[]> {
+      if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || (page - 1) * pageSize > 2147483647) invalid();
+      const rows = await request(`/payment-scopes?page=${page}&pageSize=${pageSize}`, signal);
+      if (!Array.isArray(rows) || rows.length > pageSize) return fail();
+      for (const value of rows) { const r = fields(value, ['scope', 'workspaceName', 'projectName', 'capabilities']); const scope = fields(r.scope, ['workspaceId', 'projectId']);
+        if (!validId(scope.workspaceId) || !validId(scope.projectId) || typeof r.workspaceName !== 'string' || typeof r.projectName !== 'string' || !Array.isArray(r.capabilities) || !r.capabilities.length || new Set(r.capabilities).size !== r.capabilities.length || r.capabilities.some(x => !['finance.check', 'payment.record'].includes(x))) return fail(); }
+      return rows as PaymentScopeChoice[];
+    },
     async sendPaymentCommand(requestId: string, action: PaymentAction, payload: unknown, signal?: AbortSignal): Promise<PaymentSummary> {
       if (!validId(requestId) || !actions.includes(action)) return invalid();
       if (action === 'supplements') {

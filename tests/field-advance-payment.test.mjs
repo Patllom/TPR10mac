@@ -110,3 +110,30 @@ test('Ceiling amendment and supplement use exact request routes and retain decim
   assert.equal((await s.sendPaymentCommand(id, 'supplements', { content, meta: { commandId: user, expectedVersion: 0, reason: 'เพิ่มงาน' } })).requestId, user);
   assert.equal(supplementCalls[0].url, `/api/v1/field-advances/requests/${id}/supplements`);
 });
+
+test('Payment UI context is account-bound and validates scoped actions', async () => {
+  const context = { requestId: id, familyVersion: 1, requestVersion: 1, allowedActions: ['installments'], installments: [], proposals: [] };
+  const c = client(async () => Response.json(context));
+  assert.deepEqual(await c.getPaymentContext(id), context);
+  for (const patch of [{ requestId: user }, { allowedActions: ['admin'] }, { familyVersion: -1 }, { installments: [{ installmentId: user, installmentVersion: 1, allowedActions: ['confirm'] }] }])
+    await assert.rejects(() => client(async () => Response.json({ ...context, ...patch })).getPaymentContext(id));
+});
+test('Payment scope discovery validates capabilities and bounds', async () => {
+  const choice = { scope: { workspaceId: user, projectId: id }, workspaceName: 'บริษัท', projectName: 'โครงการ', capabilities: ['payment.record'] };
+  assert.deepEqual(await client(async () => Response.json([choice])).paymentScopes(), [choice]);
+  await assert.rejects(() => client(async () => Response.json([{ ...choice, capabilities: ['admin'] }])).paymentScopes());
+  await assert.rejects(() => client(async () => Response.json([])).paymentScopes(0));
+});
+test('UI context discards account switches and aborted reads without delivering hints', async () => {
+  const value = { requestId: id, familyVersion: 1, requestVersion: 1, allowedActions: ['installments'], installments: [], proposals: [] };
+  let actor = user;
+  await assert.rejects(() => client(async () => { actor = id; return Response.json(value); }, () => actor).getPaymentContext(id), e => e.clearProtectedData);
+  const abort = new AbortController();
+  await assert.rejects(() => client(async () => { abort.abort(); return Response.json(value); }).getPaymentContext(id, abort.signal));
+  await assert.rejects(() => client(async () => Response.json({ ...value, installments: [{ installmentId: user, installmentVersion: 1, allowedActions: ['start', 'start'] }] })).getPaymentContext(id));
+});
+test('Mismatch incident remains readable as an incident without changing the paid summary', async () => {
+  const change = { outcome: null, state: null, reserved: null, metadata: null, payment: null, revisionId: null, approved: null, basis: null };
+  const incident = { id: user, requestId: id, installmentId: user, kind: 'PaymentMismatch', state: 'Pending', familyVersion: 2, requestVersion: 2, installmentVersion: 2, reason: 'พบความคลาดเคลื่อน', before: change, after: change, evidence: [] };
+  assert.equal((await client(async () => Response.json({ installments: [], proposals: [incident], evidence: [] })).installments(id)).proposals[0].kind, 'PaymentMismatch');
+});

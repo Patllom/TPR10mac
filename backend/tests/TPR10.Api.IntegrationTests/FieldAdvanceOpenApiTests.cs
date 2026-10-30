@@ -51,6 +51,8 @@ public sealed class FieldAdvanceOpenApiTests
         "post /api/v1/field-advances/requests/{id}/copy",
         "get /api/v1/field-advances/requests/{id}/payments",
         "get /api/v1/field-advances/payments",
+        "get /api/v1/field-advances/payment-scopes",
+        "get /api/v1/field-advances/requests/{id}/payment-context",
         "get /api/v1/field-advances/requests/{id}/installments",
         "get /api/v1/field-advances/installments/{id}",
         "get /api/v1/field-advances/payment-proposals/{id}",

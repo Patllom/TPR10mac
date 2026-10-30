@@ -38,6 +38,11 @@ public sealed record PaymentProposalHttp(Guid Id, Guid RequestId, Guid? Installm
     long FamilyVersion, long RequestVersion, long? InstallmentVersion, string Reason,
     PaymentProposalChangeHttp Before, PaymentProposalChangeHttp After, EvidenceTicket[] Evidence);
 
+public sealed record PaymentUiInstallment(Guid InstallmentId, long InstallmentVersion, string[] AllowedActions);
+public sealed record PaymentUiProposal(Guid ProposalId, string[] AllowedActions);
+public sealed record PaymentUiContext(Guid RequestId, long FamilyVersion, long RequestVersion, string[] AllowedActions,
+    PaymentUiInstallment[] Installments, PaymentUiProposal[] Proposals);
+
 internal static class PaymentHttp
 {
     internal static string Money(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
@@ -59,6 +64,8 @@ internal static class PaymentHttp
     internal static IResult Protect(Guid actor, Guid requestId, IResult result, string action = "read") =>
         new ProtectedResult(actor, [requestId], result, action);
     internal static IResult Protect(Guid actor, Guid[] requestIds, IResult result, string action = "read") => new ProtectedResult(actor, requestIds, result, action);
+    internal static IResult ProtectProjection(Guid actor, Guid[] requests, IResult result, Func<CancellationToken, Task<bool>> validate) =>
+        new ProtectedResult(actor, requests, result, "read", validate);
     // A final-role assignment authorizes only the disposition decision context. It never grants source-request or evidence access.
     internal static async Task<bool> AssignedDisposition(Tpr10DbContext db, PaymentAccess access, Guid actor, Guid request, CancellationToken ct) =>
         await db.Set<AdvancePaymentProposal>().AsNoTracking().AnyAsync(x => x.RequestId == request && x.Kind == "PaymentDisposition"
@@ -75,7 +82,7 @@ internal static class PaymentHttp
     };
 
     // Keep current identity/rights locked until serialization/download completes, not only until the handler returns.
-    private sealed class ProtectedResult(Guid actor, Guid[] requests, IResult result, string action) : IResult
+    private sealed class ProtectedResult(Guid actor, Guid[] requests, IResult result, string action, Func<CancellationToken, Task<bool>>? validate = null) : IResult
     {
         public async Task ExecuteAsync(HttpContext context)
         {
@@ -99,6 +106,7 @@ internal static class PaymentHttp
                 var allowed = identity.Status is null && identity.ActorId == actor && actor != Guid.Empty;
                 foreach (var id in requests.Distinct().Order())
                     if (allowed && !await Allowed(db, access, actor, id, action, ct)) allowed = false;
+                if (allowed && validate is not null) allowed = await validate(ct);
                 identity = await sessions.ValidateSessionAsync(true, ct);
                 allowed &= identity.Status is null && identity.ActorId == actor;
                 context.Response.Headers.CacheControl = "private, no-store";
