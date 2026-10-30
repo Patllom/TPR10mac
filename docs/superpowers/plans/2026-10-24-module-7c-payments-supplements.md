@@ -329,12 +329,12 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** ใช้ request-client 7B + payment-client Task12; supplement editor lock project/owner จาก server, ประมาณการเฉพาะส่วนเพิ่ม; confirmation แสดง RequestedTotal กับ ApprovalBasis และ breakdown ที่ API อนุญาต
 
-- [ ] Step 1 E2E `supplement shows 3000 payout against 13000 authority`: `await expect(page.getByText('ยอดส่วนเพิ่ม 3,000.00 บาท')).toBeVisible();` และ `await expect(page.getByText('ฐานอำนาจอนุมัติ 13,000.00 บาท')).toBeVisible();` ผู้อนุมัติไม่มีสิทธิ์ source เปิด source detail ไม่ได้
-- [ ] Step 2 รัน spec HTTPS Red
-- [ ] Step 3 ก่อนจ่ายแสดงปรับวงเงิน+รอสะสางงวด/อนุมัติสองเงื่อนไข หลังจ่ายเสนอส่วนเพิ่มเท่านั้น; unknown บอกพัก, Returned/Held supplement บอกมีรายการค้าง, ownerยืนยันใหม่เมื่อ quoteเปลี่ยน; แสดงผลส่งกลับ/ปฏิเสธ/ถอนเป็นของฉบับแก้ไข ไม่ลบวงเงินอนุมัติเดิม
-- [ ] Step 4 Disposition เสนอ/ยืนยัน/สะสาง/finalize แสดง “ยุติเฉพาะยอดที่ยังไม่จ่าย ยังต้องเคลียร์เงินที่จ่ายแล้ว” ไม่ใช้คำว่าปิดครบ; ResumeOriginal ไม่ล้าง mismatch; ไม่มีหน้าจอ grant เพื่อแก้การหาผู้ยืนยันไม่ได้อัตโนมัติ
-- [ ] Step 5 Green E2E cumulativeหลายทอด, terminateแล้วbasisเดิม, pendingเดิมจ่ายได้แต่ส่วนเพิ่มยังจ่ายไม่ได้, roleเก่า/บัญชีสอง, stale quote และ source dataไม่รั่ว หลังเปลี่ยนassignmentข้อมูลตามassignmentหาย
-- [ ] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add ceiling and supplemental request screens`
+- [x] Step 1 E2E `supplement shows 3000 payout against 13000 authority`: `await expect(page.getByText('ยอดส่วนเพิ่ม 3,000.00 บาท')).toBeVisible();` และ `await expect(page.getByText('ฐานอำนาจอนุมัติ 13,000.00 บาท')).toBeVisible();` ผู้อนุมัติไม่มีสิทธิ์ source เปิด source detail ไม่ได้
+- [x] Step 2 รัน spec HTTPS Red
+- [x] Step 3 ก่อนจ่ายแสดงปรับวงเงิน+รอสะสางงวด/อนุมัติสองเงื่อนไข หลังจ่ายเสนอส่วนเพิ่มเท่านั้น; unknown บอกพัก, Returned/Held supplement บอกมีรายการค้าง, ownerยืนยันใหม่เมื่อ quoteเปลี่ยน; แสดงผลส่งกลับ/ปฏิเสธ/ถอนเป็นของฉบับแก้ไข ไม่ลบวงเงินอนุมัติเดิม
+- [x] Step 4 Disposition เสนอ/ยืนยัน/สะสาง/finalize แสดง “ยุติเฉพาะยอดที่ยังไม่จ่าย ยังต้องเคลียร์เงินที่จ่ายแล้ว” ไม่ใช้คำว่าปิดครบ; ResumeOriginal ไม่ล้าง mismatch; ไม่มีหน้าจอ grant เพื่อแก้การหาผู้ยืนยันไม่ได้อัตโนมัติ
+- [x] Step 5 Green E2E cumulativeหลายทอด, terminateแล้วbasisเดิม, pendingเดิมจ่ายได้แต่ส่วนเพิ่มยังจ่ายไม่ได้, roleเก่า/บัญชีสอง, stale quote และ source dataไม่รั่ว หลังเปลี่ยนassignmentข้อมูลตามassignmentหาย
+- [x] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add ceiling and supplemental request screens`
 
 ### Task 15: ตรวจระบบรวมและคู่มือส่งมอบ
 
