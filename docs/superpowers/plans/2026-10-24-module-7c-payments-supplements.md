@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–12 ผ่านแล้ว Task 12 โค้ด `1bff164` แยกผู้ลงมือและผู้ตรวจ Test Backend 3,023 / Frontend 167, Build, Format และ Lint ครบ ดู docs/reports/2026-10-27-module-7c-task12-verification.md คง M2-R1/R2-C1, HTTPS 504, Minor log และ OpenAPI 500 พักมือถือจริง/NAS จริง Task 13–15 ยังไม่เริ่ม
+**สถานะแผน:** Task 1–13 ผ่านแล้ว Task 13 โค้ด `e973432` แยกผู้ลงมือและผู้ตรวจ Test Backend 3,037 / Frontend 171, HTTPS dev/prod, Build, Format และ Lint ครบ ดู docs/reports/2026-10-30-module-7c-task13-verification.md คง M2-R1/R2-C1, HTTPS 504, Minor log, OpenAPI 500 และ T13-M1 พักมือถือจริง/NAS จริง Task 14–15 ยังไม่เริ่ม
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -314,12 +314,14 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** React components รับ requestId/string, summary/PaymentSummary และ callback reload ใช้ client Task 12; ไม่มีคำนวณยอด authoritative ด้วย JavaScript float ไม่ส่งรหัสบุคคลแทน actor
 
-- [ ] Step 1 E2E `payment review start record` ตรวจแสดง Approved/Reserved/Paid/Available แยกกัน, ผู้ตรวจไม่เห็นปุ่ม payer, review ไม่แสดงจ่ายแล้ว, exact copy `await expect(page.getByText('กำลังตรวจสอบผล ห้ามจ่ายซ้ำ')).toBeVisible();` เมื่อ response ขาด
-- [ ] Step 2 รัน HTTPS E2E ตามคำสั่งด้านล่างต้อง Red จาก UI ที่ยังไม่มี ไม่ใช่จาก cert/504
-- [ ] Step 3 ทำ queue/detail/editor/review/preflight แสดงคนรับ ยอด ช่องทาง บัญชีฉบับตรวจผ่าน; หลัง start มี only record/status ไม่ startซ้ำ Networkerror อ่าน command เดิม/สถานะ ไม่สร้าง command ใหม่เพื่อโอนซ้ำ
-- [ ] Step 4 RecoveryPanel รองรับ outcome/takeover/cancel/metadata พร้อมเหตุผลหลักฐานและผู้ตรวจ; revoked identity ล้างข้อมูล, abort oldrequests, conflict reload ไม่ทับฉบับใหม่; component ต้องเข้าถึงด้วย keyboard/error label ภาษาไทย
-- [ ] Step 5 Green E2E สอง session แยกคน, เงินสด/โอน, ปุ่ม doubleclick, หลักฐานหาย, mismatch familyhold, layout viewport mobile จำลอง (ไม่ใช่มือถือจริง) และ dev/prod ทั้งสองพอร์ต
-- [ ] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add advance payment operations screens`
+- [x] Step 1 E2E `payment review start record` ตรวจแสดง Approved/Reserved/Paid/Available แยกกัน, ผู้ตรวจไม่เห็นปุ่ม payer, review ไม่แสดงจ่ายแล้ว, exact copy `await expect(page.getByText('กำลังตรวจสอบผล ห้ามจ่ายซ้ำ')).toBeVisible();` เมื่อ response ขาด
+- [x] Step 2 รัน HTTPS E2E ตามคำสั่งด้านล่างต้อง Red จาก UI ที่ยังไม่มี ไม่ใช่จาก cert/504
+- [x] Step 3 ทำ queue/detail/editor/review/preflight แสดงคนรับ ยอด ช่องทาง บัญชีฉบับตรวจผ่าน; หลัง start มี only record/status ไม่ startซ้ำ Networkerror อ่าน command เดิม/สถานะ ไม่สร้าง command ใหม่เพื่อโอนซ้ำ
+- [x] Step 4 RecoveryPanel รองรับ outcome/takeover/cancel/metadata พร้อมเหตุผลหลักฐานและผู้ตรวจ; revoked identity ล้างข้อมูล, abort oldrequests, conflict reload ไม่ทับฉบับใหม่; component ต้องเข้าถึงด้วย keyboard/error label ภาษาไทย
+- [x] Step 5 Green E2E สอง session แยกคน, เงินสด/โอน, ปุ่ม doubleclick, หลักฐานหาย, mismatch familyhold, layout viewport mobile จำลอง (ไม่ใช่มือถือจริง) และ dev/prod ทั้งสองพอร์ต
+- [x] Step 6 ผู้ตรวจใหม่ + G + commit `feat: add advance payment operations screens`
+
+ผล Task 13: โค้ด `e973432` ผู้ตรวจอิสระผ่านหลังแก้ I1/I2 รอบเดียว ชุดเต็ม Backend 3,037 / Frontend 171 ผ่าน Build/Format/Lint และ HTTPS4000/4001 ครบ เพิ่ม read-only context/scopes และแก้ GUID config/Linux ARM64 ตามข้อจำเป็นที่ยืนยันด้วยเทสต์ คง T13-M1 เรื่องข้อความสถานะภาษาอังกฤษเพื่อตรวจรวม ไม่มี Task14
 
 ### Task 14: หน้าจอปรับวงเงิน ส่วนเพิ่ม และยุติยอด
 
