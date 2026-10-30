@@ -41,7 +41,16 @@ public sealed record PaymentProposalHttp(Guid Id, Guid RequestId, Guid? Installm
 public sealed record PaymentUiInstallment(Guid InstallmentId, long InstallmentVersion, string[] AllowedActions);
 public sealed record PaymentUiProposal(Guid ProposalId, string[] AllowedActions);
 public sealed record PaymentUiContext(Guid RequestId, long FamilyVersion, long RequestVersion, string[] AllowedActions,
-    PaymentUiInstallment[] Installments, PaymentUiProposal[] Proposals);
+    PaymentUiInstallment[] Installments, PaymentUiProposal[] Proposals)
+{
+    public string Variant => "request";
+    public PaymentWorkflowContext? Workflow { get; init; }
+}
+public sealed record PaymentWorkflowContext(bool EverPaid, bool OutcomeUnclear, string RelationKind,
+    string? PendingSupplementState, string? AmendmentState, bool AmendmentApproved, bool InstallmentsCleared,
+    Guid OwnerPersonId, FinanceScope Scope);
+public sealed record PaymentDispositionContext(string Variant, Guid RequestId, long FamilyVersion, long RequestVersion,
+    PaymentUiProposal[] Proposals);
 
 internal static class PaymentHttp
 {
@@ -64,8 +73,8 @@ internal static class PaymentHttp
     internal static IResult Protect(Guid actor, Guid requestId, IResult result, string action = "read") =>
         new ProtectedResult(actor, [requestId], result, action);
     internal static IResult Protect(Guid actor, Guid[] requestIds, IResult result, string action = "read") => new ProtectedResult(actor, requestIds, result, action);
-    internal static IResult ProtectProjection(Guid actor, Guid[] requests, IResult result, Func<CancellationToken, Task<bool>> validate) =>
-        new ProtectedResult(actor, requests, result, "read", validate);
+    internal static IResult ProtectProjection(Guid actor, Guid[] requests, IResult result, Func<CancellationToken, Task<bool>> validate, string requiredReadAction = "read") =>
+        new ProtectedResult(actor, requests, result, requiredReadAction, validate);
     // A final-role assignment authorizes only the disposition decision context. It never grants source-request or evidence access.
     internal static async Task<bool> AssignedDisposition(Tpr10DbContext db, PaymentAccess access, Guid actor, Guid request, CancellationToken ct) =>
         await db.Set<AdvancePaymentProposal>().AsNoTracking().AnyAsync(x => x.RequestId == request && x.Kind == "PaymentDisposition"

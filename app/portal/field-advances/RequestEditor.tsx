@@ -7,6 +7,8 @@ import { diffRequestContent } from '@/lib/field-advances/request-view';
 import type { PolicySnapshot } from '@/lib/field-advances/policy-types';
 import type { FinanceScope, RequestView, RequestContent, RequestScreen, RequestHistory, RequestPersonChoice, ConfirmationQuote, RequestCommandResult, RequestCommand } from '@/lib/field-advances/request-types';
 import RequestDetails from './RequestDetails';
+import CeilingAmendmentPanel from './CeilingAmendmentPanel';
+import { money } from './SupplementEditor';
 import RequestRevisionDetails from './RequestRevisionDetails';
 import type { RequestRevisionSummary, RequestRevisionDetail } from '@/lib/field-advances/request-types';
 
@@ -15,7 +17,12 @@ const buttonClass = 'rounded-lg border border-orange-700 px-4 py-2 disabled:opac
 const emptyContent = (): RequestContent => ({ kind: 'Individual', purpose: '', fieldStart: '', fieldEnd: '', neededOn: '', teamPersonIds: [], lines: [] });
 type Pending = { id: string; committed?: boolean; run: (signal: AbortSignal) => Promise<RequestCommandResult> };
 
-export default function RequestEditor({ userId, requestId, scope }: { userId: string; requestId?: string; scope?: FinanceScope }) {
+type EditorProps = { userId: string; requestId?: string; scope?: FinanceScope };
+export default function RequestEditor(props: EditorProps) {
+  // Only identity/request changes discard account-bound commands, never a version poll.
+  return <RequestEditorSession key={`${props.userId}:${props.requestId ?? 'new'}:${props.scope?.workspaceId ?? ''}:${props.scope?.projectId ?? ''}`} {...props} />;
+}
+function RequestEditorSession({ userId, requestId, scope }: EditorProps) {
   const [row, setRow] = useState<RequestView | null>(null), [screen, setScreen] = useState<RequestScreen | null>(null);
   const [content, setContent] = useState<RequestContent>(emptyContent), [policy, setPolicy] = useState<PolicySnapshot | null>(null);
   const [owners, setOwners] = useState<RequestPersonChoice[]>([]), [owner, setOwner] = useState(''), [ownerPage, setOwnerPage] = useState(1);
@@ -26,7 +33,12 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
   const [ready, setReady] = useState(false), [uncertain, setUncertain] = useState(false), [refresh, setRefresh] = useState(0);
   const live = useRef<AbortController | null>(null), rowRef = useRef<RequestView | null>(null), pending = useRef<Pending | null>(null);
   const working = useRef(false), poll = useRef<AbortController | null>(null), dialogRef = useRef<HTMLDialogElement>(null);
-  const client = useRef(createRequestClient(userId));
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const client = useRef(createRequestClient(userId, async (...args) => {
+    const response = await fetch(...args);
+    if (args[1]?.method !== 'GET' && args[1]?.method && response.ok && String(args[0]).includes('/field-advances/') && pending.current) pending.current.committed = true;
+    return response;
+  }));
   const [revisions, setRevisions] = useState<RequestRevisionSummary[]>([]), [revisionPage, setRevisionPage] = useState(1);
   const [historical, setHistorical] = useState<RequestRevisionDetail | null>(null);
   const selectedRevision = useRef<string | null>(null);
@@ -34,7 +46,7 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
 
   function clearProtected() {
     selectedRevision.current = null; setHistorical(null); setRevisions([]);
-    live.current?.abort(); poll.current?.abort(); pending.current = null; rowRef.current = null;
+    live.current?.abort(); poll.current?.abort(); pending.current = null; rowRef.current = null; setWorkflowBusy(false);
     setRow(null); setScreen(null); setContent(emptyContent()); setPolicy(null); setOwners([]); setOwner(''); setTeam([]); setTeamNames({}); setPrefix(''); setHistory([]); setQuote(null); setDialog(null); setReason(''); setStatus(''); setUncertain(false); setReady(false);
   }
   function failure(e: unknown) {
@@ -73,7 +85,7 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
   useEffect(() => {
     const controller = new AbortController(); live.current = controller;
     const update = async () => {
-      if (controller.signal.aborted || working.current || poll.current) return;
+      if (controller.signal.aborted || working.current || poll.current || pending.current) return;
       const check = new AbortController(); poll.current = check;
       const signal = AbortSignal.any([controller.signal, check.signal]);
       try { await load(signal); }
@@ -113,21 +125,21 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
       if (live.current.signal.aborted) return;
       if (e instanceof RequestError && e.clearProtectedData) failure(e);
       else if (command.committed) {
-        setUncertain(true); setQuote(null); setDialog(null); failure(e);
+        setUncertain(true); setScreen(null); setQuote(null); setDialog(null); failure(e);
       }
       else if (e instanceof RequestError && (e.unknownResult || e.refreshRequired && e.status !== 409)) {
-        setUncertain(true); setDialog(null); setError(`ไม่ทราบผลปัจจุบัน กรุณาตรวจผลด้วยคำสั่งเดิม (${command.id})`);
+        setUncertain(true); setScreen(null); setDialog(null); setError(`ไม่ทราบผลปัจจุบัน กรุณาตรวจผลด้วยคำสั่งเดิม (${command.id})`);
       } else { pending.current = null; setUncertain(false); setQuote(null); setDialog(null); failure(e); }
     } finally { working.current = false; setBusy(false); }
   }
   function command(run: (meta: RequestCommand, signal: AbortSignal) => Promise<RequestCommandResult>) {
-    if (pending.current || working.current || selectedRevision.current) return;
+    if (pending.current || working.current || workflowBusy || selectedRevision.current) return;
     const meta = { commandId: crypto.randomUUID(), expectedVersion: rowRef.current?.version ?? 0, reason };
     void execute({ id: meta.commandId, run: signal => run(meta, signal) });
   }
-  const editable = !historical && ready && (!row || screen?.actions.includes('edit'));
+  const editable = !historical && !uncertain && ready && (!row || screen?.actions.includes('edit'));
   const dirty = !!row && diffRequestContent(row.content, content).length > 0;
-  const disabled = busy || uncertain;
+  const disabled = busy || uncertain || workflowBusy;
   const can = (action: string) => screen?.actions.includes(action) ?? false;
   function save() {
     const payload = structuredClone(content), current = rowRef.current;
@@ -161,13 +173,14 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
   return <div className="space-y-5">
     <nav className="flex flex-wrap gap-4 underline"><a href="/portal/field-advances">คำขอของฉัน / ที่ยื่นแทน</a><a href="/portal/field-advances/approvals">งานรออนุมัติ</a></nav>
     {error && <p role="alert" className="rounded border border-red-700 p-3">{error}</p>}{status && <p role="status">{status}</p>}
-    <button className={buttonClass} disabled={busy} onClick={() => { setError(''); setRefresh(x => x + 1); }}>โหลดใหม่</button>
+    <button className={buttonClass} disabled={busy || uncertain || workflowBusy} onClick={() => { setError(''); setRefresh(x => x + 1); }}>โหลดใหม่</button>
     {uncertain && <button className={buttonClass} disabled={busy} onClick={() => { if (pending.current) void execute(pending.current); }}>ตรวจผลด้วยคำสั่งเดิม</button>}
     {row && screen && <><section aria-label="เลือกฉบับคำขอ" className="flex flex-wrap gap-3">
       <button disabled={disabled} onClick={() => { selectedRevision.current = null; setHistorical(null); }}>กลับฉบับปัจจุบัน</button>
       {revisions.map(r => <button key={r.revisionId} disabled={disabled} onClick={() => inspectRevision(r.revisionId)}>ดูฉบับที่ {r.revisionNumber}</button>)}
       <button disabled={revisionPage === 1 || disabled} onClick={() => setRevisionPage(x => x - 1)}>ฉบับหน้าก่อน</button><button disabled={revisions.length < 20 || disabled} onClick={() => setRevisionPage(x => x + 1)}>ฉบับหน้าถัดไป</button>
     </section>{historical ? <RequestRevisionDetails revision={historical} /> : <><RequestDetails row={row} screen={screen} history={history} quote={dirty ? null : quote} /><div className="flex gap-3"><button disabled={historyPage === 1 || busy} onClick={() => setHistoryPage(x => x - 1)}>ประวัติหน้าก่อน</button><button disabled={history.length < 20 || busy} onClick={() => setHistoryPage(x => x + 1)}>ประวัติหน้าถัดไป</button></div></>}</>}
+    {!historical && row && !uncertain && <CeilingAmendmentPanel key={`${userId}:${row.id}`} userId={userId} requestId={row.id} source={row} onAccessLost={() => { clearProtected(); setError('ไม่มีสิทธิ์ หรือบัญชีเปลี่ยน กรุณาโหลดใหม่'); }} onBusy={setWorkflowBusy} onChanged={() => setRefresh(x => x + 1)} />}
     {editable && dirty && <p>มีข้อมูลที่ยังไม่บันทึก กรุณาบันทึกร่างก่อนทบทวนหรือส่งให้ผู้รับผิดชอบ</p>}
     {editable && policy && <form onSubmit={e => { e.preventDefault(); save(); }} className="space-y-5">
       <fieldset disabled={disabled} className="min-w-0 space-y-4"><legend className="font-semibold">จัดทำคำขอเงินทดรอง</legend>
@@ -215,7 +228,7 @@ export default function RequestEditor({ userId, requestId, scope }: { userId: st
       <p>วันที่ต้องการเงิน {row.content.neededOn}</p>
       <p className="break-all">โครงการ {row.scope.projectId} · ผู้รับผิดชอบเงิน {row.ownerPersonId}</p>
       {row.content.teamPersonIds.length > 0 && <p className="break-all">รหัสบุคคลสมาชิกทีม: {row.content.teamPersonIds.join(', ')}</p>}
-      {dialog === 'confirm' && quote ? <><p>ยอดยืนยันจากเซิร์ฟเวอร์ {quote.estimate.total} บาท</p><p>ลำดับ: {quote.levels.join(' → ')}</p><p>วันเคลียร์ {quote.policy.content.clearingDays} วัน</p><ul>{quote.estimate.lines.map(l => <li key={l.id}>{l.description}: {l.amount} บาท</li>)}</ul><button className={buttonClass} disabled={disabled} onClick={() => { const id = row.id, hash = quote.confirmationHash; command((meta, signal) => client.current.confirm(id, hash, meta, signal)); }}>ยืนยันและส่ง</button></> : <form onSubmit={e => { e.preventDefault(); simple('withdraw'); }} className="space-y-4"><label className="block">เหตุผลถอนคำขอ<textarea required maxLength={2000} className={inputClass} value={reason} onChange={e => setReason(e.target.value)} /></label><button className={buttonClass} disabled={disabled}>ยืนยันถอนคำขอ</button></form>}
+      {dialog === 'confirm' && quote ? <><p>ยอดยืนยันจากเซิร์ฟเวอร์ {quote.estimate.total} บาท</p>{quote.basis && <><p>{quote.basis.items.some(x => x.requestId !== row.id) ? 'ยอดส่วนเพิ่ม' : 'ยอดคำขอ'} {money(quote.estimate.total)} บาท</p><p>ฐานอำนาจอนุมัติ {money(quote.basis.amount)} บาท</p><ul>{quote.basis.items.map(item => <li key={item.requestId} className="break-all">คำขอ {item.requestId} · {money(item.approvedAmount)} บาท</li>)}</ul><p>เมื่อยอดหรือกติกาเปลี่ยน ต้องทบทวนและให้ผู้รับผิดชอบยืนยันใหม่</p></>}<p>ลำดับ: {quote.levels.join(' → ')}</p><p>วันเคลียร์ {quote.policy.content.clearingDays} วัน</p><ul>{quote.estimate.lines.map(l => <li key={l.id}>{l.description}: {l.amount} บาท</li>)}</ul><button className={buttonClass} disabled={disabled} onClick={() => { const id = row.id, hash = quote.confirmationHash; command((meta, signal) => client.current.confirm(id, hash, meta, signal)); }}>ยืนยันและส่ง</button></> : <form onSubmit={e => { e.preventDefault(); simple('withdraw'); }} className="space-y-4"><label className="block">เหตุผลถอนคำขอ<textarea required maxLength={2000} className={inputClass} value={reason} onChange={e => setReason(e.target.value)} /></label><button className={buttonClass} disabled={disabled}>ยืนยันถอนคำขอ</button></form>}
       <button className={buttonClass} disabled={busy} onClick={() => setDialog(null)}>ยกเลิก</button>
     </dialog>}
   </div>;

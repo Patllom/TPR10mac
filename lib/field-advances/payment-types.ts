@@ -19,3 +19,7 @@ export type PaymentCatalog = { installments: PaymentSummary[]; proposals: Paymen
 
 export type PaymentUiContext = { requestId: string; familyVersion: number; requestVersion: number; allowedActions: PaymentAction[]; installments: { installmentId: string; installmentVersion: number; allowedActions: PaymentAction[] }[]; proposals: { proposalId: string; allowedActions: PaymentAction[] }[] };
 export type PaymentScopeChoice = { scope: import('./request-types').FinanceScope; workspaceName: string; projectName: string; capabilities: ('finance.check' | 'payment.record')[] };
+
+export type WorkflowContext = { everPaid: boolean; outcomeUnclear: boolean; relationKind: 'Normal' | 'Supplement'; pendingSupplementState: string | null; amendmentState: string | null; amendmentApproved: boolean; installmentsCleared: boolean; ownerPersonId: string; scope: import('./request-types').FinanceScope };
+export type WorkflowAction = PaymentAction | 'resume-original' | 'terminate-remaining';
+export type PaymentWorkflowContext = { variant: 'request'; requestId: string; familyVersion: number; requestVersion: number; allowedActions: WorkflowAction[]; installments: PaymentUiContext['installments']; proposals: PaymentUiContext['proposals']; workflow: WorkflowContext } | { variant: 'disposition'; requestId: string; familyVersion: number; requestVersion: number; proposals: PaymentUiContext['proposals'] };

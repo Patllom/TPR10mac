@@ -137,3 +137,20 @@ test('Mismatch incident remains readable as an incident without changing the pai
   const incident = { id: user, requestId: id, installmentId: user, kind: 'PaymentMismatch', state: 'Pending', familyVersion: 2, requestVersion: 2, installmentVersion: 2, reason: 'พบความคลาดเคลื่อน', before: change, after: change, evidence: [] };
   assert.equal((await client(async () => Response.json({ installments: [], proposals: [incident], evidence: [] })).installments(id)).proposals[0].kind, 'PaymentMismatch');
 });
+
+test('Task14 limited workflow context accepts only disposition fields and rejects unknown variants and leaks', async () => {
+  const limited = { variant: 'disposition', requestId: id, familyVersion: 1, requestVersion: 2, proposals: [{ proposalId: user, allowedActions: ['confirm'] }] };
+  const c = client(async () => Response.json(limited));
+  assert.deepEqual(await c.getWorkflowContext(id), limited);
+  for (const patch of [{ variant: 'other' }, { approved: '100.00' }, { installments: [] }, { evidence: [] }, { workflow: {} }, { proposals: [{ proposalId: user, allowedActions: ['start'] }] }])
+    await assert.rejects(() => client(async () => Response.json({ ...limited, ...patch })).getWorkflowContext(id));
+  await assert.rejects(() => c.getPaymentContext(id));
+});
+
+test('Task14 full context preserves exact actor hints and rejects extra fields and malformed locks', async () => {
+  const value = { variant: 'request', requestId: id, familyVersion: 1, requestVersion: 1, allowedActions: ['supplements', 'terminate-remaining'], installments: [], proposals: [], workflow: { everPaid: true, outcomeUnclear: false, relationKind: 'Normal', pendingSupplementState: null, amendmentState: null, amendmentApproved: true, installmentsCleared: false, ownerPersonId: user, scope: { workspaceId: user, projectId: id } } };
+  assert.deepEqual(await client(async () => Response.json(value)).getWorkflowContext(id), value);
+  assert.deepEqual((await client(async () => Response.json(value)).getPaymentContext(id)).allowedActions, []);
+  for (const patch of [{ extra: 'secret' }, { workflow: { ...value.workflow, history: ['secret'] } }, { workflow: { ...value.workflow, ownerPersonId: 'wrong' } }, { workflow: { ...value.workflow, pendingSupplementState: 'Unknown' } }, { allowedActions: ['grant'] }, { proposals: [{ proposalId: user, allowedActions: ['finalize', 'finalize'] }] }])
+    await assert.rejects(() => client(async () => Response.json({ ...value, ...patch })).getWorkflowContext(id));
+});

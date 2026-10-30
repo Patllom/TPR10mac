@@ -295,6 +295,54 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         Assert.Equal(HttpStatusCode.Forbidden, (await final.GetAsync(Root + $"payment-proposals/{proposalId}")).StatusCode);
     }
 
+    [Fact]
+    public async Task Task14_limited_context_has_no_source_account_installment_or_evidence_fields()
+    {
+        await using var f = await FieldAdvanceRequestLifecycleTests.Ready(postgres); using var keys = new TestKeyMaterial();
+        var request = await AssignedDisposition(f);
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var final = await Client(factory, f, AliasAccountId);
+        var response = await final.GetAsync(Root + $"requests/{request.Id}/payment-context");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("disposition", body.GetProperty("variant").GetString());
+        Assert.Equal(new[] { "familyVersion", "proposals", "requestId", "requestVersion", "variant" }, body.EnumerateObject().Select(x => x.Name).Order().ToArray());
+        Assert.Single(body.GetProperty("proposals").EnumerateArray());
+        Assert.Equal(HttpStatusCode.Forbidden, (await final.GetAsync(Root + $"requests/{request.Id}/payments")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await final.GetAsync(Root + $"requests/{request.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await final.GetAsync(Root + $"payment-evidence/{await ExistingEvidence(f, request.Id)}")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("assignment")]
+    [InlineData("person")]
+    [InlineData("expiry")]
+    public async Task Task14_prepared_limited_context_cannot_survive_assignment_or_identity_loss_with_report_read(string change)
+    {
+        await using var f = await FieldAdvanceRequestLifecycleTests.Ready(postgres); using var keys = new TestKeyMaterial();
+        var request = await AssignedDisposition(f);
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        var session = await f.SessionAsync(AliasAccountId); await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<RequestSession>().Entity = session.Entity;
+        var prepared = await scope.ServiceProvider.GetRequiredService<PaymentUiService>().ContextAsync(AliasAccountId, request.Id, default);
+        await using (var db = f.CreateContext())
+        {
+            if (change == "person") await db.Set<FinanceAccountLink>().Where(x => x.UserId == AliasAccountId).ExecuteUpdateAsync(x => x.SetProperty(p => p.EndedAtUtc, f.Clock.GetUtcNow()).SetProperty(p => p.Version, p => p.Version + 1).SetProperty(p => p.EndedBy, AuthorId).SetProperty(p => p.EndReason, "test"));
+            else if (change == "expiry") await db.Set<GrantProposal>().Where(x => x.RecipientId == AliasAccountId).ExecuteUpdateAsync(x => x.SetProperty(p => p.EndsAtUtc, f.Clock.GetUtcNow()));
+            else await db.Set<GrantProposal>().Where(x => x.RecipientId == AliasAccountId).ExecuteUpdateAsync(x => x.SetProperty(p => p.PrimaryApprovalLevels, Array.Empty<string>()));
+        }
+        if (change != "person")
+        {
+            var grant = await FieldAdvanceGrantTests.AuthorityAsync(f, AliasAccountId, request.Person);
+            await using var db = f.CreateContext(); var assignment = await db.Set<GrantAssignment>().SingleAsync(x => x.Id == grant);
+            await db.Set<GrantProposal>().Where(x => x.Id == assignment.ProposalId).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "report.read" }));
+            Assert.Equal(200, (await scope.ServiceProvider.GetRequiredService<PaymentReadService>().GetAsync(AliasAccountId, request.Id, default)).Status);
+        }
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; context.Response.Body = new MemoryStream();
+        await prepared.ExecuteAsync(context); Assert.Equal(403, context.Response.StatusCode);
+        context.Response.Body.Position = 0; Assert.DoesNotContain(request.ProposalId.ToString(), await new StreamReader(context.Response.Body).ReadToEndAsync());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -318,6 +366,52 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         Assert.Single((await service.InstallmentsAsync(AliasAccountId, request.Id, default)).Value!.Installments);
         var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; context.Response.Body = new MemoryStream();
         var prepared = await PaymentEndpoints.Installments(request.Id, service, context, default);
+        if (expire) f.Clock.Advance(TimeSpan.FromMinutes(2));
+        else
+        {
+            await using var db = f.CreateContext();
+            await db.Set<GrantAssignment>().Where(x => x.Id == readGrant).ExecuteUpdateAsync(x => x.SetProperty(p => p.RevokedAtUtc, f.Clock.GetUtcNow()).SetProperty(p => p.RevokedBy, AuthorId).SetProperty(p => p.RevocationReason, "test revoke read"));
+        }
+        var access = scope.ServiceProvider.GetRequiredService<PaymentAccess>();
+        var scopedDb = scope.ServiceProvider.GetRequiredService<TPR10.Api.Data.Tpr10DbContext>();
+        await using (var tx = await scopedDb.Database.BeginTransactionAsync())
+        {
+            Assert.False((await access.CheckAsync(AliasAccountId, request.Id, "read", default)).Allowed);
+            Assert.True(await PaymentHttp.AssignedDisposition(scopedDb, access, AliasAccountId, request.Id, default));
+        }
+        await prepared.ExecuteAsync(context);
+        Assert.Equal(403, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        Assert.DoesNotContain(installment.Installment.Id.ToString(), body);
+        Assert.DoesNotContain("installments", body);
+        var restricted = await service.InstallmentsAsync(AliasAccountId, request.Id, default);
+        Assert.Equal(200, restricted.Status); Assert.Empty(restricted.Value!.Installments); Assert.Single(restricted.Value.Proposals);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Task14_prepared_full_context_requires_read_even_when_final_assignment_survives(bool expire)
+    {
+        await using var f = await FieldAdvanceRequestLifecycleTests.Ready(postgres); using var keys = new TestKeyMaterial();
+        var request = await AssignedDisposition(f);
+        var installment = await new FieldAdvancePaymentFixture(f).SeedInstallmentAsync(request.Id);
+        var readGrant = await FieldAdvanceGrantTests.AuthorityAsync(f, AliasAccountId, request.Person);
+        await using (var db = f.CreateContext())
+        {
+            var proposal = (await db.Set<GrantAssignment>().SingleAsync(x => x.Id == readGrant)).ProposalId;
+            await db.Set<GrantProposal>().Where(x => x.Id == proposal).ExecuteUpdateAsync(x => x
+                .SetProperty(p => p.Capabilities, new[] { "report.read" })
+                .SetProperty(p => p.EndsAtUtc, f.Clock.GetUtcNow().AddMinutes(1)));
+        }
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        var session = await f.SessionAsync(AliasAccountId); await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<RequestSession>().Entity = session.Entity;
+        var service = scope.ServiceProvider.GetRequiredService<PaymentReadService>();
+        Assert.Single((await service.InstallmentsAsync(AliasAccountId, request.Id, default)).Value!.Installments);
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; context.Response.Body = new MemoryStream();
+        var prepared = await scope.ServiceProvider.GetRequiredService<PaymentUiService>().ContextAsync(AliasAccountId, request.Id, default);
         if (expire) f.Clock.Advance(TimeSpan.FromMinutes(2));
         else
         {
@@ -461,7 +555,8 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         var payerUi = await payer.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
         var checkerUi = await checker.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");
         Assert.DoesNotContain("review", payerUi!.Installments.Single().AllowedActions);
-        Assert.Empty(checkerUi!.AllowedActions); Assert.Equal(new[] { "review" }, checkerUi.Installments.Single().AllowedActions);
+        Assert.DoesNotContain("installments", checkerUi!.AllowedActions);
+        Assert.Contains("terminate-remaining", checkerUi.AllowedActions); Assert.Equal(new[] { "review" }, checkerUi.Installments.Single().AllowedActions);
         var reviewed = await Send(checker, HttpMethod.Post, $"installments/{installmentId}/review", new { outcome = "Approve", meta = Command(current) });
         Assert.Equal(HttpStatusCode.OK, reviewed.StatusCode); current = (await reviewed.Content.ReadFromJsonAsync<PaymentHttpView>())!;
         checkerUi = await checker.GetFromJsonAsync<PaymentUiContext>(Root + $"requests/{id}/payment-context");

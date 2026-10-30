@@ -3,7 +3,7 @@ import { validId } from './policy-view';
 import { parsePaymentSummary, paymentMoney, paymentVersion } from './payment-view';
 import { createRequestClient } from './request-client';
 import type { FinanceScope, RequestContent } from './request-types';
-import type { PaymentAction, PaymentSummary, PaymentCommand, EvidenceTicket, PaymentProposal, InstallmentDetail, PaymentCatalog, PaymentUiContext, PaymentScopeChoice } from './payment-types';
+import type { PaymentAction, PaymentSummary, PaymentCommand, EvidenceTicket, PaymentProposal, InstallmentDetail, PaymentCatalog, PaymentUiContext, PaymentScopeChoice, PaymentWorkflowContext } from './payment-types';
 const root = '/api/v1/field-advances';
 const options = { credentials: 'same-origin', cache: 'no-store', redirect: 'error' } as const;
 const actions: PaymentAction[] = ['installments', 'update', 'submit', 'review', 'start', 'record', 'outcome', 'mismatch', 'cancel', 'metadata', 'takeover', 'confirm', 'ceiling-amendment', 'ceiling-activate', 'disposition', 'finalize', 'supplements'];
@@ -78,6 +78,27 @@ function proposal(v: unknown, requestId: string): PaymentProposal {
   for (const side of [r.before, r.after]) { const x = fields(side, ['outcome', 'state', 'reserved', 'metadata', 'payment', 'revisionId', 'approved', 'basis']); if (!nullableText(x.outcome) || !nullableText(x.state) || !(x.revisionId === null || validId(x.revisionId)) || ![x.reserved, x.approved, x.basis].every(n => n === null || paymentMoney(n))) return fail(); if (x.metadata !== null) metadata(x.metadata); if (x.payment !== null) outcome(x.payment); }
   r.evidence.forEach(ticket); return r as PaymentProposal;
 }
+function workflowContext(value: unknown, requestId: string): PaymentWorkflowContext {
+  const raw = object(value);
+  const common = ['variant', 'requestId', 'familyVersion', 'requestVersion', 'proposals'];
+  const r = fields(value, raw.variant === 'request' ? [...common, 'allowedActions', 'installments', 'workflow'] : common);
+  if (r.requestId !== requestId) throw new PaymentError(403);
+  if (!['request', 'disposition'].includes(r.variant as string) || !paymentVersion(r.familyVersion) || !paymentVersion(r.requestVersion) || !Array.isArray(r.proposals)) return fail();
+  const allowed = (v: unknown, names: string[]) => Array.isArray(v) && new Set(v).size === v.length && v.every(x => typeof x === 'string' && names.includes(x));
+  for (const value of r.proposals) { const x = fields(value, ['proposalId', 'allowedActions']); if (!validId(x.proposalId) || !allowed(x.allowedActions, ['confirm', 'finalize'])) return fail(); }
+  if (new Set(r.proposals.map(x => x.proposalId)).size !== r.proposals.length) return fail();
+  if (r.variant === 'request') {
+    if (!allowed(r.allowedActions, ['installments', 'ceiling-amendment', 'ceiling-activate', 'supplements', 'resume-original', 'terminate-remaining']) || !Array.isArray(r.installments)) return fail();
+    for (const value of r.installments) { const x = fields(value, ['installmentId', 'installmentVersion', 'allowedActions']); if (!validId(x.installmentId) || !paymentVersion(x.installmentVersion) || !allowed(x.allowedActions, ['update', 'submit', 'review', 'start', 'record', 'outcome', 'mismatch', 'cancel', 'metadata', 'takeover'])) return fail(); }
+    if (new Set(r.installments.map(x => x.installmentId)).size !== r.installments.length) return fail();
+    const w = fields(r.workflow, ['everPaid', 'outcomeUnclear', 'relationKind', 'pendingSupplementState', 'amendmentState', 'amendmentApproved', 'installmentsCleared', 'ownerPersonId', 'scope']);
+    const scope = fields(w.scope, ['workspaceId', 'projectId']);
+    const state = (v: unknown) => v === null || ['Draft', 'AwaitingOwner', 'PendingApproval', 'Held', 'Returned', 'Approved', 'Rejected', 'Withdrawn'].includes(v as string);
+    if (![w.everPaid, w.outcomeUnclear, w.amendmentApproved, w.installmentsCleared].every(x => typeof x === 'boolean') || !['Normal', 'Supplement'].includes(w.relationKind as string)
+      || !state(w.pendingSupplementState) || !state(w.amendmentState) || !validId(w.ownerPersonId) || !validId(scope.workspaceId) || !validId(scope.projectId)) return fail();
+  }
+  return r as PaymentWorkflowContext;
+}
 export function createPaymentClient(userId: string, transport: typeof fetch = fetch) {
   if (!validId(userId)) invalid();
   const bounded = (signal?: AbortSignal) => signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
@@ -113,7 +134,17 @@ export function createPaymentClient(userId: string, transport: typeof fetch = fe
     getPaymentSummary,
     async getPaymentContext(requestId: string, signal?: AbortSignal): Promise<PaymentUiContext> {
       if (!validId(requestId)) invalid();
-      const r = fields(await request(`/requests/${requestId}/payment-context`, signal), ['requestId', 'familyVersion', 'requestVersion', 'allowedActions', 'installments', 'proposals']);
+      const value = await request(`/requests/${requestId}/payment-context`, signal);
+      const raw = object(value);
+      if ('variant' in raw) {
+        const context = workflowContext(value, requestId);
+        if (context.variant !== 'request') throw new PaymentError(403);
+        // Existing payment screens keep their strict, installment-only interface.
+        return { requestId, familyVersion: context.familyVersion, requestVersion: context.requestVersion,
+          allowedActions: context.allowedActions.filter((x): x is 'installments' => x === 'installments'), installments: context.installments,
+          proposals: context.proposals.map(p => ({ ...p, allowedActions: p.allowedActions.filter(x => x === 'confirm') })) };
+      }
+      const r = fields(value, ['requestId', 'familyVersion', 'requestVersion', 'allowedActions', 'installments', 'proposals']);
       if (r.requestId !== requestId) throw new PaymentError(403);
       const allowed = (v: unknown, names: string[]) => Array.isArray(v) && new Set(v).size === v.length && v.every(x => typeof x === 'string' && names.includes(x));
       if (!paymentVersion(r.familyVersion) || !paymentVersion(r.requestVersion) || !allowed(r.allowedActions, ['installments']) || !Array.isArray(r.installments) || !Array.isArray(r.proposals)) return fail();
@@ -121,6 +152,10 @@ export function createPaymentClient(userId: string, transport: typeof fetch = fe
       for (const value of r.proposals) { const x = fields(value, ['proposalId', 'allowedActions']); if (!validId(x.proposalId) || !allowed(x.allowedActions, ['confirm'])) return fail(); }
       if (new Set(r.installments.map(x => x.installmentId)).size !== r.installments.length || new Set(r.proposals.map(x => x.proposalId)).size !== r.proposals.length) return fail();
       return r as PaymentUiContext;
+    },
+    async getWorkflowContext(requestId: string, signal?: AbortSignal): Promise<PaymentWorkflowContext> {
+      if (!validId(requestId)) invalid();
+      return workflowContext(await request(`/requests/${requestId}/payment-context`, signal), requestId);
     },
     async paymentScopes(page = 1, pageSize = 25, signal?: AbortSignal): Promise<PaymentScopeChoice[]> {
       if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || (page - 1) * pageSize > 2147483647) invalid();

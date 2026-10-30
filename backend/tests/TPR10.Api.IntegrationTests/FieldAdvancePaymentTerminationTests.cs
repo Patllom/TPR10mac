@@ -23,6 +23,39 @@ public sealed class FieldAdvancePaymentTerminationTests(PostgresFixture postgres
     private static readonly Guid Payer = Guid.Parse("71000000-0000-0000-0000-000000000052");
     private static readonly Guid Checker = Guid.Parse("71000000-0000-0000-0000-000000000053");
 
+    [Theory]
+    [InlineData("proposer")]
+    [InlineData("role")]
+    [InlineData("ceiling")]
+    public async Task Task14_prepared_real_disposition_hint_rechecks_authority_with_surviving_report_read(string change)
+    {
+        await using var f = await Ready(); using var files = new EvidenceFiles(); using var keys = new TestKeyMaterial();
+        var root = await PaidRoot(f, files);
+        Value(await Disposition(f, root.Id, "Propose", "TerminateRemaining"));
+        await using (var db = f.CreateContext())
+            await db.Set<GrantProposal>().Where(x => x.RecipientId == Director).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "request.approve", "report.read" }));
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var client = await FieldAdvancePolicyHttpTests.Client(factory, f, Director);
+        var response = await client.GetAsync($"/api/v1/field-advances/requests/{root.Id}/payment-context");
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        var proposalId = await Proposal(f, "PaymentDisposition");
+        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.Contains("confirm", json.GetProperty("proposals").EnumerateArray().Single(x => x.GetProperty("proposalId").GetGuid() == proposalId).GetProperty("allowedActions").EnumerateArray().Select(x => x.GetString()));
+        var session = await f.SessionAsync(Director); await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<TPR10.Api.Identity.Sessions.RequestSession>().Entity = session.Entity;
+        var prepared = await scope.ServiceProvider.GetRequiredService<PaymentUiService>().ContextAsync(Director, root.Id, default);
+        await using (var db = f.CreateContext())
+        {
+            if (change == "proposer") await db.Set<GrantProposal>().Where(x => x.RecipientId == Checker).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, Array.Empty<string>()));
+            else if (change == "role") await db.Set<GrantProposal>().Where(x => x.RecipientId == Director).ExecuteUpdateAsync(x => x.SetProperty(p => p.PrimaryApprovalLevels, Array.Empty<string>()));
+            else await db.Set<GrantProposal>().Where(x => x.RecipientId == Director).ExecuteUpdateAsync(x => x.SetProperty(p => p.ApprovalLimit, 1m));
+        }
+        Assert.Equal(200, (await scope.ServiceProvider.GetRequiredService<PaymentReadService>().GetAsync(Director, root.Id, default)).Status);
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext { RequestServices = scope.ServiceProvider }; context.Response.Body = new MemoryStream();
+        await prepared.ExecuteAsync(context); Assert.Equal(403, context.Response.StatusCode);
+        context.Response.Body.Position = 0; Assert.DoesNotContain("allowedActions", await new StreamReader(context.Response.Body).ReadToEndAsync());
+    }
+
     // Red if termination rejects a paid approved request, erases approval history, or lowers supplement authority.
     [Fact]
     public async Task TerminationPreservesApprovalBasis()
