@@ -75,6 +75,7 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
     [InlineData("expired")]
     [InlineData("person")]
     [InlineData("hold")]
+    [InlineData("family-version")]
     public async Task Ui_prepared_context_rechecks_expiry_person_and_family_hold(string change)
     {
         await using var f = await Ready(); using var keys = new TestKeyMaterial();
@@ -87,6 +88,12 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         {
             if (change == "expired") f.Clock.Advance(TimeSpan.FromMinutes(20));
             else if (change == "person") await db.Set<FinanceAccountLink>().Where(x => x.UserId == RecipientId).ExecuteUpdateAsync(x => x.SetProperty(p => p.EndedAtUtc, f.Clock.GetUtcNow()).SetProperty(p => p.Version, p => p.Version + 1).SetProperty(p => p.EndedBy, AuthorId).SetProperty(p => p.EndReason, "test identity ended"));
+            else if (change == "family-version")
+            {
+                var family = await db.Set<AdvanceRequest>().Where(x => x.Id == id).Select(x => x.FamilyId).SingleAsync();
+                await db.Set<AdvanceFamily>().Where(x => x.Id == family).ExecuteUpdateAsync(x => x.SetProperty(p => p.Version, p => p.Version + 1));
+                await db.Set<AdvanceRequest>().Where(x => x.Id == id).ExecuteUpdateAsync(x => x.SetProperty(p => p.Version, p => p.Version + 1));
+            }
             else
             {
                 var request = await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == id);
@@ -108,6 +115,111 @@ public sealed class FieldAdvancePaymentHttpTests(PostgresFixture postgres)
         var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; context.Response.Body = new MemoryStream();
         await result.ExecuteAsync(context); Assert.Equal(403, context.Response.StatusCode);
         context.Response.Body.Position = 0; Assert.DoesNotContain("allowedActions", await new StreamReader(context.Response.Body).ReadToEndAsync());
+    }
+
+    // คั่นระหว่าง prepare/delivery ด้วย commit จริงอีก connection โดยไม่ใช้ sleep หรือ production hook
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Owner_draft_commit_between_context_prepare_and_delivery_distinguishes_stale_from_revoked(bool revoke)
+    {
+        await using var f = await FieldAdvanceRequestLifecycleTests.Ready(postgres);
+        var draft = await FieldAdvanceRequestLifecycleTests.Create(f);
+        using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        var session = await f.SessionAsync(AuthorId);
+        await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<RequestSession>().Entity = session.Entity;
+        var reader = scope.ServiceProvider.GetRequiredService<TPR10.Api.Data.Tpr10DbContext>();
+        await reader.Database.OpenConnectionAsync();
+        var readerPid = ((Npgsql.NpgsqlConnection)reader.Database.GetDbConnection()).ProcessID;
+        var prepared = await scope.ServiceProvider.GetRequiredService<PaymentUiService>().ContextAsync(AuthorId, draft.Id, default);
+        Assert.Null(reader.Database.CurrentTransaction);
+
+        // ContextAsync คืน IResult หลังปล่อย transaction จึงเป็น barrier ก่อน final serialization/authorization
+        await using (var writer = f.CreateContext())
+        {
+            await writer.Database.OpenConnectionAsync();
+            Assert.NotEqual(readerPid, ((Npgsql.NpgsqlConnection)writer.Database.GetDbConnection()).ProcessID);
+            var writerSession = await f.SessionAsync(AuthorId);
+            var updated = await FieldAdvanceRequestLifecycleTests.Draft(f, writer, writerSession).UpdateAsync(
+                AuthorId, draft.Id, draft.Content with { Purpose = "แก้รายละเอียดระหว่างเตรียมส่งข้อมูล" },
+                FieldAdvanceRequestLifecycleTests.Meta(draft.Version), default);
+            Assert.Equal(200, updated.Status);
+            Assert.Equal(draft.Version + 1, updated.Value!.Version);
+            Assert.Null(writer.Database.CurrentTransaction);
+            if (revoke)
+            {
+                await using var tx = await writer.Database.BeginTransactionAsync();
+                await writer.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
+                var changed = await writer.Set<GrantProposal>().Where(x => x.RecipientId == AuthorId && x.ProjectId == ProjectId)
+                    .ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, Array.Empty<string>()));
+                Assert.True(changed > 0);
+                await tx.CommitAsync();
+            }
+        }
+        // อ่านจาก connection เดิมหลัง commit ยืนยันทั้ง version และสิทธิ์จริง ไม่เดาจากHTTP403
+        reader.ChangeTracker.Clear();
+        var committed = await reader.Set<AdvanceRequest>().AsNoTracking().SingleAsync(x => x.Id == draft.Id);
+        Assert.Equal(draft.Version + 1, committed.Version);
+        Assert.Equal(AuthorPersonId, committed.OwnerPersonId);
+        Assert.Equal(revoke ? 403 : 200,
+            (await scope.ServiceProvider.GetRequiredService<PaymentReadService>().GetAsync(AuthorId, draft.Id, default)).Status);
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Response.Body = new MemoryStream();
+        await prepared.ExecuteAsync(context);
+        context.Response.Body.Position = 0;
+        var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        Assert.DoesNotContain("allowedActions", body);
+        Assert.DoesNotContain("workflow", body);
+        Assert.Equal("private, no-store", context.Response.Headers.CacheControl.ToString());
+        Assert.Equal(revoke ? 403 : 409, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Owner_unchanged_prepared_context_delivers_current_projection()
+    {
+        await using var f = await FieldAdvanceRequestLifecycleTests.Ready(postgres);
+        var draft = await FieldAdvanceRequestLifecycleTests.Create(f);
+        using var keys = new TestKeyMaterial();
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<RequestSession>().Entity = (await f.SessionAsync(AuthorId)).Entity;
+        var prepared = await scope.ServiceProvider.GetRequiredService<PaymentUiService>().ContextAsync(AuthorId, draft.Id, default);
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Response.Body = new MemoryStream();
+        await prepared.ExecuteAsync(context);
+        Assert.Equal(200, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        using var body = await JsonDocument.ParseAsync(context.Response.Body);
+        Assert.Equal(draft.Version, body.RootElement.GetProperty("requestVersion").GetInt64());
+        Assert.Equal(AuthorPersonId, body.RootElement.GetProperty("workflow").GetProperty("ownerPersonId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Final_identity_expiry_overrides_stale_projection_without_delivering_payload()
+    {
+        await using var f = await Ready(); using var keys = new TestKeyMaterial();
+        var id = await new FieldAdvancePaymentFixture(f).SeedApprovedAsync(10000, default);
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        await using var scope = factory.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<RequestSession>().Entity = (await f.SessionAsync(AuthorId)).Entity;
+        var validated = false;
+        var prepared = PaymentHttp.ProtectProjection(AuthorId, [id], Results.Json(new { marker = "must-not-deliver" }), _ =>
+        {
+            validated = true;
+            f.Clock.Advance(TimeSpan.FromMinutes(20));
+            return Task.FromResult(PaymentHttp.ProjectionOutcome.Stale);
+        });
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Response.Body = new MemoryStream();
+        await prepared.ExecuteAsync(context);
+        Assert.True(validated);
+        Assert.Equal(403, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        Assert.DoesNotContain("must-not-deliver", body);
+        Assert.Contains("finance-access-denied", body);
     }
 
     [Fact]

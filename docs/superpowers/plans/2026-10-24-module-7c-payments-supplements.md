@@ -10,7 +10,7 @@
 
 **เอกสารออกแบบ:** `docs/superpowers/specs/2026-10-24-module-7c-payments-supplements-design.md` ผู้ใช้อนุมัติ 24 ตุลาคม 2569 ผู้ลงมือและผู้ตรวจต้องอ่านทั้งแบบและแผน
 
-**สถานะแผน:** Task 1–13 ผ่านแล้ว Task 13 โค้ด `e973432` แยกผู้ลงมือและผู้ตรวจ Test Backend 3,037 / Frontend 171, HTTPS dev/prod, Build, Format และ Lint ครบ ดู docs/reports/2026-10-30-module-7c-task13-verification.md คง M2-R1/R2-C1, HTTPS 504, Minor log, OpenAPI 500 และ T13-M1 พักมือถือจริง/NAS จริง Task 14–15 ยังไม่เริ่ม
+**สถานะแผน:** Task 1–15 ผ่านแล้ว แยกผู้ลงมือและผู้ตรวจ Task15เพิ่มเทสต์race/rollback/backupและแก้stale alert/403ระหว่างsave; Test backend3,064 / frontend175, Build, Format, Lint และHTTPSครบ ดู [รายงานตรวจรับ](../../reports/2026-10-24-module-7c-verification.md) คงM2-R1/R2-C1, HTTPS504, Minor log, OpenAPI500, T13-M1/T14-M1 พักมือถือจริง/NASจริง ยังไม่push/PR/merge
 
 ## ข้อกำหนดร่วม (Global Constraints)
 
@@ -342,13 +342,13 @@ dotnet test backend/tests/TPR10.Api.IntegrationTests --filter FullyQualifiedName
 
 **Interfaces:** ใช้ services/HTTP/fixture จาก Taskก่อนหน้า ไม่มี public interface ใหม่; runbook บอกจัดเก็บ/สำรอง/migrate/กู้คืน/การจ่ายภายนอกและการอ่าน command outcome
 
-- [ ] Step 1 เติม Red regression สำหรับความเสี่ยงที่ยังไม่มี เช่น start vs amendment/termination/mismatch, checker/payer grantrevocation vs command, partialcommit vs replay, filelocation switch vs download ด้วย PostgreSQL จริงสอง connection และ barrier ไม่ใช้ timing sleep เดา
-- [ ] Step 2 filter `FieldAdvancePaymentRaceTests|FieldAdvancePaymentDeliveryTests` โดย syntax `--filter 'FullyQualifiedName~FieldAdvancePaymentRaceTests|FullyQualifiedName~FieldAdvancePaymentDeliveryTests'` ตรวจ FAIL ตรง assertion ก่อนแก้
-- [ ] Step 3 แก้เฉพาะข้อบกพร่องที่พิสูจน์ได้; ทดสอบ migration clone schema7B, data copyสัมพันธ์เดิม, ไม่มี seedเงินจริง/grantเอง; idempotent apply, สำรองและ forward-recovery ก่อนใช้งาน ไม่ใช้ down migration ที่ลบหลักฐานบนฐานจริง
-- [ ] Step 4 รัน G และ HTTPS specs identity/scopes/7A policy/grant/7B request/7C payment/supplement ทั้ง4000/4001 ด้วย TLS ที่ตรวจจริง รวม file move local; ถ้า 504 เกิดเก็บหลักฐานและระบุ blocked ไม่เปลี่ยนเป็น retryจนดูผ่าน ไม่อ้างว่า 504 ถูกแก้
-- [ ] Step 5 ผู้ตรวจใหม่ตรวจทั้ง branch เทียบ C01–C25 และรายการเดิม ปิด Critical/Important ก่อนส่งมอบ รายงานแยก passed/failed/blocked/not-run พร้อม command/exit/time/commit ไม่รวมมือถือ/NASในpassed
-- [ ] Step 6 เขียนคู่มือ “ตรวจผ่านยังไม่จ่าย”, เริ่มก่อนเงินจริง, responseหายห้ามโอนซ้ำ, ใช้ผู้ตรวจสะสาง, mismatchคงพักรอ7D, backup DBพร้อมstorage, secret/file access และผู้มีสิทธิ์จัดการroot เก็บ M2-R1/R2-C1/HTTPS504/มือถือ/NASในรายการคงค้าง
-- [ ] Step 7 รัน G หลังแก้สุดท้าย + commit `test: verify module 7c payment safety and delivery` หยุดรอคำสั่งผู้ใช้ก่อน push/PR/merge
+- [x] Step 1 เติม Red regression สำหรับความเสี่ยงที่ยังไม่มี เช่น start vs amendment/termination/mismatch, checker/payer grantrevocation vs command, partialcommit vs replay, filelocation switch vs download ด้วย PostgreSQL จริงสอง connection และ barrier ไม่ใช้ timing sleep เดา
+- [x] Step 2 filter `FieldAdvancePaymentRaceTests|FieldAdvancePaymentDeliveryTests` โดย syntax `--filter 'FullyQualifiedName~FieldAdvancePaymentRaceTests|FullyQualifiedName~FieldAdvancePaymentDeliveryTests'` ตรวจ FAIL ตรง assertion ก่อนแก้
+- [x] Step 3 แก้เฉพาะข้อบกพร่องที่พิสูจน์ได้; ทดสอบ migration clone schema7B, data copyสัมพันธ์เดิม, ไม่มี seedเงินจริง/grantเอง; idempotent apply, สำรองและ forward-recovery ก่อนใช้งาน ไม่ใช้ down migration ที่ลบหลักฐานบนฐานจริง
+- [x] Step 4 รัน G และ HTTPS specs identity/scopes/7A policy/grant/7B request/7C payment/supplement ทั้ง4000/4001 ด้วย TLS ที่ตรวจจริง รวม file move local; ถ้า 504 เกิดเก็บหลักฐานและระบุ blocked ไม่เปลี่ยนเป็น retryจนดูผ่าน ไม่อ้างว่า 504 ถูกแก้
+- [x] Step 5 ผู้ตรวจใหม่ตรวจทั้ง branch เทียบ C01–C25 และรายการเดิม ปิด Critical/Important ก่อนส่งมอบ รายงานแยก passed/failed/blocked/not-run พร้อม command/exit/time/commit ไม่รวมมือถือ/NASในpassed
+- [x] Step 6 เขียนคู่มือ “ตรวจผ่านยังไม่จ่าย”, เริ่มก่อนเงินจริง, responseหายห้ามโอนซ้ำ, ใช้ผู้ตรวจสะสาง, mismatchคงพักรอ7D, backup DBพร้อมstorage, secret/file access และผู้มีสิทธิ์จัดการroot เก็บ M2-R1/R2-C1/HTTPS504/มือถือ/NASในรายการคงค้าง
+- [x] Step 7 รัน G หลังแก้สุดท้าย + commit `test: verify module 7c payment safety and delivery` หยุดรอคำสั่งผู้ใช้ก่อน push/PR/merge
 
 ## คำสั่ง HTTPS E2E เมื่อถึง Task หน้าจอ
 
@@ -390,3 +390,6 @@ node --input-type=module -e "import { runHttpsSmoke } from './infra/nginx/https-
 - HTTPS 504: คงรอหลักฐานจริง ไม่ถือว่าหายจาก build/E2E ที่ผ่านบางรอบ
 - มือถือจริง/NAS จริง: พักตามคำสั่ง การทดสอบ viewport/local folders/adapter ไม่ทดแทนอุปกรณ์จริง
 - หลังอนุมัติแผน: เริ่ม Task 1 เท่านั้นตามคำสั่งครั้งถัดไป ไม่ต้องเลือกรูปแบบผู้ลงมือ/ผู้ตรวจใหม่
+
+
+ผล Task15: เทสต์ความเสี่ยงใหม่13กรณีผ่านพฤติกรรมเดิม จึงบันทึกเป็นcoverageGREEN ไม่สร้างREDเทียม บั๊กstale alertและowner403มีRED→GREENจริง; Faradayตรวจทั้งbranchและfix1ผ่าน; finalG7คำสั่งexit0 sourceคงเดิม backend3,064/frontend175และHTTPS15ชุดผ่าน เก็บผลFAIL/ABORTEDและข้อจำกัดlogในรายงาน ไม่มีการเปลี่ยนรายการติดตามหรือทดสอบมือถือ/NASจริง

@@ -34,6 +34,8 @@ export default function CeilingAmendmentPanel({ userId, requestId, source, onCha
     if (JSON.stringify(latest) !== JSON.stringify(next)) throw new PaymentError(409);
     if (current.current && JSON.stringify(current.current) !== JSON.stringify(next)) { setEditing(null); setPolicy(null); }
     current.current = next; setContext(next); setProposals(catalog.proposals); setSummary(account);
+    // ล้างข้อผิดพลาดการอ่านเมื่อได้ชุดข้อมูลปัจจุบันครบแล้ว ไม่ล้างคำเตือนคำสั่งที่ยังรอผล
+    if (!pending.current) setError('');
   }
   useEffect(() => {
     const abort = new AbortController(); live.current = abort;

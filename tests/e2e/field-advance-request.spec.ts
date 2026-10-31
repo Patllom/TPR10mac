@@ -32,12 +32,20 @@ async function policy(owner: BrowserContext, reviewer: BrowserContext, n: number
   row = await send(owner, `/${row.id}/submit`, { commandId: randomUUID(), expectedVersion: row.version, reason: 'จำลอง', policy: options });
   await send(reviewer, `/${row.id}/review`, { decision: 'approve', meta: { commandId: randomUUID(), expectedVersion: row.version, reason: 'จำลอง', policy: options } });
 }
+const dwellDiagnostics = new WeakMap<Page, (step: string) => void>();
 async function dwell(page: Page) {
+  const trace = dwellDiagnostics.get(page);
+  trace?.('dwell-id-before');
   const current = await page.getByTestId('request-id').innerText();
+  trace?.('dwell-id-after');
   const polled = page.waitForResponse(r => r.url().endsWith(`${api}/${current}/screen`) && r.status() === 200);
+  trace?.('dwell-clock-before');
   await page.clock.fastForward(16000);
+  trace?.('dwell-clock-after-wait-screen-before');
   await polled;
+  trace?.('dwell-wait-screen-after-assert-before');
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+  trace?.('dwell-assert-after');
 }
 async function draft(page: Page, n: number, team = false, save = true) {
   await page.goto(`${root}/new?workspaceId=${workspace(n)}&projectId=${project(n)}`);
@@ -125,7 +133,7 @@ test('round1: POST สำเร็จแต่ projection ล้มเหลว�
       await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
       await expect(page.getByRole('main').getByRole('alert')).toContainText('บันทึกแล้ว แต่โหลดข้อมูลประกอบไม่สำเร็จ');
       await expect(page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true })).toBeEnabled();
-      await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toHaveCount(0);
       await page.clock.fastForward(16000); expect(sent).toHaveLength(1);
       broken = false;
       await page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true }).click();
@@ -386,31 +394,90 @@ test('WB-I2: เปิดฉบับแรกหลังสามฉบับ�
 });
 test('ส่งกลับ แก้ฉบับ ยืนยันใหม่ และถอนด้วยเหตุผล', async ({ page, context, browser }) => {
   const n = 14, reviewer = await browser.newContext();
+  const diagnostics = process.env.TPR10_SMOKE_DIAGNOSTICS === '1';
+  const started = performance.now();
+  let phase = 'setup', subphase = '', phaseCount = 0, count = 0, lateCount = 0, subphaseCount = 0;
+  function mark(next: string) {
+    phase = next; subphase = ''; count = 0; phaseCount++;
+    if (diagnostics && phaseCount <= 30) console.log('Task15 request phase', JSON.stringify({ phase, elapsedMs: Math.round(performance.now() - started) }));
+  }
+  function trace(step: string) {
+    subphase = step;
+    if (diagnostics && subphaseCount++ < 80) console.log('Task15 request subphase', JSON.stringify({ phase, subphase, elapsedMs: Math.round(performance.now() - started) }));
+  }
+  dwellDiagnostics.set(page, trace);
+  function observe(label: string, target: BrowserContext) {
+    const response = (value: import('@playwright/test').Response) => {
+      if (!diagnostics) return;
+      const pathname = new URL(value.url()).pathname;
+      if (!pathname.startsWith('/api/v1/field-advances/') && pathname !== '/api/v1/auth/session') return;
+      const status = value.status();
+      const lateDenial = [401, 403, 409].includes(status);
+      if (lateDenial) { if (lateCount >= 20) return; lateCount++; }
+      else { if (phaseCount > 30 || count >= 8) return; count++; }
+      console.log('Task15 request API', JSON.stringify({ phase, subphase, context: label, elapsedMs: Math.round(performance.now() - started), pathname, status }));
+    };
+    target.on('response', response);
+    return () => target.off('response', response);
+  }
+  const stopOwner = observe('owner', context), stopReviewer = observe('reviewer', reviewer);
+  mark('setup');
   try {
+    mark('sessions-policy');
     await session(context, n, 1); await session(reviewer, n, 2); await policy(context, reviewer, n);
+    mark('draft-confirm');
     const id = await draft(page, n); await confirm(page);
+    mark('reviewer-navigation');
     const review = await reviewer.newPage(); await review.goto(`${root}/${id}`);
+    mark('return-reason');
     await review.getByLabel('เหตุผลดำเนินการ').fill('เพิ่มรายละเอียดจุดสำรวจ');
+    mark('return-command');
     await review.getByRole('button', { name: 'ส่งกลับ', exact: true }).click();
+    mark('owner-refresh');
     await page.getByRole('button', { name: 'โหลดใหม่', exact: true }).click();
+    mark('returned-state');
     await expect(page.getByTestId('request-state')).toHaveText('ส่งกลับเพื่อแก้ไข');
+    mark('create-revision');
     await page.getByRole('button', { name: 'สร้างฉบับแก้ไข', exact: true }).click();
+    mark('revision-visible-and-poll');
     await expect(page.getByText('ฉบับที่ 2', { exact: true })).toBeVisible(); await dwell(page);
+    mark('edit-description');
     await page.getByLabel('รายละเอียดงาน').fill('สำรวจพื้นที่จำลอง เพิ่มจุด');
+    mark('confirm-disabled');
     await expect(page.getByRole('button', { name: 'ทบทวนและยืนยัน', exact: true })).toBeDisabled();
+    mark('poll-edited-draft');
     await dwell(page);
+    mark('description-preserved');
     await expect(page.getByLabel('รายละเอียดงาน')).toHaveValue('สำรวจพื้นที่จำลอง เพิ่มจุด');
-    await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click(); await dwell(page);
+    mark('save-and-poll');
+    trace('save-click-before');
+    await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
+    trace('save-click-after');
+    await dwell(page);
+    mark('revision-diff');
     await expect(page.getByText('รายละเอียดงาน: สำรวจพื้นที่จำลอง → สำรวจพื้นที่จำลอง เพิ่มจุด', { exact: true })).toBeVisible();
+    mark('confirm-revision');
     await confirm(page);
+    mark('approval-step');
     await expect(page.getByText('ขั้นปัจจุบัน: supervisor', { exact: true })).toBeVisible();
+    mark('withdraw-open');
     await page.getByRole('button', { name: 'ถอนคำขอ', exact: true }).click();
+    mark('withdraw-reason');
     await page.getByRole('dialog').getByLabel('เหตุผลถอนคำขอ').fill('ยกเลิกการออกสนาม');
+    mark('withdraw-confirm');
     await page.getByRole('button', { name: 'ยืนยันถอนคำขอ', exact: true }).click();
+    mark('withdrawn-state-and-poll');
     await expect(page.getByTestId('request-state')).toHaveText('ถอนแล้ว'); await dwell(page);
+    mark('withdraw-reason-visible');
     await expect(page.getByText('ยกเลิกการออกสนาม', { exact: true })).toBeVisible();
+    mark('revision-action-absent');
     await expect(page.getByRole('button', { name: 'สร้างฉบับแก้ไข', exact: true })).toHaveCount(0);
-  } finally { await reviewer.close(); }
+  } finally {
+    mark('cleanup-after-' + phase);
+    dwellDiagnostics.delete(page);
+    stopOwner(); stopReviewer();
+    await reviewer.close();
+  }
 });
 test('ทิ้งผลคำสั่งที่กลับมาหลังเปลี่ยนบัญชี', async ({ page, context, browser }) => {
   const n = 18, reviewer = await browser.newContext();
@@ -450,7 +517,7 @@ test('ผลเครือข่ายไม่ทราบเก็บคำ�
     await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
     await expect(page.getByRole('main').getByRole('alert')).toContainText('ไม่ทราบผล');
     await page.clock.fastForward(16000); expect(sent).toHaveLength(1);
-    await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'บันทึกร่าง', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'ตรวจผลด้วยคำสั่งเดิม', exact: true }).click();
     await expect(page.getByTestId('request-state')).toHaveText('ร่าง');
     expect(sent).toHaveLength(2); expect(sent[1]).toBe(sent[0]);
@@ -484,5 +551,33 @@ test('ไม่มีผู้อนุมัติให้พักและ�
     await expect(page.getByText('เหตุผลพักสายอนุมัติ: ไม่มีผู้อนุมัติที่เข้าเงื่อนไข', { exact: true })).toBeVisible();
     await dwell(page);
     await expect(page.getByRole('button', { name: 'อนุมัติขั้นนี้', exact: true })).toHaveCount(0);
+  } finally { await reviewer.close(); }
+});
+
+
+test('Task15: โหลดวงเงินสำเร็จหลัง 409 ต้องล้าง alert เก่าโดยไม่ส่งคำสั่งซ้ำ', async ({ page, context, browser }) => {
+  const n = 12, reviewer = await browser.newContext();
+  try {
+    await session(context, n, 1); await session(reviewer, n, 2); await policy(context, reviewer, n);
+    // ใช้โครงการ fixture ที่ยังไม่ถูกเทสต์คำขออื่นใช้ และให้เฉพาะสิทธิ์ผู้จัดทำในฐานทิ้งได้
+    sql(`UPDATE field_advance_grant_proposals SET capabilities=ARRAY['request.create'] WHERE recipient_id='${user(n, 1)}' AND project_id='${project(n)}'`);
+    await draft(page, n, false, false);
+    let unavailable = true, rejected = 0, mutations = 0;
+    page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith(api)) mutations++; });
+    const pattern = /\/api\/v1\/field-advances\/requests\/[^/]+\/payment-context$/;
+    await page.route(pattern, route => {
+      if (unavailable) { rejected++; return route.fulfill({ status: 409, json: {} }); }
+      return route.continue();
+    });
+    await page.getByRole('button', { name: 'บันทึกร่าง', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'ปรับวงเงินและส่วนเพิ่ม', exact: true });
+    await expect(panel.getByRole('alert')).toContainText('ข้อมูลเปลี่ยน');
+    expect(rejected).toBeGreaterThan(0); expect(mutations).toBe(1);
+    unavailable = false;
+    await panel.getByRole('button', { name: 'โหลดสถานะวงเงินใหม่', exact: true }).click();
+    await expect(panel.getByText('วงเงินอนุมัติที่ใช้จ่ายอยู่ 0.00 บาท · เหตุระงับ ไม่มี', { exact: true })).toBeVisible();
+    await expect(panel.getByRole('alert')).toHaveCount(0);
+    expect(mutations).toBe(1);
+    await page.unroute(pattern);
   } finally { await reviewer.close(); }
 });

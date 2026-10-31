@@ -37,7 +37,15 @@ public sealed class PaymentUiService(Tpr10DbContext db, PaymentAccess access, Fi
         return PaymentHttp.ProtectProjection(actor, requests, Results.Json(prepared), async token =>
         {
             var current = await load(token);
-            return current is not null && fingerprint == JsonSerializer.Serialize(current);
+            if (current is null) return PaymentHttp.ProjectionOutcome.Denied;
+            if (fingerprint == JsonSerializer.Serialize(current)) return PaymentHttp.ProjectionOutcome.Current;
+            // เปลี่ยนเฉพาะรุ่นคำขอไม่ใช่การถอนสิทธิ์ แต่ห้ามส่ง projection เก่า
+            // ส่วนอื่นต้องตรงทั้งหมด รวมสิทธิ์/action hints, family, owner และ workflow
+            if (prepared is PaymentUiContext before && current is PaymentUiContext after
+                && before.RequestVersion != after.RequestVersion
+                && fingerprint == JsonSerializer.Serialize(after with { RequestVersion = before.RequestVersion }))
+                return PaymentHttp.ProjectionOutcome.Stale;
+            return PaymentHttp.ProjectionOutcome.Denied;
         }, prepared is PaymentDispositionContext ? "disposition-read" : "read");
     }
     private async Task<RequestScopeChoice[]?> ScopesCore(Guid actor, int page, int size, CancellationToken ct)
