@@ -1,4 +1,6 @@
 'use client';
+import { money } from './SupplementEditor';
+import Link from 'next/link';
 import type { RequestView, RequestScreen, RequestHistory, ConfirmationQuote } from '@/lib/field-advances/request-types';
 import { diffRequestContent, requestStateLabel } from '@/lib/field-advances/request-view';
 
@@ -8,6 +10,7 @@ export default function RequestDetails({ row, screen, history, quote }: { row: R
   const holdReasons: Record<string, string> = { 'route-no-candidate': 'ไม่มีผู้อนุมัติที่เข้าเงื่อนไข', 'route-cycle': 'สายบังคับบัญชาวนซ้ำ', 'route-ambiguous-role': 'ผู้ดำรงบทบาทอนุมัติไม่ชัดเจน', 'route-identity-unavailable': 'ตรวจสอบตัวบุคคลผู้อนุมัติไม่ได้', 'route-invalid-policy': 'กติกาฉบับนี้ใช้กำหนดสายอนุมัติไม่ได้', 'route-invalid-level': 'ระดับอนุมัติไม่ตรงกับกติกาฉบับนี้', 'route-invalid-context': 'ข้อมูลสายอนุมัติไม่พร้อม' };
   const actions: Record<string, string> = { DraftCreated: 'สร้างร่าง', DraftUpdated: 'แก้ไขร่าง', ReturnedToAuthor: 'ส่งกลับผู้จัดทำ', SentToOwner: 'ส่งให้ผู้รับผิดชอบ', Confirmed: 'ยืนยันและส่ง', Approved: 'อนุมัติขั้น', Returned: 'ส่งกลับ', Rejected: 'ปฏิเสธ', Withdrawn: 'ถอนคำขอ', Revised: 'สร้างฉบับแก้ไข', Copied: 'คัดลอก', 'field-advance.request.reevaluate': 'ประเมินสายอนุมัติใหม่' };
   return <section className="space-y-4" aria-label="รายละเอียดคำขอ">
+    <Link className="underline" href={`/portal/field-advances/payments?requestId=${row.id}`}>ดูยอดและรายละเอียดการจ่ายตามสิทธิ์</Link>
     <p>รหัสคำขอ <span data-testid="request-id" className="break-all">{row.id}</span></p>
     <p>ฉบับที่ {screen.revisionNumber}</p><p data-testid="request-state" className="font-semibold">{requestStateLabel(row.state)}</p>
     <p>{row.content.purpose}</p><p>ออกสนาม {row.content.fieldStart} ถึง {row.content.fieldEnd} · ต้องการเงิน {row.content.neededOn}</p>
@@ -17,6 +20,7 @@ export default function RequestDetails({ row, screen, history, quote }: { row: R
     {row.content.teamPersonIds.length > 0 && <ul aria-label="รหัสบุคคลสมาชิกทีม" className="break-all">{row.content.teamPersonIds.map(id => <li key={id}>{id}</li>)}</ul>}
     {row.content.teamPersonIds.length > 0 && <p>สมาชิกทีมที่เลือก: {row.content.teamPersonIds.length} คน (ไม่มีสิทธิ์การเงินอัตโนมัติ)</p>}
     {row.estimate && <><p className="font-semibold">ยอดจากเซิร์ฟเวอร์: {row.estimate.total} บาท</p><ul>{row.estimate.lines.map(line => <li key={line.id}>{line.description} · {line.quantity !== null ? `${line.quantity} × ${line.unitRate} = ` : ''}{line.amount} บาท</li>)}</ul></>}
+    {row.basis && <section aria-label="ฐานอำนาจอนุมัติ"><p>{row.basis.items.some(x => x.requestId !== row.id) ? 'ยอดส่วนเพิ่ม' : 'ยอดคำขอ'} {money(row.estimate?.total ?? '0.00')} บาท</p><p>{row.state === 'Draft' || row.state === 'AwaitingOwner' ? 'ฐานร่าง (ต้องให้ผู้รับผิดชอบทบทวนใหม่)' : 'ฐานอำนาจอนุมัติ'} {money(row.basis.amount)} บาท</p><ul>{row.basis.items.map(item => <li key={item.requestId} className="break-all"><Link className="underline" href={`/portal/field-advances/${item.requestId}`}>คำขอ {item.requestId}</Link> · {money(item.approvedAmount)} บาท</li>)}</ul><p>เลขคำขอและยอดประกอบไม่ให้สิทธิ์อ่านรายละเอียดต้นทาง ทุกลิงก์ตรวจสิทธิ์แยก</p></section>}
     {row.currentStep && <p>ขั้นปัจจุบัน: {row.currentStep.levelCode}</p>}
     {row.holdCode && <p>เหตุผลพักสายอนุมัติ: {holdReasons[row.holdCode] ?? row.holdCode}</p>}
     {screen.previousContent && <section><h2 className="font-semibold">ความต่างจากฉบับก่อน</h2>{differences.length ? <ul>{differences.map(x => <li key={x}>{x}</li>)}</ul> : <p>เนื้อหาไม่เปลี่ยนแปลง</p>}</section>}

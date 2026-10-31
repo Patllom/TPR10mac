@@ -1,3 +1,4 @@
+using TPR10.Api.FieldAdvances.Payments;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Auditing;
@@ -75,6 +76,7 @@ public sealed class RequestSubmissionService(Tpr10DbContext db, FinanceAccess ac
             if (request.Version != meta.ExpectedVersion || request.Version == long.MaxValue) return Conflict();
             var revision = await CurrentAsync(requestId, ct);
             if (revision is null || revision.SubmittedAtUtc is not null) return Conflict();
+            if (!await CeilingAmendmentService.CanProgressAsync(db, request.Id, ct)) return Conflict();
             var calculated = await QuoteLockedAsync(request, revision, ct);
             // A previously displayed quote is no longer confirmable, including when the
             // current policy disables a category or cannot cover the total. Quote reports
@@ -82,6 +84,16 @@ public sealed class RequestSubmissionService(Tpr10DbContext db, FinanceAccess ac
             if (calculated.Value is null) return Conflict();
             var quote = calculated.Value;
             if (!string.Equals(confirmationHash, quote.ConfirmationHash, StringComparison.Ordinal)) return Conflict();
+            if (request.RelationKind == "Supplement")
+            {
+                if (!await SupplementService.EligibleAsync(db, request.FamilyId, ct)) return Conflict();
+                // Compare-and-set at the database boundary, under the common family lock.
+                var claimed = await db.Set<AdvanceFamily>().Where(x => x.Id == request.FamilyId
+                    && (x.PendingSupplementId == null || x.PendingSupplementId == request.Id))
+                    .ExecuteUpdateAsync(x => x.SetProperty(f => f.PendingSupplementId, request.Id), ct);
+                if (claimed != 1) return Conflict();
+                await db.Entry(await db.Set<AdvanceFamily>().SingleAsync(x => x.Id == request.FamilyId, ct)).ReloadAsync(ct);
+            }
             var content = JsonSerializer.Deserialize<RequestContent>(revision.ContentJson)!;
             await StoreEstimateAsync(request, revision, quote, ct);
             revision.CompanyPolicyRevisionId = quote.Policy.CompanyVersionId;
@@ -141,8 +153,12 @@ public sealed class RequestSubmissionService(Tpr10DbContext db, FinanceAccess ac
         var calculated = await drafts.CalculateAsync(new(request.WorkspaceId, request.ProjectId), content!, ct);
         if (calculated.Value is null) return new(calculated.Status, calculated.Code, null);
         var (estimate, policy) = calculated.Value;
-        var levels = ApprovalLevelEvaluator.Evaluate(estimate.Total, policy);
+        ApprovalBasis basis;
+        try { basis = await new ApprovalBasisCalculator(db).CalculateAsync(request.Id, estimate.Total, ct); }
+        catch (OverflowException) { return new(400, "invalid-approval-basis", null); }
+        var levels = ApprovalLevelEvaluator.Evaluate(basis.Amount, policy);
         if (levels.Value is null) return new(levels.Status, levels.Code, null);
+        var familyVersion = await db.Set<AdvanceFamily>().Where(x => x.Id == request.FamilyId).Select(x => x.Version).SingleAsync(ct);
         var hash = Hash(new
         {
             request.Id,
@@ -155,16 +171,20 @@ public sealed class RequestSubmissionService(Tpr10DbContext db, FinanceAccess ac
             revision.ContentHash,
             Content = content,
             Estimate = estimate,
+            Basis = basis,
+            FamilyVersion = familyVersion,
             Policy = policy,
             Levels = levels.Value
         });
-        return new(200, "ok", new(request.Id, revision.Id, request.Version, hash, estimate, policy, levels.Value));
+        return new(200, "ok", new(request.Id, revision.Id, request.Version, hash, estimate, policy, levels.Value) { Basis = basis, FamilyVersion = familyVersion });
     }
 
     private async Task StoreEstimateAsync(AdvanceRequest request, AdvanceRequestRevision revision, ConfirmationQuote quote, CancellationToken ct)
     {
         await db.Set<AdvanceRequestLine>().Where(x => x.RevisionId == revision.Id).ExecuteDeleteAsync(ct);
         revision.Total = quote.Estimate.Total;
+        revision.ApprovalBasisAmount = quote.Basis.Amount;
+        revision.ApprovalBasisJson = JsonSerializer.Serialize(new { quote.Basis.Amount, quote.Basis.Items, quote.FamilyVersion });
         drafts.AddLines(request, revision, quote.Estimate, quote.Policy);
     }
 }

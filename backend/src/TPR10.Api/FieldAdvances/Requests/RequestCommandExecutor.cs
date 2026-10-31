@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Auditing;
 using TPR10.Api.Data;
 using TPR10.Api.FieldAdvances.Data;
+using TPR10.Api.FieldAdvances.Payments;
 
 namespace TPR10.Api.FieldAdvances.Requests;
 
@@ -34,8 +35,7 @@ internal sealed class RequestCommandExecutor(Tpr10DbContext db, RequestAccess ac
     }
 
     internal Task<AdvanceRequest?> LockAsync(Guid requestId, CancellationToken ct) =>
-        db.Set<AdvanceRequest>().FromSqlInterpolated($"SELECT * FROM field_advance_requests WHERE id={requestId} FOR UPDATE")
-            .SingleOrDefaultAsync(ct);
+        FamilyParticipation.LockRequestAsync(db, requestId, ct);
 
     // The caller checks current command authority BEFORE reaching this receipt lookup.
     internal async Task<FinanceResult<RequestView>?> ReplayAsync(Guid actor, FinanceScope scope, string action,

@@ -1,3 +1,4 @@
+using TPR10.Api.FieldAdvances.Payments;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Auditing;
@@ -97,6 +98,12 @@ public sealed class RequestDraftService(Tpr10DbContext db, FinanceAccess access,
             revision.ContentJson = JsonSerializer.Serialize(content);
             revision.ContentHash = Hash(content);
             revision.Total = estimate.Total;
+            if (request.RelationKind == "Supplement")
+            {
+                revision.ApprovalBasisAmount = estimate.Total;
+                revision.ApprovalBasisJson = JsonSerializer.Serialize(new ApprovalBasis(estimate.Total,
+                    [new(request.Id, revision.Id, estimate.Total)]));
+            }
             request.Version++;
             AddLines(request, revision, estimate, policy);
             var person = await people.ResolveAsync(actorId, request.WorkspaceId, ct);

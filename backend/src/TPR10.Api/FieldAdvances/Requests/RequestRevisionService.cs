@@ -1,3 +1,4 @@
+using TPR10.Api.FieldAdvances.Payments;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Auditing;
@@ -71,12 +72,16 @@ public sealed class RequestRevisionService(Tpr10DbContext db, FinanceAccess acce
             {
                 if (operation == "revise")
                 {
+                    if (!await CeilingAmendmentService.CanProgressAsync(db, request.Id, ct)) return Conflict();
                     if (revision.SubmittedAtUtc is null || revision.RevisionNumber == int.MaxValue) return Conflict();
                     var lines = await db.Set<AdvanceRequestLine>().AsNoTracking().Where(x => x.RevisionId == revision.Id).ToArrayAsync(ct);
                     revision.IsCurrent = false;
                     // ปลด unique current ก่อนเพิ่มฉบับใหม่ โดยยังอยู่ใน transaction เดียวกัน
                     await db.SaveChangesAsync(ct);
                     revision = NewRevision(request, content, estimate, revision.RevisionNumber + 1, actor, person.Value);
+                    revision.ApprovalBasisAmount = estimate.Total;
+                    revision.ApprovalBasisJson = JsonSerializer.Serialize(new ApprovalBasis(estimate.Total,
+                        [new(request.Id, revision.Id, estimate.Total)]));
                     db.Add(revision);
                     foreach (var line in lines)
                     {
@@ -92,6 +97,7 @@ public sealed class RequestRevisionService(Tpr10DbContext db, FinanceAccess acce
                 else
                 {
                     request.State = "Withdrawn";
+                    await SupplementService.ReleaseAsync(db, request, ct);
                     var pending = await db.Set<AdvanceApprovalStep>().Where(x => x.RevisionId == revision.Id && x.Outcome == null).ToArrayAsync(ct);
                     foreach (var step in pending)
                     {

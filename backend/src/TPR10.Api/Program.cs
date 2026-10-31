@@ -74,7 +74,12 @@ app.Use(async (context, next) => { RecordingEndpoints.ApplyCaptureBodyLimit(cont
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/v1"))
-        context.Response.OnStarting(() => { context.Response.Headers.CacheControl = "no-store"; return Task.CompletedTask; });
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = context.GetEndpoint()?.Metadata.GetMetadata<TPR10.Api.FieldAdvances.Payments.PaymentApiMetadata>() is not null
+                ? "private, no-store" : "no-store";
+            return Task.CompletedTask;
+        });
     try { await next(context); }
     catch (TPR10.Api.Attendance.Directory.DirectoryConflictException)
     {

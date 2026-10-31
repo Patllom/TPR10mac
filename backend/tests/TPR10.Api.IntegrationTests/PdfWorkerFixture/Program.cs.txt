@@ -1,0 +1,40 @@
+using System.Diagnostics;
+using System.Net.Sockets;
+using System.Text;
+using System.Runtime.InteropServices;
+var mode = await new StreamReader(Console.OpenStandardInput()).ReadToEndAsync();
+if (mode == "sleep") await Task.Delay(60000);
+if (mode == "memory-settings" && (File.ReadAllText("/sys/fs/cgroup/memory.max").Trim() != "536870912" || File.ReadAllText("/sys/fs/cgroup/memory.swap.max").Trim() != "0")) return 11;
+if (mode == "oom")
+{
+    var allocations = new List<IntPtr>(); var bytes = new byte[1024 * 1024]; Array.Fill(bytes, (byte)42);
+    try { for (var i = 0; i < 768; i++) { var block = Marshal.AllocHGlobal(bytes.Length); Marshal.Copy(bytes, 0, block, bytes.Length); allocations.Add(block); } }
+    finally { foreach (var block in allocations) Marshal.FreeHGlobal(block); }
+    Console.WriteLine("valid"); return 0;
+}
+if (mode == "stdout" || mode == "stderr")
+{ var writer = mode == "stdout" ? Console.Out : Console.Error; for (var i = 0; i < 100; i++) writer.Write(new string('x', 4096)); Console.WriteLine("valid"); return 0; }
+if (mode == "crash") return 3;
+if (mode == "cpu")
+{
+    var process = Process.GetCurrentProcess(); var before = process.TotalProcessorTime; var watch = Stopwatch.StartNew();
+    await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Factory.StartNew(() => { while (watch.ElapsedMilliseconds < 2500) Thread.SpinWait(10000); }, TaskCreationOptions.LongRunning)));
+    if ((process.TotalProcessorTime - before).TotalSeconds / watch.Elapsed.TotalSeconds > 1.5) return 4;
+}
+if (mode == "pids")
+{
+    var children = new List<Process>(); var limited = false;
+    try { for (var i = 0; i < 80; i++) { try { children.Add(Process.Start("sleep", "10")!); } catch { limited = true; break; } } }
+    finally { foreach (var child in children) { try { child.Kill(); child.WaitForExit(); } catch { } child.Dispose(); } }
+    if (!limited) return 5;
+}
+if (mode == "isolation")
+{
+    if (File.ReadAllText("/proc/self/status").Split('\n').Single(x => x.StartsWith("Uid:")).Split('\t')[1] == "0") return 6;
+    try { File.WriteAllText("/tmp/probe", "forbidden"); return 7; } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    if (File.ReadAllText("/proc/net/route").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length != 1) return 10;
+    try { using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp); using var deadline = new CancellationTokenSource(1000); await socket.ConnectAsync("192.0.2.1", 80, deadline.Token); return 8; } catch (SocketException) { }
+    var status = File.ReadAllText("/proc/self/status");
+    if (!status.Contains("NoNewPrivs:\t1") || !status.Contains("CapEff:\t0000000000000000")) return 9;
+}
+Console.WriteLine("valid"); return 0;

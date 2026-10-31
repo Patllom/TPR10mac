@@ -4,6 +4,7 @@ using TPR10.Api.Auditing;
 using TPR10.Api.Data;
 using TPR10.Api.FieldAdvances.Access;
 using TPR10.Api.FieldAdvances.Data;
+using TPR10.Api.FieldAdvances.Payments;
 using static TPR10.Api.FieldAdvances.Requests.RequestCommandExecutor;
 
 namespace TPR10.Api.FieldAdvances.Requests;
@@ -33,6 +34,7 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
             if (request.Version != meta.ExpectedVersion || request.Version == long.MaxValue) return Conflict();
             if (!revision.IsCurrent || revision.SubmittedAtUtc is null || !(await requestAccess.CheckAsync(actorId, requestId, "review", ct)).Allowed)
                 return Denied();
+            if (!await CeilingAmendmentService.CanProgressAsync(db, request.Id, ct)) return Conflict();
             var pending = await db.Set<AdvanceApprovalStep>().Where(x => x.RevisionId == revision.Id && x.Outcome == null)
                 .OrderBy(x => x.StepOrder).ToArrayAsync(ct);
             if (pending.Length == 0 || pending[0].Id != step.Id) return Conflict();
@@ -56,6 +58,8 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
                 });
             // Resolver ต้องเห็นผลที่เพิ่งลง เพื่อบังคับคนละคนในฉบับเดียวกัน
             await db.SaveChangesAsync(ct);
+            // Returning/rejecting is also participation; persist it in the decision transaction.
+            await FamilyParticipation.RecordAuthorizedAsync(db, request, person.Value, "Approver", actorId, clock.GetUtcNow(), ct);
             RouteChoice? nextRoute = null;
             var next = pending.Skip(1).FirstOrDefault();
             if (step.Outcome == "Approved" && next is not null)
@@ -70,6 +74,21 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
                 {
                     remaining.AssigneePersonId = null; remaining.HoldCode = null;
                     remaining.AssignmentReason = "ปิดขั้นค้างเมื่อจบรอบอนุมัติฉบับนี้";
+                }
+            }
+            if (request.State is "Approved" or "Rejected")
+                await SupplementService.ReleaseAsync(db, request, ct);
+            if (request.State == "Approved")
+            {
+                var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == request.Id, ct);
+                // Only activate the first approval. Task9 amendments keep the old frozen account until Activate.
+                if (account.ApprovedRevisionId is null)
+                {
+                    account.ApprovedRevisionId = revision.Id;
+                    account.Approved = revision.Total; account.Spendable = revision.Total;
+                    account.Version = checked(account.Version + 1);
+                    var family = await db.Set<AdvanceFamily>().SingleAsync(x => x.Id == request.FamilyId, ct);
+                    family.Version = checked(family.Version + 1);
                 }
             }
             request.Version++;
@@ -134,7 +153,7 @@ public sealed class RequestReviewService(Tpr10DbContext db, FinanceAccess access
             || !(await access.CheckAsync(actor, scope, "request.approve", ct)).Allowed) return null;
         return await FinanceGrantQueries.Current(db, scope, "request.approve", clock.GetUtcNow())
             .AnyAsync(x => x.RecipientId == actor && x.RecipientPersonId == person && x.ApprovalLevels.Contains(step.LevelCode)
-                && x.ApprovalLimit != null && x.ApprovalLimit >= revision.Total, ct) ? person : null;
+                && x.ApprovalLimit != null && x.ApprovalLimit >= revision.ApprovalBasisAmount, ct) ? person : null;
     }
 
     private static void Assign(AdvanceRequest request, AdvanceApprovalStep step, RouteChoice route)

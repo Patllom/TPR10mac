@@ -8,6 +8,9 @@ public sealed class AdvanceRequest
     public Guid OwnerPersonId { get; set; }
     public Guid? DelegatePersonId { get; set; }
     public Guid? SourceRequestId { get; set; }
+    public Guid FamilyId { get; set; }
+    public string RelationKind { get; set; } = "Normal";
+    public Guid? SupplementOfRequestId { get; set; }
     public string State { get; set; } = "Draft";
     public string? HoldCode { get; set; }
     public long Version { get; set; } = 1;
@@ -26,6 +29,8 @@ public sealed class AdvanceRequestRevision
     public required string ContentJson { get; set; }
     public required string ContentHash { get; set; }
     public decimal Total { get; set; }
+    public decimal ApprovalBasisAmount { get; set; }
+    public string ApprovalBasisJson { get; set; } = "{}";
     public Guid? CompanyPolicyRevisionId { get; set; }
     public Guid? ProjectPolicyRevisionId { get; set; }
     public string? PolicySnapshotJson { get; set; }

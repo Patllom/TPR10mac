@@ -1,0 +1,25 @@
+import type { RequestContent, RequestCommand } from './request-types';
+export type PaymentAction = 'installments' | 'update' | 'submit' | 'review' | 'start' | 'record' | 'outcome' | 'mismatch' | 'cancel' | 'metadata' | 'takeover' | 'confirm' | 'ceiling-amendment' | 'ceiling-activate' | 'disposition' | 'finalize' | 'supplements';
+export type PaymentSummary = {
+  requestId: string; installmentId: string | null; familyVersion: number; requestVersion: number; installmentVersion: number | null;
+  state: string; approved: string; spendable: string; reserved: string; paid: string; available: string; holdCodes: string[];
+};
+export type PaymentCommand = { commandId: string; familyVersion: number; requestVersion: number; installmentVersion: number | null; reason: string };
+export type PaymentDestination = { channel: 'Cash' | 'Transfer'; recipientPersonId: string; bankCode: string | null; accountNumber: string | null; accountHolder: string | null };
+export type EvidenceTicket = { id: string; sha256: string; length: number; contentType: string; state: string };
+export type PaymentMetadata = { paidOn: string; reference: string | null; evidenceIds: string[] };
+export type ActualPayment = PaymentMetadata & { amount: string; recipientPersonId: string };
+export type PaymentOutcome = { outcome: string; actual: ActualPayment | null; evidenceIds: string[] };
+export type PaymentProposalChange = { revisionId: string | null; approved: string | null; basis: string | null; outcome: string | null; state: string | null; reserved: string | null; metadata: PaymentMetadata | null; payment: PaymentOutcome | null };
+export type PaymentProposal = { id: string; requestId: string; installmentId: string | null; kind: string; state: string; familyVersion: number; requestVersion: number; installmentVersion: number | null; reason: string; before: PaymentProposalChange; after: PaymentProposalChange; evidence: EvidenceTicket[] };
+export type InstallmentDetail = { summary: PaymentSummary; revisions: { id: string; revisionNumber: number; isCurrent: boolean; amount: string; destination: PaymentDestination; reviewedAtUtc: string | null; reason: string }[]; proposals: PaymentProposal[]; evidence: EvidenceTicket[] };
+export type SupplementInput = { content: RequestContent; meta: RequestCommand };
+
+export type PaymentCatalog = { installments: PaymentSummary[]; proposals: PaymentProposal[]; evidence: EvidenceTicket[] };
+
+export type PaymentUiContext = { requestId: string; familyVersion: number; requestVersion: number; allowedActions: PaymentAction[]; installments: { installmentId: string; installmentVersion: number; allowedActions: PaymentAction[] }[]; proposals: { proposalId: string; allowedActions: PaymentAction[] }[] };
+export type PaymentScopeChoice = { scope: import('./request-types').FinanceScope; workspaceName: string; projectName: string; capabilities: ('finance.check' | 'payment.record')[] };
+
+export type WorkflowContext = { everPaid: boolean; outcomeUnclear: boolean; relationKind: 'Normal' | 'Supplement'; pendingSupplementState: string | null; amendmentState: string | null; amendmentApproved: boolean; installmentsCleared: boolean; ownerPersonId: string; scope: import('./request-types').FinanceScope };
+export type WorkflowAction = PaymentAction | 'resume-original' | 'terminate-remaining';
+export type PaymentWorkflowContext = { variant: 'request'; requestId: string; familyVersion: number; requestVersion: number; allowedActions: WorkflowAction[]; installments: PaymentUiContext['installments']; proposals: PaymentUiContext['proposals']; workflow: WorkflowContext } | { variant: 'disposition'; requestId: string; familyVersion: number; requestVersion: number; proposals: PaymentUiContext['proposals'] };

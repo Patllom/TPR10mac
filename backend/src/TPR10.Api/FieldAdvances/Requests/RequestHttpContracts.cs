@@ -1,3 +1,4 @@
+using TPR10.Api.FieldAdvances.Payments;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -23,11 +24,24 @@ public sealed record RequestHttpView(Guid Id, Guid RevisionId, long Version, str
     Guid OwnerPersonId, Guid? DelegatePersonId, RequestContent Content, RequestEstimateHttp? Estimate,
     string? HoldCode, RequestStepView? CurrentStep)
 {
+    public ApprovalBasisHttp? Basis { get; init; }
     internal static RequestHttpView From(RequestView v) => new(v.Id, v.RevisionId, v.Version, v.State, v.Scope,
-        v.OwnerPersonId, v.DelegatePersonId, v.Content, v.Estimate is null ? null : RequestEstimateHttp.From(v.Estimate), v.HoldCode, v.CurrentStep);
+        v.OwnerPersonId, v.DelegatePersonId, v.Content, v.Estimate is null ? null : RequestEstimateHttp.From(v.Estimate), v.HoldCode, v.CurrentStep)
+    { Basis = v.Basis is null ? null : ApprovalBasisHttp.From(v.Basis) };
 }
 public sealed record RequestQuoteHttp(Guid RequestId, Guid RevisionId, long Version, string ConfirmationHash,
-    RequestEstimateHttp Estimate, PolicyHttpSnapshot Policy, string[] Levels);
+    RequestEstimateHttp Estimate, PolicyHttpSnapshot Policy, string[] Levels)
+{
+    public ApprovalBasisHttp Basis { get; init; } = null!;
+    public long FamilyVersion { get; init; }
+}
+public sealed record ApprovalBasisItemHttp(Guid RequestId, Guid RevisionId, string ApprovedAmount);
+public sealed record ApprovalBasisHttp(string Amount, ApprovalBasisItemHttp[] Items)
+{
+    internal static ApprovalBasisHttp From(ApprovalBasis b) => new(b.Amount.ToString("0.00", CultureInfo.InvariantCulture),
+        b.Items.Select(x => new ApprovalBasisItemHttp(x.RequestId, x.RevisionId,
+            x.ApprovedAmount.ToString("0.00", CultureInfo.InvariantCulture))).ToArray());
+}
 public sealed record RequestHistory(Guid EventId, Guid RevisionId, string Action, Guid? Actor,
     DateTimeOffset Time, string Reason, Guid? StepId, long Version, JsonElement Metadata);
 public sealed record RequestScopeChoice(FinanceScope Scope, string WorkspaceName, string ProjectName, string[] Capabilities);
@@ -39,7 +53,10 @@ public sealed record RequestRevisionStep(Guid Id, string LevelCode, int Order, s
     Guid? DecidedByPersonId, DateTimeOffset? DecidedAtUtc, string? DecisionReason);
 public sealed record RequestRevisionDetail(Guid RequestId, Guid RevisionId, int RevisionNumber, FinanceScope Scope,
     DateTimeOffset? SubmittedAtUtc, RequestContent Content, RequestEstimateHttp? Estimate,
-    PolicyHttpSnapshot? FrozenPolicy, RequestRevisionStep[] Steps);
+    PolicyHttpSnapshot? FrozenPolicy, RequestRevisionStep[] Steps)
+{
+    public ApprovalBasisHttp? Basis { get; init; }
+}
 
 internal static class RequestHttp
 {
@@ -65,7 +82,8 @@ internal static class RequestHttp
         PolicySnapshot p => new PolicyHttpSnapshot(p.CompanyVersionId, p.ProjectVersionId, PolicyWireContent.From(p.Content), p.ContentHash, p.Scope, p.RequiresReview),
         ConfirmationQuote q => new RequestQuoteHttp(q.RequestId, q.RevisionId, q.Version, q.ConfirmationHash,
             RequestEstimateHttp.From(q.Estimate), new(q.Policy.CompanyVersionId, q.Policy.ProjectVersionId,
-                PolicyWireContent.From(q.Policy.Content), q.Policy.ContentHash, q.Policy.Scope, q.Policy.RequiresReview), q.Levels),
+                PolicyWireContent.From(q.Policy.Content), q.Policy.ContentHash, q.Policy.Scope, q.Policy.RequiresReview), q.Levels)
+        { Basis = ApprovalBasisHttp.From(q.Basis), FamilyVersion = q.FamilyVersion },
         _ => value
     };
 }

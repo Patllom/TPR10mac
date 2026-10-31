@@ -1,3 +1,4 @@
+using TPR10.Api.FieldAdvances.Payments;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Data;
@@ -184,7 +185,8 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
         var row = new RequestRevisionDetail(id, revisionId, revision.RevisionNumber, new(request.WorkspaceId, request.ProjectId),
             revision.SubmittedAtUtc, JsonSerializer.Deserialize<RequestContent>(revision.ContentJson)!,
             estimate is null ? null : RequestEstimateHttp.From(estimate),
-            frozen is null ? null : new(frozen.CompanyVersionId, frozen.ProjectVersionId, PolicyWireContent.From(frozen.Content), frozen.ContentHash, frozen.Scope, frozen.RequiresReview), steps);
+            frozen is null ? null : new(frozen.CompanyVersionId, frozen.ProjectVersionId, PolicyWireContent.From(frozen.Content), frozen.ContentHash, frozen.Scope, frozen.RequiresReview), steps)
+        { Basis = ApprovalBasisHttp.From(JsonSerializer.Deserialize<ApprovalBasis>(revision.ApprovalBasisJson)!) };
         if (!(await requests.CheckAsync(actorId, id, "read", ct)).Allowed) return Denied<RequestRevisionDetail>();
         return new(200, "ok", row);
     }, ct);
@@ -202,7 +204,7 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
         return new(id, revision.Id, request.Version, request.State, new(request.WorkspaceId, request.ProjectId),
             request.OwnerPersonId, request.DelegatePersonId, JsonSerializer.Deserialize<RequestContent>(revision.ContentJson)!,
             await drafts.StoredEstimateAsync(revision, ct), request.HoldCode)
-        { CurrentStep = step };
+        { CurrentStep = step, Basis = JsonSerializer.Deserialize<ApprovalBasis>(revision.ApprovalBasisJson) };
     }
 
     public Task<FinanceResult<RequestHistory[]>> HistoryAsync(Guid actorId, Guid id, int page, int size, CancellationToken ct) => Locked(actorId, async () =>

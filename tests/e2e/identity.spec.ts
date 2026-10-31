@@ -11,26 +11,44 @@ test.beforeEach(async ({ page }) => {
   });
 });
 async function login(page: Page, username = 'e2e-staff', secret = password, target = '/login') {
-  const pending = new Set<string>();
-  const started = (request: import('@playwright/test').Request) => {
-    // Paths/types only: never query, body, credentials or response contents.
-    pending.add(request.resourceType() + ' ' + new URL(request.url()).pathname);
+  // ครอบคลุมหน้าที่สร้างเองด้วย จำกัด 48 เหตุการณ์ ไม่มี query/body/cookie/ข้อความ console
+  const began = Date.now();
+  const events: { ms: number; kind: string; path?: string; status?: number }[] = [];
+  const record = (kind: string, path?: string, status?: number) => {
+    if (events.length === 48) events.shift();
+    events.push({ ms: Date.now() - began, kind, path, status });
   };
-  const ended = (request: import('@playwright/test').Request) => {
-    pending.delete(request.resourceType() + ' ' + new URL(request.url()).pathname);
+  const publicPath = (url: string) => {
+    const path = new URL(url).pathname;
+    return path === '/login' || path.startsWith('/_next/static/') ? path : undefined;
   };
-  page.on('request', started); page.on('requestfinished', ended); page.on('requestfailed', ended);
+  const response = (value: import('@playwright/test').Response) => {
+    const path = publicPath(value.url()); if (path) record('response', path, value.status());
+  };
+  const failed = (value: import('@playwright/test').Request) => {
+    const path = publicPath(value.url()); if (path) record('requestfailed', path);
+  };
+  const scriptError = () => record('pageerror');
+  const crashed = () => record('crash');
+  const loaded = () => record('domcontentloaded');
+  page.on('response', response); page.on('requestfailed', failed);
+  page.on('pageerror', scriptError); page.on('crash', crashed); page.on('domcontentloaded', loaded);
+  let phase = 'navigation';
   try {
     await page.goto(target, { waitUntil: 'domcontentloaded' });
+    phase = 'username';
+    await page.getByLabel('ชื่อผู้ใช้', { exact: true }).fill(username);
+    phase = 'password';
+    await page.getByLabel('รหัสผ่าน', { exact: true }).fill(secret);
+    phase = 'submit';
+    await page.getByRole('button', { name: 'เข้าสู่ระบบ', exact: true }).click();
   } catch (error) {
-    console.log('login navigation pending resource types/paths:', [...pending]);
+    console.log('login bounded public diagnostics:', JSON.stringify({ phase, elapsedMs: Date.now() - began, events }));
     throw error;
   } finally {
-    page.off('request', started); page.off('requestfinished', ended); page.off('requestfailed', ended);
+    page.off('response', response); page.off('requestfailed', failed);
+    page.off('pageerror', scriptError); page.off('crash', crashed); page.off('domcontentloaded', loaded);
   }
-  await page.getByLabel('ชื่อผู้ใช้', { exact: true }).fill(username);
-  await page.getByLabel('รหัสผ่าน', { exact: true }).fill(secret);
-  await page.getByRole('button', { name: 'เข้าสู่ระบบ', exact: true }).click();
 }
 function database(sql: string) {
   const container = process.env.TPR10_E2E_DATABASE;

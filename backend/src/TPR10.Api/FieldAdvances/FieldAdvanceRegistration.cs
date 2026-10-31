@@ -2,7 +2,9 @@ using TPR10.Api.FieldAdvances.Access;
 using TPR10.Api.FieldAdvances.Grants;
 using TPR10.Api.FieldAdvances.Policies;
 using TPR10.Api.FieldAdvances.Requests;
+using TPR10.Api.FieldAdvances.Payments;
 using TPR10.Api.Identity;
+using TPR10.Api.FieldAdvances.Evidence;
 
 namespace TPR10.Api.FieldAdvances;
 
@@ -10,11 +12,52 @@ public static class FieldAdvanceRegistration
 {
     public static IServiceCollection AddFieldAdvances(this IServiceCollection services)
     {
+        services.AddSingleton(sp =>
+        {
+            var section = sp.GetRequiredService<IConfiguration>().GetSection("FinanceEvidence");
+            var options = section.Get<FinanceEvidenceOptions>() ?? new();
+            // ConfigurationBinder does not bind GUID dictionary keys. Parse explicitly, never silently
+            // omit an invalid root or let two textual representations overwrite the same storage ID.
+            var roots = section.GetSection("Roots").GetChildren().ToArray();
+            options.Roots = [];
+            foreach (var root in roots)
+                if (!Guid.TryParse(root.Key, out var id) || id == Guid.Empty || root.Value is null
+                    || !options.Roots.TryAdd(id, root.Value))
+                    throw new InvalidOperationException("Invalid or duplicate finance evidence storage identifier.");
+            // An entirely unconfigured store remains unavailable at the existing evidence boundary;
+            // configured stores must meet exactly the existing limits and absolute-root validation.
+            if (roots.Length != 0 || options.ActiveStorageId != Guid.Empty) options.Validate();
+            return options;
+        });
+        services.AddSingleton(sp => sp.GetRequiredService<IConfiguration>().GetSection("FinanceEvidence:Pdf").Get<PdfValidationOptions>() ?? new());
+        services.AddSingleton<IFinanceEvidenceStore, FolderFinanceEvidenceStore>();
+        services.AddSingleton<IFinancePdfValidator, PdfValidationProcess>();
+        services.AddScoped<FinanceEvidenceService>();
+        services.AddScoped<FinanceEvidenceMigration>();
+        services.AddScoped<FinanceEvidenceReconciler>();
         services.AddScoped<FinancePersonResolver>();
         services.AddScoped<FinanceAccess>();
         services.AddScoped<RequestAccess>();
+        services.AddScoped<PaymentAccess>();
+        services.AddScoped<PaymentReadService>();
+        services.AddScoped<PaymentUiService>();
+        services.AddScoped<FamilyParticipation>();
+        services.AddScoped<PaymentCommandExecutor>();
+        services.AddScoped<ReservationLedger>();
+        services.AddScoped<InstallmentService>();
+        services.AddScoped<InstallmentReviewService>();
+        services.AddScoped<PaymentExecutionService>();
+        services.AddScoped<PaymentOutcomeService>();
+        services.AddScoped<PaymentHoldService>();
+        services.AddScoped<PaymentTakeoverService>();
+        services.AddScoped<PaymentCancellationService>();
+        services.AddScoped<PaymentMetadataService>();
+        services.AddScoped<CeilingAmendmentService>();
+        services.AddScoped<PaymentDispositionService>();
         services.AddScoped<RequestReadService>();
         services.AddScoped<RequestDraftService>();
+        services.AddScoped<SupplementService>();
+        services.AddScoped<ApprovalBasisCalculator>();
         services.AddScoped<RequestSubmissionService>();
         services.AddScoped<RequestReviewService>();
         services.AddScoped<RequestRevisionService>();
@@ -78,6 +121,9 @@ public static class FieldAdvanceRegistration
         group.MapPost("/requests/{id}/revise", RequestEndpoints.Revise).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
         group.MapPost("/requests/{id}/withdraw", RequestEndpoints.Withdraw).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
         group.MapPost("/requests/{id}/copy", RequestEndpoints.Copy).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>(201);
+        group.MapPayments();
+        group.MapFinanceEvidence();
+        PaymentEndpoints.Contract(group.MapPost("/requests/{id}/supplements", RequestEndpoints.Supplement)).Accepts<SupplementHttp>("application/json").Produces<RequestHttpView>(201);
         return endpoints;
     }
 }

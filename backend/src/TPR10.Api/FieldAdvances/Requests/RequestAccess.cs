@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TPR10.Api.Data;
 using TPR10.Api.FieldAdvances.Access;
 using TPR10.Api.FieldAdvances.Data;
+using TPR10.Api.FieldAdvances.Payments;
 
 namespace TPR10.Api.FieldAdvances.Requests;
 
@@ -25,7 +26,8 @@ public sealed class RequestAccess(Tpr10DbContext db, FinanceAccess access, Finan
         var allowed = action switch
         {
             "read" => owner || delegated || (await access.CheckAsync(actorId, scope, "report.read", ct)).Allowed
-                || await CanReviewAsync(actorId, person.Value, request, ct),
+                || await CanReviewAsync(actorId, person.Value, request, ct)
+                || await CanFinanceReadAsync(actorId, person.Value, request, ct),
             "edit" => author && request.State == "Draft",
             "send-to-owner" => delegated && request.State == "Draft",
             "confirm" => owner && (request.State == "AwaitingOwner" || request.State == "Draft" && request.DelegatePersonId is null),
@@ -57,16 +59,8 @@ public sealed class RequestAccess(Tpr10DbContext db, FinanceAccess access, Finan
         // The stored-assignee check above also prevents a new candidate reading before assignment.
         var route = await new ApprovalRouteResolver(db, people, clock).ResolveAsync(request.Id, revision.Id, next.LevelCode, ct);
         if (route.HoldCode is not null || route.PersonId != person) return false;
-        var participants = await db.Set<AdvanceRequestParticipant>().AsNoTracking().Where(x => x.RequestId == request.Id).ToArrayAsync(ct);
-        Guid[] Role(string role) => participants.Where(x => x.Role == role).Select(x => x.PersonId).Distinct().ToArray();
         var approved = steps.Where(x => x.Outcome == "Approved").Select(x => x.DecidedByPersonId ?? Guid.Empty).ToArray();
-        var allApprovers = await db.Set<AdvanceApprovalStep>().AsNoTracking()
-            .Where(x => x.RequestId == request.Id && x.Outcome == "Approved")
-            .Select(x => x.DecidedByPersonId ?? Guid.Empty).ToArrayAsync(ct);
-        RequestParticipationHistory history = new(
-            Role("Owner").Append(request.OwnerPersonId).Distinct().ToArray(),
-            Role("Delegate").Concat(request.DelegatePersonId is { } d ? [d] : Array.Empty<Guid>()).Distinct().ToArray(),
-            Role("Approver").Concat(allApprovers).Distinct().ToArray(), Role("Checker"), Role("Payer"));
+        var history = await FamilyParticipation.ReadHistoryAsync(db, request.FamilyId, ct);
         if (!RequestSeparation.Check(person, "request.approve", history, approved).Allowed) return false;
         var now = clock.GetUtcNow();
         // One current source supplies capability, exact level and the entire amount together.
@@ -84,8 +78,17 @@ public sealed class RequestAccess(Tpr10DbContext db, FinanceAccess access, Finan
                           && review.ReviewerPersonId != proposal.ProposedByPersonId
                           && proposal.StartsAtUtc <= now && (proposal.EndsAtUtc == null || now < proposal.EndsAtUtc)
                           && proposal.Capabilities.Contains("request.approve") && proposal.ApprovalLevels.Contains(next.LevelCode)
-                          && proposal.ApprovalLimit != null && proposal.ApprovalLimit >= revision.Total
+                          && proposal.ApprovalLimit != null && proposal.ApprovalLimit >= revision.ApprovalBasisAmount
                       select assignment.Id).AnyAsync(ct);
+    }
+
+    private async Task<bool> CanFinanceReadAsync(Guid actor, Guid person, AdvanceRequest request, CancellationToken ct)
+    {
+        var history = await FamilyParticipation.ReadHistoryAsync(db, request.FamilyId, ct);
+        foreach (var capability in new[] { "finance.check", "payment.record" })
+            if (RequestSeparation.Check(person, capability, history, []).Allowed
+                && (await access.CheckAsync(actor, new(request.WorkspaceId, request.ProjectId), capability, ct)).Allowed) return true;
+        return false;
     }
 
     private static FinanceDecision Denied() => new(false, "finance-access-denied");

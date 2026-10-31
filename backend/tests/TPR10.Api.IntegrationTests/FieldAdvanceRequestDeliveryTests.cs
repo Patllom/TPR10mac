@@ -120,7 +120,7 @@ public sealed class FieldAdvanceRequestDeliveryTests(PostgresFixture postgres, I
         await using var db = f.CreateContext();
         Assert.Single(await db.Set<AdvanceRequest>().ToArrayAsync());
         Assert.Equal(delegated ? 3 : 2, await db.Set<AdvanceRequestParticipant>().CountAsync());
-        await NoPaymentTables(f);
+        await NoPaymentEffects(f);
     }
 
     [Theory]
@@ -215,7 +215,7 @@ public sealed class FieldAdvanceRequestDeliveryTests(PostgresFixture postgres, I
             var before = await BusinessSnapshot(f);
             if (responses[0].IsSuccessStatusCode) await Command(director, $"/{row.Id}/review", approve);
             else await Command(owner, $"/{row.Id}/withdraw", withdraw);
-            Assert.Equal(before, await BusinessSnapshot(f)); await NoPaymentTables(f);
+            Assert.Equal(before, await BusinessSnapshot(f)); await NoPaymentEffects(f);
         }
         finally { foreach (var response in responses) response.Dispose(); }
     }
@@ -341,7 +341,7 @@ public sealed class FieldAdvanceRequestDeliveryTests(PostgresFixture postgres, I
         Assert.Equal(JsonSerializer.Serialize(success), JsonSerializer.Serialize(await Command(reviewer, $"/{row.Id}/review", body)));
         Assert.Equal(after, await BusinessSnapshot(f));
         Assert.Single(await db.Set<FinanceCommandReceipt>().Where(x => x.CommandId == body.meta.CommandId).ToArrayAsync());
-        await NoPaymentTables(f);
+        await NoPaymentEffects(f);
     }
 
     [Fact]
@@ -482,7 +482,8 @@ public sealed class FieldAdvanceRequestDeliveryTests(PostgresFixture postgres, I
             await command.ExecuteNonQueryAsync(); await command.ExecuteNonQueryAsync();
         }
         Assert.Equal(before, await Rows(db, columns));
-        Assert.Equal(2, (await db.Database.GetAppliedMigrationsAsync()).Count(x => StringComparer.Ordinal.Compare(x, FieldAdvanceRequestFixture.PreviousMigration) > 0));
+        var expectedMigrations = db.Database.GetMigrations().Where(x => StringComparer.Ordinal.Compare(x, FieldAdvanceRequestFixture.PreviousMigration) > 0).ToArray();
+        Assert.Equal(expectedMigrations, (await db.Database.GetAppliedMigrationsAsync()).Where(x => StringComparer.Ordinal.Compare(x, FieldAdvanceRequestFixture.PreviousMigration) > 0).ToArray());
         output.WriteLine($"7A backup/restore -> 7B: {columns.Length} legacy tables compared using all original columns; 2 policies, 1 grant/review/assignment; injected DDL failure rolled back; idempotent SQL replayed twice; no pending model changes.");
     }
 
@@ -549,10 +550,21 @@ public sealed class FieldAdvanceRequestDeliveryTests(PostgresFixture postgres, I
             metadata = await db.AuditMetadata.AsNoTracking().OrderBy(x => x.AuditEventId).ThenBy(x => x.Key).ToArrayAsync()
         });
     }
-    private static async Task NoPaymentTables(FieldAdvanceFixture f)
+    private static async Task NoPaymentEffects(FieldAdvanceFixture f)
     {
         await using var db = f.CreateContext();
-        Assert.Empty(await db.Database.SqlQueryRaw<string>("SELECT tablename AS \"Value\" FROM pg_tables WHERE schemaname='public' AND (tablename LIKE '%payment%' OR tablename LIKE '%settlement%')").ToArrayAsync());
+        Assert.Empty(await db.Set<AdvanceInstallment>().ToArrayAsync());
+        Assert.Empty(await db.Set<AdvancePaymentAttempt>().ToArrayAsync());
+        Assert.Empty(await db.Set<AdvancePaymentResult>().ToArrayAsync());
+        Assert.Empty(await db.Set<AdvanceReservationEntry>().ToArrayAsync());
+        Assert.Empty(await db.Set<AdvancePaymentProposal>().ToArrayAsync());
+        Assert.Empty(await db.Set<AdvancePaymentEvent>().ToArrayAsync());
+        Assert.All(await db.Set<AdvancePaymentAccount>().ToArrayAsync(), account =>
+        {
+            Assert.Equal(0m, account.Reserved);
+            Assert.Equal(0m, account.Paid);
+            Assert.False(account.EverPaid);
+        });
     }
 
     // WB-I1: removing current-route validation leaks reads while the worker has not assigned B.
