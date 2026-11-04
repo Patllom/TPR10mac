@@ -27,9 +27,9 @@ public sealed class ReservationLedger(Tpr10DbContext db, TimeProvider clock)
         if (amount <= 0 || amount > 9999999999999999.99m || decimal.Round(amount, 2) != amount)
             throw new ReservationException(invalid: true);
         var installment = await db.Set<AdvanceInstallment>().SingleAsync(x => x.Id == installmentId && x.RequestId == requestId, ct);
-        var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == requestId, ct);
+        var account = await PaymentCapacity.LockAsync(db, requestId, ct);
         BalanceSnapshot Snapshot() => new(account.Approved, account.Spendable, account.Reserved, account.Paid);
-        var available = BalanceMath.Available(Snapshot());
+        var available = PaymentCapacity.Available(account);
         var entries = (await db.Set<AdvanceReservationEntry>().AsNoTracking().Where(x => x.InstallmentId == installmentId).ToArrayAsync(ct))
             .Concat(db.ChangeTracker.Entries<AdvanceReservationEntry>().Where(x => x.State == EntityState.Added
                 && x.Entity.InstallmentId == installmentId).Select(x => x.Entity)).ToArray();
@@ -43,6 +43,27 @@ public sealed class ReservationLedger(Tpr10DbContext db, TimeProvider clock)
         foreach (var entry in entries)
             reserved = checked(reserved + (entry.Action == "Reserve" ? entry.Amount : -entry.Amount));
         if (entries.Any(x => x.Action == "Consume") || reserved < 0) throw new ReservationException();
+        var claim = await db.Set<PaymentShortfallClaim>().SingleOrDefaultAsync(x => x.InstallmentId == installmentId, ct);
+        if (claim is not null)
+        {
+            if (claim.State != "Reserved" || claim.Amount != reserved) throw new ReservationException();
+            if (action == "Reserve")
+            {
+                if (!await PaymentCapacity.ClaimFitsAsync(db, claim.IncidentId, checked(claim.Amount + amount), claim.Id, ct)
+                    || PaymentCapacity.Usage(account) < amount) throw new ReservationException();
+                claim.Amount = checked(claim.Amount + amount);
+                account.ActivatedShortfall = checked(account.ActivatedShortfall + amount);
+                available = PaymentCapacity.Available(account);
+            }
+            else if (action == "Release")
+            {
+                if (amount > claim.Amount) throw new ReservationException();
+                account.ActivatedShortfall = checked(account.ActivatedShortfall - amount);
+                if (amount == claim.Amount) claim.State = "Cancelled";
+                else claim.Amount -= amount;
+            }
+            else if (action == "Consume") claim.State = "Consumed";
+        }
         if (action == "Reserve")
         {
             if (available < amount) throw new ReservationException();
@@ -58,7 +79,7 @@ public sealed class ReservationLedger(Tpr10DbContext db, TimeProvider clock)
             }
         }
         account.Version = checked(account.Version + 1);
-        _ = BalanceMath.Available(Snapshot());
+        _ = PaymentCapacity.Available(account);
         db.Add(new AdvanceReservationEntry
         {
             Id = Guid.NewGuid(),

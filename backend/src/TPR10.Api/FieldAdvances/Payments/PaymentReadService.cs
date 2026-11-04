@@ -109,7 +109,7 @@ public sealed class PaymentReadService(Tpr10DbContext db, PaymentAccess access, 
             && (x.RequestId == null || x.RequestId == requestId) && (installmentId == null || x.InstallmentId == null || x.InstallmentId == installmentId))
             .Select(x => x.Code).Distinct().OrderBy(x => x).ToArrayAsync(ct);
         return new(requestId, installmentId, family.Version, request.Version, installment?.Version, installment?.State ?? request.State,
-            account.Approved, account.Spendable, account.Reserved, account.Paid, account.Spendable - account.Reserved - account.Paid, holds);
+            account.Approved, account.Spendable, account.Reserved, account.Paid, PaymentCapacity.Available(account), holds);
     }
     private async Task<EvidenceTicket[]> Evidence(Guid request, Guid? installment, Guid[]? ids, CancellationToken ct) =>
         await db.Set<AdvanceEvidence>().AsNoTracking().Where(x => x.RequestId == request && (ids != null ? ids.Contains(x.Id) : x.InstallmentId == installment))

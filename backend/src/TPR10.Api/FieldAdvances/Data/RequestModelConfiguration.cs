@@ -28,6 +28,7 @@ public static class RequestModelConfiguration
         request.Property(x => x.HoldCode).HasMaxLength(100);
         request.ToTable(t =>
         {
+            t.HasCheckConstraint("ck_supplement_order_provenance", "(relation_kind='Normal' AND num_nonnulls(family_version_at_creation,legacy_family_version_baseline)=0) OR (relation_kind='Supplement' AND num_nonnulls(family_version_at_creation,legacy_family_version_baseline)=1 AND COALESCE(family_version_at_creation,legacy_family_version_baseline)>0)");
             t.HasCheckConstraint("ck_advance_request_version", "version>=1");
             t.HasCheckConstraint("ck_advance_request_source", "source_request_id IS NULL OR source_request_id<>id");
             t.HasCheckConstraint("ck_advance_request_relation", "(relation_kind='Normal' AND supplement_of_request_id IS NULL) OR (relation_kind='Supplement' AND supplement_of_request_id IS NOT NULL AND supplement_of_request_id<>id AND source_request_id IS NULL)");

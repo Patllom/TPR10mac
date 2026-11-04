@@ -24,7 +24,7 @@ internal sealed class FieldAdvancePaymentFixture(FieldAdvanceFixture foundation)
         catch { await foundation.DisposeAsync(); throw; }
     }
 
-    public async Task<Guid> SeedApprovedAsync(decimal amount, CancellationToken ct)
+    public async Task<Guid> SeedApprovedAsync(decimal amount, CancellationToken ct, bool legacyPaymentAccount = false)
     {
         await using var db = CreateContext();
         var request = new AdvanceRequest { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId, ProjectId = ProjectId, OwnerPersonId = AuthorPersonId, CreatedBy = AuthorId, State = "Approved" };
@@ -45,7 +45,16 @@ internal sealed class FieldAdvancePaymentFixture(FieldAdvanceFixture foundation)
             PolicySnapshotJson = "{}",
             PolicyHash = new('b', 64)
         };
-        db.AddRange(request, revision);
+        if (legacyPaymentAccount)
+        {
+            // The 7C fixture also predates Task13 request ordering columns.
+            await db.Database.ExecuteSqlAsync($"""
+                INSERT INTO field_advance_requests(id,workspace_id,project_id,owner_person_id,created_by,state)
+                VALUES ({request.Id},{request.WorkspaceId},{request.ProjectId},{request.OwnerPersonId},{request.CreatedBy},{request.State})
+                """, ct);
+            db.Add(revision);
+        }
+        else db.AddRange(request, revision);
         var step = new AdvanceApprovalStep
         {
             Id = Guid.NewGuid(),
@@ -62,8 +71,18 @@ internal sealed class FieldAdvancePaymentFixture(FieldAdvanceFixture foundation)
         await db.SaveChangesAsync(ct);
         step.Outcome = "Approved"; step.DecidedBy = ReviewerId; step.DecidedByPersonId = ReviewerPersonId;
         step.DecidedAtUtc = DateTimeOffset.UtcNow; step.DecisionReason = "Test approval";
-        var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == request.Id, ct);
-        account.ApprovedRevisionId = revision.Id; account.Approved = amount; account.Spendable = amount;
+        if (legacyPaymentAccount)
+        {
+            // Migration fixtures deliberately run on 7C, where Task12 columns do not exist.
+            // Update only the original columns, without materializing the current entity model.
+            await db.Set<AdvancePaymentAccount>().Where(x => x.RequestId == request.Id).ExecuteUpdateAsync(set => set
+                .SetProperty(x => x.ApprovedRevisionId, revision.Id).SetProperty(x => x.Approved, amount).SetProperty(x => x.Spendable, amount), ct);
+        }
+        else
+        {
+            var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == request.Id, ct);
+            account.ApprovedRevisionId = revision.Id; account.Approved = amount; account.Spendable = amount;
+        }
         await db.SaveChangesAsync(ct);
         return request.Id;
     }

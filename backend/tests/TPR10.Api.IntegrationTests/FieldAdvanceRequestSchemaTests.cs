@@ -409,8 +409,18 @@ public sealed class FieldAdvanceRequestSchemaTests(PostgresFixture postgres)
         const string snapshot = "SELECT jsonb_agg(to_jsonb(p) ORDER BY id)::text AS \"Value\" FROM field_advance_policy_revisions p";
         var before = await db.Database.SqlQueryRaw<string>(snapshot).SingleAsync();
         await db.Database.MigrateAsync();
-        var retainedPolicy = await db.Database.SqlQueryRaw<string>(snapshot).SingleAsync();
+        // Compare every legacy field and row; only the known additive 7D column is checked separately.
+        var retainedPolicy = await db.Database.SqlQueryRaw<string>("""
+            SELECT jsonb_agg(to_jsonb(p)-'correction_days' ORDER BY id)::text AS "Value"
+            FROM field_advance_policy_revisions p
+            """).SingleAsync();
         Assert.Equal(before, retainedPolicy);
+        Assert.True(await db.Database.SqlQueryRaw<bool>("""
+            SELECT data_type='integer' AND is_nullable='YES' AND column_default IS NULL AS "Value"
+            FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='field_advance_policy_revisions' AND column_name='correction_days'
+            """).SingleAsync());
+        Assert.All(await db.Set<PolicyRevision>().AsNoTracking().Select(x => x.CorrectionDays).ToArrayAsync(), days => Assert.Null(days));
         Assert.Contains(await db.Database.GetAppliedMigrationsAsync(), x => x.EndsWith("_AddFieldAdvanceRequests"));
     }
 }

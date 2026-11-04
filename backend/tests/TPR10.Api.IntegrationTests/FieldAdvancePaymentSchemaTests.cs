@@ -205,12 +205,15 @@ public sealed class FieldAdvancePaymentSchemaTests(PostgresFixture postgres)
     [InlineData("pending-supplement")]
     [InlineData("supplement-family")]
     [InlineData("family-owner")]
+    [InlineData("valid-supplement")]
     public async Task References_cannot_cross_request_or_owner_within_the_same_project(string reference)
     {
         await using var f = await FieldAdvancePaymentFixture.CreateAsync(postgres);
         var first = await f.SeedApprovedAsync(10000m, default);
         var second = await f.SeedApprovedAsync(1000m, default);
         await using var db = f.CreateContext();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         var family = (await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == first)).FamilyId;
         if (reference == "approved-revision")
         {
@@ -220,6 +223,9 @@ public sealed class FieldAdvancePaymentSchemaTests(PostgresFixture postgres)
         else if (reference == "pending-supplement")
             (await db.Set<AdvanceFamily>().SingleAsync(x => x.Id == family)).PendingSupplementId = second;
         else
+        {
+            var familyRow = await db.Set<AdvanceFamily>().FromSqlInterpolated($"SELECT * FROM field_advance_families WHERE id={family} FOR UPDATE").SingleAsync();
+            var order = ++familyRow.Version;
             db.Add(new AdvanceRequest
             {
                 Id = Guid.NewGuid(),
@@ -227,10 +233,19 @@ public sealed class FieldAdvancePaymentSchemaTests(PostgresFixture postgres)
                 ProjectId = ProjectId,
                 FamilyId = family,
                 RelationKind = "Supplement",
+                FamilyVersionAtCreation = order,
                 SupplementOfRequestId = reference == "supplement-family" ? second : first,
                 OwnerPersonId = reference == "family-owner" ? ReviewerPersonId : AuthorPersonId,
                 CreatedBy = AuthorId
             });
+        }
+        if (reference == "valid-supplement")
+        {
+            await db.SaveChangesAsync(); await tx.CommitAsync();
+            var supplement = await db.Set<AdvanceRequest>().AsNoTracking().SingleAsync(x => x.SupplementOfRequestId == first);
+            Assert.Equal((await db.Set<AdvanceFamily>().AsNoTracking().SingleAsync(x => x.Id == family)).Version, supplement.FamilyVersionAtCreation);
+            return;
+        }
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         Assert.Contains(Assert.IsType<PostgresException>(error.InnerException).SqlState, new[] { "23503", "23514" });
     }

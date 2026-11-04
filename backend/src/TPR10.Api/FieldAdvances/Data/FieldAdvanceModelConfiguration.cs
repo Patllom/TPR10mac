@@ -47,6 +47,7 @@ public static class FieldAdvanceModelConfiguration
         revision.ToTable(t =>
         {
             t.HasCheckConstraint("ck_field_advance_policy_base", $"company_scope_project_id={EmptyId} AND ((project_id IS NULL AND base_company_version_id IS NULL) OR (project_id IS NOT NULL AND base_company_version_id IS NOT NULL))");
+            t.HasCheckConstraint("ck_field_advance_policy_correction_days", "correction_days IS NULL OR correction_days>0");
             t.HasCheckConstraint("ck_field_advance_policy_content", "clearing_days>=0 AND content_hash ~ '^[a-f0-9]{64}$'");
             t.HasCheckConstraint("ck_field_advance_policy_state", "state IN ('Draft','Pending','Approved','Active','Rejected','Retired','Returned')");
             t.HasCheckConstraint("ck_field_advance_policy_mode", "mode IS NULL OR (project_id IS NULL AND mode='Company') OR (project_id IS NOT NULL AND mode IN ('Override','Inherit'))");

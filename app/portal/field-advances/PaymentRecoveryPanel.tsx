@@ -1,5 +1,6 @@
  'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import type { InstallmentDetail, PaymentAction, PaymentProposal, PaymentUiContext, EvidenceTicket } from '@/lib/field-advances/payment-types';
 export default function PaymentRecoveryPanel({ detail, actions, context, busy, send, upload, download }: {
   detail: InstallmentDetail; actions: PaymentAction[]; context: PaymentUiContext; busy: boolean;
@@ -17,6 +18,10 @@ export default function PaymentRecoveryPanel({ detail, actions, context, busy, s
   const disabled = busy || uploading || !reason.trim(), needsEvidence = disabled || evidence.length === 0;
   return <section className="space-y-3 rounded border p-4" aria-label="บันทึกผลและสะสาง">
     <h2 className="font-semibold">บันทึกผลและสะสาง</h2>
+    {detail.summary.holdCodes.length > 0 && <p>
+      เหตุระงับยังคงอยู่จนฝ่ายการเงินยืนยันแยกแต่ละขั้น ·{' '}
+      <Link className="underline" href="/portal/field-advances/settlements">เปิดคิวตรวจเหตุจ่ายผิด</Link>
+    </p>}
     {(canWrite || proposals.length > 0) && <label className="block">เหตุผลและหลักฐานประกอบ<textarea className="block w-full border p-2" value={reason} maxLength={2000} onChange={e => setReason(e.target.value)} /></label>}
     {canWrite && <>
       <label className="block">วันที่จ่ายจริง<input className="block w-full border p-2" type="date" value={date} onChange={e => setDate(e.target.value)} /></label>

@@ -36,8 +36,9 @@ public sealed class PaymentHoldService(Tpr10DbContext db, PaymentCommandExecutor
                 var owner = await PaymentRecovery.OwnerAsync(db, attempt, token);
                 var snapshot = new RecoverySnapshot(attempt.Id, revision.Id, revision.ContentHash, owner,
                     new("Unknown", observed, ids), prepared.Rows, null);
-                db.Add(recovery.Proposal(installment, actor, person.Value, "PaymentMismatch", snapshot, meta));
-                recovery.Hold(installment, actor, person.Value, meta.Reason);
+                var proposal = recovery.Proposal(installment, actor, person.Value, "PaymentMismatch", snapshot, meta);
+                db.Add(proposal);
+                recovery.Hold(installment, actor, person.Value, meta.Reason, proposal.Id);
                 if (installment.State != "Paid") { installment.State = "OutcomePending"; attempt.State = "Mismatch"; }
                 // The incident is separate evidence, never a correction to recorded money or recipient.
                 return Success(requestId.Value, installmentId);

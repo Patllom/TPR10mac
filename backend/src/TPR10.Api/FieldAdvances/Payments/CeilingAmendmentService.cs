@@ -102,7 +102,7 @@ public sealed class CeilingAmendmentService(Tpr10DbContext db, PaymentCommandExe
             && x.Code == HoldCode && x.ReleasedAtUtc == null, ct);
 
     internal static async Task<bool> UnpaidAsync(Tpr10DbContext db, AdvancePaymentAccount account, CancellationToken ct)
-        => !account.EverPaid && account.Paid == 0
+        => !account.EverPaid && account.Paid == 0 && account.IncidentReservationUsage == 0 && account.ActivatedShortfall == 0
             && !await db.Set<AdvancePaymentResult>().AnyAsync(x => x.RequestId == account.RequestId, ct)
             && !await db.Set<AdvancePaymentAttempt>().AnyAsync(x => x.RequestId == account.RequestId && x.State != "Unpaid", ct);
 

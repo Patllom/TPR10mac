@@ -86,7 +86,7 @@ public sealed class RequestSubmissionService(Tpr10DbContext db, FinanceAccess ac
             if (!string.Equals(confirmationHash, quote.ConfirmationHash, StringComparison.Ordinal)) return Conflict();
             if (request.RelationKind == "Supplement")
             {
-                if (!await SupplementService.EligibleAsync(db, request.FamilyId, ct)) return Conflict();
+                if (!await SupplementService.CanContinueAsync(db, request.Id, ct)) return Conflict();
                 // Compare-and-set at the database boundary, under the common family lock.
                 var claimed = await db.Set<AdvanceFamily>().Where(x => x.Id == request.FamilyId
                     && (x.PendingSupplementId == null || x.PendingSupplementId == request.Id))

@@ -40,6 +40,7 @@ public sealed class PolicyRevision
     public required string State { get; set; }
     public long Version { get; set; } = 1;
     public int ClearingDays { get; set; }
+    public int? CorrectionDays { get; set; }
     public required string ContentHash { get; set; }
     public Guid CreatedBy { get; set; }
     public Guid CreatedByPersonId { get; set; }

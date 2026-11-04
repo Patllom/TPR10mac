@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPaymentClient, PaymentError } from '@/lib/field-advances/payment-client';
 import { createRequestClient, RequestError } from '@/lib/field-advances/request-client';
+import { createSettlementClient, SettlementError } from '@/lib/field-advances/settlement-client';
 import { subscribeAuthChanges } from '@/lib/auth/auth-change';
 import type { PaymentAction, PaymentWorkflowContext, PaymentProposal, PaymentSummary } from '@/lib/field-advances/payment-types';
 import type { RequestView, RequestContent } from '@/lib/field-advances/request-types';
@@ -14,26 +15,34 @@ export default function CeilingAmendmentPanel({ userId, requestId, source, onCha
 }) {
   const [context, setContext] = useState<PaymentWorkflowContext | null>(null), [proposals, setProposals] = useState<PaymentProposal[]>([]);
   const [summary, setSummary] = useState<PaymentSummary | null>(null), [policy, setPolicy] = useState<PolicySnapshot | null>(null);
+  const [hasAdjustment, setHasAdjustment] = useState(false);
   const [editing, setEditing] = useState<'supplement' | 'amendment' | null>(null), [reason, setReason] = useState('');
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false), [refresh, setRefresh] = useState(0);
   const live = useRef<AbortController | null>(null), polling = useRef<AbortController | null>(null), working = useRef(false), pending = useRef<Pending | null>(null);
   const current = useRef<PaymentWorkflowContext | null>(null);
-  function hide() { current.current = null; setContext(null); setProposals([]); setSummary(null); setPolicy(null); setEditing(null); }
+  function hide() { current.current = null; setContext(null); setProposals([]); setSummary(null); setPolicy(null); setEditing(null); setHasAdjustment(false); }
   function clear() { live.current?.abort(); polling.current?.abort(); pending.current = null; hide(); setReason(''); setUncertain(false); onBusy?.(false); }
   function failure(e: unknown) {
-    if ((e instanceof RequestError || e instanceof PaymentError) && e.clearProtectedData) { clear(); onAccessLost?.(); }
+    if ((e instanceof RequestError || e instanceof PaymentError || e instanceof SettlementError)
+      && e.clearProtectedData) { clear(); onAccessLost?.(); }
     setError(e instanceof Error ? e.message : 'โหลดไม่สำเร็จ');
   }
   async function load(signal: AbortSignal) {
     const client = createPaymentClient(userId), next = await client.getWorkflowContext(requestId, signal);
     const catalog = await client.installments(requestId, signal);
     const account = next.variant === 'request' ? await client.getPaymentSummary(requestId, signal) : null;
+    const adjustments = source?.state === 'Closed'
+      ? await createSettlementClient(userId).listSettlement(requestId, 'adjustments', 1, undefined, signal)
+      : null;
     signal.throwIfAborted();
     if (account && (next.familyVersion !== account.familyVersion || next.requestVersion !== account.requestVersion)) throw new PaymentError(409);
+    if (adjustments && (next.familyVersion !== adjustments.familyVersion
+      || next.requestVersion !== adjustments.requestVersion)) throw new SettlementError(409);
     const latest = await client.getWorkflowContext(requestId, signal); signal.throwIfAborted();
     if (JSON.stringify(latest) !== JSON.stringify(next)) throw new PaymentError(409);
     if (current.current && JSON.stringify(current.current) !== JSON.stringify(next)) { setEditing(null); setPolicy(null); }
     current.current = next; setContext(next); setProposals(catalog.proposals); setSummary(account);
+    setHasAdjustment(!!adjustments && (adjustments.items.length > 0 || !!adjustments.nextCursor));
     // ล้างข้อผิดพลาดการอ่านเมื่อได้ชุดข้อมูลปัจจุบันครบแล้ว ไม่ล้างคำเตือนคำสั่งที่ยังรอผล
     if (!pending.current) setError('');
   }
@@ -119,6 +128,7 @@ export default function CeilingAmendmentPanel({ userId, requestId, source, onCha
     {uncertain && <button disabled={busy} onClick={() => { if (pending.current) void execute(pending.current, true); }}>ตรวจผลคำสั่งวงเงินเดิม</button>}
     {!uncertain && context && <>
       {workflow && <>
+        {source?.state === 'Closed' && hasAdjustment && <p role="status">ปิดแล้ว มีรายการปรับปรุง</p>}
         {workflow.everPaid ? <p>เคยจ่ายเงินจริงแล้ว ขอใหม่เฉพาะส่วนเพิ่ม ไม่ปรับวงเงินเดิม</p> : <p>ก่อนจ่ายเงินจริง สามารถเสนอปรับวงเงินเมื่อเข้าเงื่อนไข</p>}
         {workflow.outcomeUnclear && <p role="status">พักการปรับวงเงิน: ยังมีผลจ่ายไม่ชัดเจน ต้องสะสางก่อน</p>}
         {workflow.pendingSupplementState && <p>มีส่วนเพิ่มค้าง ({workflow.pendingSupplementState}) รวมส่งกลับ/พัก ต้องพิจารณาให้เสร็จก่อนส่งรายการถัดไป</p>}

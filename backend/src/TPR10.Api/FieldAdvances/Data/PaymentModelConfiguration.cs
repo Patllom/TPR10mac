@@ -22,12 +22,16 @@ public static class PaymentModelConfiguration
         account.HasOne<AdvanceRequestRevision>().WithMany().HasForeignKey(x => new { x.WorkspaceId, x.ProjectId, x.RequestId, x.ApprovedRevisionId })
             .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.RequestId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         account.ToTable(t => t.HasCheckConstraint("ck_payment_account_balance",
-            "paid+reserved<=spendable AND spendable<=approved AND (paid=0 OR ever_paid) AND ((approved_revision_id IS NULL AND approved=0) OR (approved_revision_id IS NOT NULL AND approved>0))"));
+            "effective_usage+reserved<=spendable AND spendable<=approved AND (paid=0 OR ever_paid) AND ((approved_revision_id IS NULL AND approved=0) OR (approved_revision_id IS NOT NULL AND approved>0))"));
+
+        account.Property(x => x.IncidentReservationUsage).HasDefaultValue(0m);
+        account.Property(x => x.ActivatedShortfall).HasDefaultValue(0m);
+        account.Property(x => x.EffectiveUsage).HasComputedColumnSql("paid + incident_reservation_usage - activated_shortfall", stored: true);
 
         var installment = Row<AdvanceInstallment>(model, "installments");
         installment.HasAlternateKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.RequestId, x.Id });
         Account(installment, "CreatedBy");
-        installment.ToTable(t => t.HasCheckConstraint("ck_installment_state", "state IN ('Draft','PendingReview','Returned','Reviewed','Paying','OutcomePending','CancelPending','Cancelled','Paid')"));
+        installment.ToTable(t => t.HasCheckConstraint("ck_installment_state", "state IN ('Draft','PendingReview','Returned','Reviewed','Paying','OutcomePending','CancelPending','Cancelled','Paid','IncidentResolved')"));
 
         var revision = Row<AdvanceInstallmentRevision>(model, "installment_revisions");
         revision.HasAlternateKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.RequestId, x.InstallmentId, x.Id });
@@ -77,8 +81,13 @@ public static class PaymentModelConfiguration
         participation.ToTable(t => t.HasCheckConstraint("ck_payment_participation", "role IN ('Owner','Delegate','Approver','Checker','Payer')"));
 
         var hold = Row<AdvancePaymentHold>(model, "payment_holds");
+        proposal.HasAlternateKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.Id });
+        hold.HasOne<AdvancePaymentProposal>().WithMany()
+            .HasForeignKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.SourceProposalId })
+            .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+        hold.HasIndex(x => x.SourceProposalId).IsUnique().HasFilter("source_proposal_id IS NOT NULL");
         Account(hold, "CreatedBy"); Person(hold, "CreatedByPersonId"); Person(hold, "ReleasedByPersonId");
-        hold.ToTable(t => t.HasCheckConstraint("ck_payment_hold", "length(btrim(code))>0 AND length(btrim(reason))>0 AND (installment_id IS NULL OR request_id IS NOT NULL) AND (code<>'PaymentMismatch' OR (request_id IS NULL AND installment_id IS NULL AND released_at_utc IS NULL)) AND ((released_at_utc IS NULL AND released_by_person_id IS NULL) OR (released_at_utc IS NOT NULL AND isfinite(released_at_utc) AND released_by_person_id IS NOT NULL))"));
+        hold.ToTable(t => t.HasCheckConstraint("ck_payment_hold", "length(btrim(code))>0 AND length(btrim(reason))>0 AND (installment_id IS NULL OR request_id IS NOT NULL) AND (code<>'PaymentMismatch' OR (request_id IS NULL AND installment_id IS NULL)) AND ((released_at_utc IS NULL AND released_by_person_id IS NULL) OR (released_at_utc IS NOT NULL AND isfinite(released_at_utc) AND released_by_person_id IS NOT NULL))"));
 
         var history = Row<AdvancePaymentEvent>(model, "payment_events");
         Receipt(history); Account(history, "ActorId"); Person(history, "ActorPersonId");
@@ -94,8 +103,24 @@ public static class PaymentModelConfiguration
             .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.RequestId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         location.HasIndex(x => x.EvidenceId).IsUnique().HasFilter("is_current");
         location.ToTable(t => t.HasCheckConstraint("ck_evidence_location", "length(btrim(storage_key))>0 AND (NOT is_current OR verified_at_utc IS NOT NULL) AND (verified_at_utc IS NULL OR isfinite(verified_at_utc))"));
+        var adjustment = Row<IncidentPaymentAdjustment>(model, "incident_payment_adjustments");
+        Receipt(adjustment);
+        adjustment.HasIndex(x => x.IncidentId).IsUnique();
+        adjustment.HasIndex(x => x.AttemptId).IsUnique();
+        adjustment.HasIndex(x => x.InstallmentId).IsUnique();
+        adjustment.HasOne<PaymentIncidentResolution>().WithMany()
+            .HasForeignKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.RequestId, x.InstallmentId, x.AttemptId, x.IncidentId })
+            .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.RequestId, x.InstallmentId, x.AttemptId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+        var claim = Row<PaymentShortfallClaim>(model, "payment_shortfall_claims");
+        Receipt(claim);
+        claim.HasIndex(x => x.InstallmentId).IsUnique();
+        claim.HasIndex(x => x.CommandId).IsUnique();
+        claim.HasOne<PaymentIncidentResolution>().WithMany()
+            .HasForeignKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.RequestId, x.SourceInstallmentId, x.SourceAttemptId, x.IncidentId })
+            .HasPrincipalKey(x => new { x.WorkspaceId, x.ProjectId, x.FamilyId, x.RequestId, x.InstallmentId, x.AttemptId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+        claim.ToTable(t => t.HasCheckConstraint("ck_shortfall_claim", "amount>0 AND installment_id<>source_installment_id AND state IN ('Reserved','Consumed','Settled','Cancelled')"));
         // PostgreSQL identifiers have a 63-byte limit; composite scopes otherwise collide after truncation.
-        foreach (var type in new[] { typeof(AdvanceFamily), typeof(AdvancePaymentAccount), typeof(AdvanceInstallment),
+        foreach (var type in new[] { typeof(IncidentPaymentAdjustment), typeof(PaymentShortfallClaim), typeof(AdvanceFamily), typeof(AdvancePaymentAccount), typeof(AdvanceInstallment),
             typeof(AdvanceInstallmentRevision), typeof(AdvanceReservationEntry), typeof(AdvancePaymentAttempt),
             typeof(AdvancePaymentResult), typeof(AdvancePaymentProposal), typeof(AdvancePaymentParticipation),
             typeof(AdvancePaymentHold), typeof(AdvancePaymentEvent), typeof(AdvanceEvidence), typeof(AdvanceEvidenceLocation) })

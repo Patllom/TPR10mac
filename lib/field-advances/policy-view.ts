@@ -19,6 +19,7 @@ export function differences(before: PolicyContent | null, after: PolicyContent):
   const result: string[] = [];
   const change = (name: string, a: unknown, b: unknown) => { if (a !== b) result.push(`${name}: ${a ?? 'ไม่กำหนด'} → ${b ?? 'ไม่กำหนด'}`); };
   change('วันเคลียร์', before.clearingDays, after.clearingDays);
+  change('วันแก้ไข', before.correctionDays ?? null, after.correctionDays ?? null);
   const bands = new Map(before.bands.map(x => [x.order, x]));
   for (const band of after.bands) { const old = bands.get(band.order); change(`ระดับ ${band.order}`, old?.levelCode, band.levelCode); change(`วงเงิน ${band.levelCode}`, old?.upperInclusive, band.upperInclusive); bands.delete(band.order); }
   for (const band of bands.values()) result.push(`นำระดับ ${band.levelCode} ออกในฉบับใหม่`);
@@ -39,6 +40,7 @@ export function failureState<T>(state: T, status: number): T & { blocked: boolea
   return { ...state, ...([401, 403, 409].includes(status) ? { policies: [], selected: null, context: null, reason: '' } : {}), blocked: true };
 }
 export function validateContent(content: PolicyContent): void {
+  if (content?.correctionDays != null && (!Number.isSafeInteger(content.correctionDays) || content.correctionDays <= 0 || content.correctionDays > 2147483647)) throw new Error('จำนวนวันแก้ไขต้องเป็นจำนวนเต็มบวกไม่เกินขนาดที่ระบบรองรับ');
   if (!content || !Number.isSafeInteger(content.clearingDays) || content.clearingDays <= 0 || content.clearingDays > 2147483647 || !Array.isArray(content.bands) || !content.bands.length || !Array.isArray(content.categories) || !content.categories.length) throw new Error('กรอกวันเคลียร์ ระดับวงเงิน และหมวดให้ครบ');
   let prior = BigInt(0); const levels = new Set(['supervisor', 'project-manager']); const ids = new Set<string>();
   for (const [i, band] of content.bands.entries()) {

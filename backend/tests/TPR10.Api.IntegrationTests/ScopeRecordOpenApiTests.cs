@@ -1,12 +1,11 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace TPR10.Api.IntegrationTests;
 
-public sealed class ScopeRecordOpenApiTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class ScopeRecordOpenApiTests : IClassFixture<OpenApiFactory>
 {
     private readonly HttpClient client;
-    public ScopeRecordOpenApiTests(WebApplicationFactory<Program> factory) => client = factory.CreateClient();
+    public ScopeRecordOpenApiTests(OpenApiFactory factory) => client = factory.CreateClient();
     public static IEnumerable<object[]> Contracts()
     {
         foreach (var prefix in new[] { "/api/v1/workspaces/{workspaceId}", "/api/v1/workspaces/{workspaceId}/projects/{projectId}", "/api/v1/workspaces/{workspaceId}/projects/{projectId}/sites/{siteId}" })

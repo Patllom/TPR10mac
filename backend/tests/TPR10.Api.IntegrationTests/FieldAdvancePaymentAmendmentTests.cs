@@ -355,8 +355,12 @@ public sealed class FieldAdvancePaymentAmendmentTests(PostgresFixture postgres)
     private static async Task<Guid> Sibling(FieldAdvanceFixture f, Guid root)
     {
         await using var db = f.CreateContext();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         var family = (await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == root)).FamilyId;
-        var request = new AdvanceRequest { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId, ProjectId = ProjectId, OwnerPersonId = AuthorPersonId, CreatedBy = AuthorId, State = "Approved", FamilyId = family, RelationKind = "Supplement", SupplementOfRequestId = root };
+        var familyRow = await db.Set<AdvanceFamily>().FromSqlInterpolated($"SELECT * FROM field_advance_families WHERE id={family} FOR UPDATE").SingleAsync();
+        var order = ++familyRow.Version;
+        var request = new AdvanceRequest { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId, ProjectId = ProjectId, OwnerPersonId = AuthorPersonId, CreatedBy = AuthorId, State = "Approved", FamilyId = family, RelationKind = "Supplement", SupplementOfRequestId = root, FamilyVersionAtCreation = order };
         var revision = new AdvanceRequestRevision
         {
             Id = Guid.NewGuid(),
@@ -396,6 +400,7 @@ public sealed class FieldAdvancePaymentAmendmentTests(PostgresFixture postgres)
         var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == request.Id);
         account.ApprovedRevisionId = revision.Id; account.Approved = 10000m; account.Spendable = 10000m;
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
         return request.Id;
     }
     private static async Task<Guid> Proposal(FieldAdvanceFixture f, Guid id, string kind)

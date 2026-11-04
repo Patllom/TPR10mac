@@ -9,7 +9,7 @@ export function requestQueueMode(capabilities: string[], review: boolean, prefer
 }
 
 export function requestStateLabel(state: string): string {
-  return ({ Draft: 'ร่าง', AwaitingOwner: 'รอผู้รับผิดชอบยืนยัน', PendingApproval: 'รออนุมัติ', Held: 'พักสายอนุมัติ', Returned: 'ส่งกลับเพื่อแก้ไข', Approved: 'อนุมัติแล้ว รอดำเนินการจ่าย', Rejected: 'ปฏิเสธแล้ว', Withdrawn: 'ถอนแล้ว' } as Record<string, string>)[state] ?? 'ไม่ทราบสถานะ';
+  return ({ Draft: 'ร่าง', AwaitingOwner: 'รอผู้รับผิดชอบยืนยัน', PendingApproval: 'รออนุมัติ', Held: 'พักสายอนุมัติ', Returned: 'ส่งกลับเพื่อแก้ไข', Approved: 'อนุมัติแล้ว รอดำเนินการจ่าย', Rejected: 'ปฏิเสธแล้ว', Withdrawn: 'ถอนแล้ว', Closed: 'ปิดแล้ว' } as Record<string, string>)[state] ?? 'ไม่ทราบสถานะ';
 }
 export function diffRequestContent(previous: RequestContent, current: RequestContent): string[] {
   const changes: string[] = [];

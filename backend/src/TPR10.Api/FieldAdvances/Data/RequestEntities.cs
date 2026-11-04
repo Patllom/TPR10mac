@@ -11,6 +11,9 @@ public sealed class AdvanceRequest
     public Guid FamilyId { get; set; }
     public string RelationKind { get; set; } = "Normal";
     public Guid? SupplementOfRequestId { get; set; }
+    // Actual creation order and migration attestation have deliberately distinct meanings.
+    public long? FamilyVersionAtCreation { get; set; }
+    public long? LegacyFamilyVersionBaseline { get; set; }
     public string State { get; set; } = "Draft";
     public string? HoldCode { get; set; }
     public long Version { get; set; } = 1;

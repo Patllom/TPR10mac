@@ -1,12 +1,11 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace TPR10.Api.IntegrationTests;
 
-public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class IdentityOpenApiTests : IClassFixture<OpenApiFactory>
 {
     private readonly HttpClient client;
-    public IdentityOpenApiTests(WebApplicationFactory<Program> factory) => client = factory.CreateClient();
+    public IdentityOpenApiTests(OpenApiFactory factory) => client = factory.CreateClient();
 
     // Independent public contract: changing/removing a route, guard, response or schema must break these checks.
     public static TheoryData<string, string, string, int, string> Contracts => new()
@@ -123,7 +122,7 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
             .Concat(AttendanceRecordingOpenApiTests.Routes.Select(route => (route is "capture-challenges" or "check-ins" or "check-outs" ? "post" : "get") + " /api/v1/attendance/" + route))
             .Concat(new[] { "get /api/v1/attendance/corrections", "post /api/v1/attendance/corrections", "get /api/v1/attendance/corrections/{id}", "get /api/v1/attendance/corrections/approvals", "get /api/v1/attendance/corrections/sites" })
             .Concat(new[] { "revisions", "submit", "supervisor-approve", "hr-approve", "return", "reroute" }.Select(x => "post /api/v1/attendance/corrections/{id}/" + x))
-            .Concat(FieldAdvanceOpenApiTests.ExpectedOperations()).Order().ToArray();
+            .Concat(FieldAdvanceOpenApiTests.ExpectedOperations()).Concat(ExpectedSettlementOperations()).Order().ToArray();
         Assert.Equal(expected, actual);
         var cookie = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("SessionCookie");
         Assert.Equal("apiKey", cookie.GetProperty("type").GetString());
@@ -131,6 +130,93 @@ public sealed class IdentityOpenApiTests : IClassFixture<WebApplicationFactory<P
         Assert.Equal("__Host-tpr10_session", cookie.GetProperty("name").GetString());
         Assert.Contains("HttpOnly", cookie.GetProperty("description").GetString());
         Assert.Contains("Secure", cookie.GetProperty("description").GetString());
+    }
+
+    // Independent expected public inventory: 18 reads, 42 typed commands and
+    // seven scoped uploads. Never derive this oracle from endpoint metadata.
+    private static IEnumerable<string> ExpectedSettlementOperations()
+    {
+        const string prefix = "/api/v1/field-advances/requests/{requestId}/settlement";
+        string[] reads =
+        [
+            "",
+            "family",
+            "duplicates",
+            "rounds",
+            "documents",
+            "refunds",
+            "adjustments",
+            "incidents",
+            "corrections",
+            "case-payments",
+            "excess",
+            "excess-payments",
+            "recoveries",
+            "completion",
+            "rounds/{roundId}/revisions/{revisionId}",
+            "rounds/{entityId}/preview",
+            "rounds/{roundId}/revisions/{revisionId}/evidence/{entityId}",
+            "evidence/{entityId}",
+        ];
+        string[] writes =
+        [
+            "rounds/create",
+            "rounds/{entityId}/update",
+            "rounds/{entityId}/submit",
+            "rounds/{entityId}/review",
+            "documents/create",
+            "documents/{entityId}/update",
+            "rounds/{entityId}/documents",
+            "duplicates/{entityId}/review",
+            "completion/confirm",
+            "completion/correct",
+            "completion/{entityId}/confirm",
+            "declaration",
+            "refunds/create",
+            "refunds/{entityId}/update",
+            "refunds/{entityId}/confirm",
+            "refunds/{entityId}/cancel",
+            "refunds/{entityId}/review",
+            "corrections/create",
+            "case-payments/create",
+            "excess-payments/create",
+            "adjustments/{entityId}/close",
+            "rounds/{entityId}/adjust",
+            "rounds/{entityId}/excess",
+            "excess/{entityId}/disposition",
+            "incidents/create",
+            "incidents/{entityId}/confirm",
+            "incidents/{entityId}/recover",
+            "recoveries/{entityId}/confirm",
+            "incidents/{entityId}/release",
+            "incidents/{entityId}/shortfall",
+            "corrections/{entityId}/confirm",
+            "corrections/{entityId}/return",
+            "corrections/{entityId}/reject",
+            "corrections/{entityId}/cancel",
+            "case-payments/{entityId}/confirm",
+            "case-payments/{entityId}/return",
+            "case-payments/{entityId}/reject",
+            "case-payments/{entityId}/cancel",
+            "excess-payments/{entityId}/confirm",
+            "excess-payments/{entityId}/return",
+            "excess-payments/{entityId}/reject",
+            "excess-payments/{entityId}/cancel",
+            "evidence",
+            "rounds/{entityId}/evidence",
+            "refunds/{entityId}/evidence",
+            "adjustments/{entityId}/evidence",
+            "case-payments/{entityId}/evidence",
+            "excess-payments/{entityId}/evidence",
+            "excess/{entityId}/evidence",
+            "incidents/{entityId}/evidence",
+        ];
+        return reads.Select(path => "get " + prefix + (path.Length == 0 ? "" : "/" + path))
+            .Concat(writes.Select(path => "post " + prefix + "/" + path))
+            .Append("get /api/v1/field-advances/requests/{requestId}/settlement/commands/{commandId}/receipt")
+            .Append("get /api/v1/field-advances/settlement-work")
+            .Append("get /api/v1/field-advances/settlement-work/duplicates/{requestId}/{caseId}/comparison")
+            .Append("get /api/v1/field-advances/settlement-work/{lane}/{requestId}/{entityId}/evidence/{evidenceId}");
     }
 
     [Theory]

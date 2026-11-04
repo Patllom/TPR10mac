@@ -6,7 +6,7 @@ import type { FinanceScope, RequestMode, RequestCommand, RequestContent, CreateR
 
 const root = '/api/v1/field-advances/requests';
 const options = { credentials: 'same-origin', cache: 'no-store', redirect: 'error' } as const;
-const states = ['Draft', 'AwaitingOwner', 'PendingApproval', 'Held', 'Returned', 'Approved', 'Rejected', 'Withdrawn'];
+const states = ['Draft', 'AwaitingOwner', 'PendingApproval', 'Held', 'Returned', 'Approved', 'Rejected', 'Withdrawn', 'Closed'];
 export class RequestError extends Error {
   readonly clearProtectedData: boolean;
   readonly refreshRequired: boolean;

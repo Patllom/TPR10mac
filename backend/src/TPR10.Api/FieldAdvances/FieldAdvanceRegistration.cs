@@ -1,9 +1,11 @@
 using TPR10.Api.FieldAdvances.Access;
+using TPR10.Api.FieldAdvances.Settlements;
 using TPR10.Api.FieldAdvances.Grants;
 using TPR10.Api.FieldAdvances.Policies;
 using TPR10.Api.FieldAdvances.Requests;
 using TPR10.Api.FieldAdvances.Payments;
 using TPR10.Api.Identity;
+using TPR10.Api.Identity.Sessions;
 using TPR10.Api.FieldAdvances.Evidence;
 
 namespace TPR10.Api.FieldAdvances;
@@ -65,12 +67,37 @@ public static class FieldAdvanceRegistration
         services.AddScoped<ApprovalRouteResolver>();
         services.AddScoped<PolicyService>();
         services.AddScoped<PolicyResolver>();
+        services.AddScoped<SettlementPolicyResolver>();
+        services.AddScoped<SettlementAccess>();
+        services.AddScoped<SettlementClosureService>();
+        services.AddScoped<SettlementReadService>();
+        services.AddScoped<SettlementUiService>();
+        services.AddScoped<SettlementWorkService>();
+        services.AddHostedService<SettlementClosureWorker>();
+        services.AddScoped<SettlementCommandExecutor>();
+        services.AddScoped<SettlementDraftService>();
+        services.AddScoped<SettlementSubmissionService>();
+        services.AddScoped<SettlementRouteResolver>();
+        services.AddScoped<SettlementReviewService>();
+        services.AddScoped<RefundService>();
+        services.AddScoped<PaymentIncidentService>();
+        services.AddScoped<IncidentPaymentBridge>();
+        services.AddScoped<RefundReviewService>();
+        services.AddScoped<RefundCorrectionService>();
+        services.AddScoped<AdjustmentCaseService>();
+        services.AddScoped<ExpenseAdjustmentService>();
+        services.AddScoped<ExpenseExcessService>();
+        services.AddScoped<SettlementCompletionService>();
+        services.AddScoped<ExpenseAllocationLedger>();
+        services.AddScoped<SettlementEvidenceService>();
+        services.AddScoped<ExpenseDocumentService>();
+        services.AddScoped<DuplicateDocumentService>();
         services.AddScoped<PolicyReadService>();
         services.AddScoped<PolicyWorkspaceService>();
         services.AddScoped<GrantService>();
         services.AddScoped<GrantReadService>();
         services.AddScoped<GrantLifecycle>();
-        services.AddOpenApi(options => options.AddOperationTransformer<FieldAdvanceOpenApiTransformer>());
+        services.AddOpenApi(options => options.AddOperationTransformer<FieldAdvanceOpenApiTransformer>().AddSchemaTransformer<FieldAdvanceOpenApiTransformer>());
         return services;
     }
 
@@ -122,6 +149,24 @@ public static class FieldAdvanceRegistration
         group.MapPost("/requests/{id}/withdraw", RequestEndpoints.Withdraw).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>();
         group.MapPost("/requests/{id}/copy", RequestEndpoints.Copy).Accepts<RequestCommand>("application/json").Produces<RequestHttpView>(201);
         group.MapPayments();
+        group.MapSettlements();
+        group.MapGet("/settlement-work", (Guid workspaceId, Guid projectId, string lane, int? take, string? cursor,
+            SettlementWorkService service, RequestSession session, CancellationToken ct) =>
+            service.QueueAsync(session.Entity?.UserId ?? Guid.Empty, workspaceId, projectId, lane, take ?? 25, cursor, ct))
+            .WithMetadata(new SettlementApiMetadata()).Produces<SettlementWorkPage>()
+            .ProducesProblem(400).ProducesProblem(401).ProducesProblem(403).ProducesProblem(409).ProducesProblem(503);
+        group.MapGet("/settlement-work/duplicates/{requestId}/{caseId}/comparison",
+            (Guid requestId, Guid caseId, SettlementWorkService service, RequestSession session, CancellationToken ct) =>
+                service.DuplicateComparisonAsync(session.Entity?.UserId ?? Guid.Empty, requestId, caseId, ct))
+            .WithMetadata(new SettlementApiMetadata()).Produces<SettlementDuplicateComparison>()
+            .ProducesProblem(400).ProducesProblem(401).ProducesProblem(403).ProducesProblem(409).ProducesProblem(503);
+        group.MapGet("/settlement-work/{lane}/{requestId}/{entityId}/evidence/{evidenceId}",
+            (string lane, Guid requestId, Guid entityId, Guid evidenceId, HttpContext context,
+                SettlementWorkService service, RequestSession session, CancellationToken ct) =>
+                service.EvidenceAsync(session.Entity?.UserId ?? Guid.Empty, lane, requestId, entityId,
+                    evidenceId, context, ct))
+            .WithMetadata(new SettlementApiMetadata()).Produces<byte[]>(200, "image/png", "image/jpeg", "application/pdf")
+            .ProducesProblem(401).ProducesProblem(403).ProducesProblem(409).ProducesProblem(503);
         group.MapFinanceEvidence();
         PaymentEndpoints.Contract(group.MapPost("/requests/{id}/supplements", RequestEndpoints.Supplement)).Accepts<SupplementHttp>("application/json").Produces<RequestHttpView>(201);
         return endpoints;

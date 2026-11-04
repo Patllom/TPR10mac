@@ -29,6 +29,7 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
             var request = await FamilyParticipation.LockRequestAsync(db, requestId, ct);
             var decision = await access.CheckAsync(actor, requestId, action, ct);
             if (request is null || !decision.Allowed || decision.PersonId is null) return Denied();
+            _ = await PaymentCapacity.LockAsync(db, requestId, ct);
             var role = action switch
             {
                 "prepare" or "start" or "record" or "takeover" => "Payer",
@@ -63,6 +64,9 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
             }
             if (family.Version != meta.FamilyVersion || request.Version != meta.RequestVersion
                 || installment?.Version != meta.InstallmentVersion) return Conflict();
+
+            if (installmentId is not null && await db.Set<PaymentIncidentResolution>().AnyAsync(x => x.InstallmentId == installmentId
+                && x.AcceptedAtUtc != null, ct)) return Conflict();
 
             // RecordAsync saves participation and increments FamilyVersion, inside this same transaction.
             if (role != "Author") await participation.RecordAsync(family.Id, requestId, decision.PersonId.Value, role, ct);
@@ -111,7 +115,7 @@ public sealed class PaymentCommandExecutor(Tpr10DbContext db, PaymentAccess acce
             result = result with
             {
                 Value = new(requestId, installment?.Id, family.Version, request.Version, installment?.Version,
-                installment?.State ?? request.State, balance.Approved, balance.Spendable, balance.Reserved, balance.Paid, BalanceMath.Available(balance), holds)
+                installment?.State ?? request.State, balance.Approved, balance.Spendable, balance.Reserved, balance.Paid, PaymentCapacity.Available(account), holds)
             };
             receipt.Status = result.Status; receipt.ResultJson = JsonSerializer.Serialize(result);
             db.Add(new AdvancePaymentEvent

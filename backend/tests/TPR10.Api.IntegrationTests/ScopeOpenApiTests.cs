@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace TPR10.Api.IntegrationTests;
 
-public sealed class ScopeOpenApiTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public sealed class ScopeOpenApiTests(OpenApiFactory factory) : IClassFixture<OpenApiFactory>
 {
     public static IEnumerable<object[]> Contracts()
     {

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using SkiaSharp;
 using TPR10.Api.Data;
 using TPR10.Api.FieldAdvances.Data;
 using TPR10.Api.FieldAdvances.Payments;
@@ -14,8 +13,9 @@ public sealed class FinanceEvidenceService(Tpr10DbContext db, PaymentAccess acce
         RequireNoTransaction();
         if (!await Authorized(actor, requestId, "record", ct)) return new(403, "finance-access-denied", null);
         try { options.Validate(); } catch (InvalidOperationException) { return new(503, "evidence-unavailable", null); }
-        var bytes = await BoundedRead(content, ct);
-        if (bytes is null || !await ValidContent(bytes, declaredType, ct)) return new(422, "evidence-invalid", null);
+        var validator = new FinanceEvidenceValidation(pdf, options);
+        var bytes = await validator.BoundedRead(content, ct);
+        if (bytes is null || !await validator.ValidContent(bytes, declaredType, ct)) return new(422, "evidence-invalid", null);
         var key = Guid.NewGuid().ToString("N"); EvidenceTicket stored;
         try
         {
@@ -138,28 +138,5 @@ public sealed class FinanceEvidenceService(Tpr10DbContext db, PaymentAccess acce
     private void RequireNoTransaction()
     {
         if (db.Database.CurrentTransaction != null) throw new InvalidOperationException("Prepare evidence I/O before entering the financial transaction.");
-    }
-    private async Task<byte[]?> BoundedRead(Stream content, CancellationToken ct)
-    {
-        using var memory = new MemoryStream(); var buffer = new byte[65536]; int read;
-        while ((read = await content.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, options.MaxFileBytes - memory.Length + 1)), ct)) != 0)
-        {
-            if (memory.Length + read > options.MaxFileBytes) return null;
-            await memory.WriteAsync(buffer.AsMemory(0, read), ct);
-        }
-        return memory.Length == 0 ? null : memory.ToArray();
-    }
-    private async Task<bool> ValidContent(byte[] bytes, string declaredType, CancellationToken ct)
-    {
-        if (declaredType == "application/pdf") return bytes.AsSpan().StartsWith("%PDF-"u8) && await pdf.ValidateAsync(bytes, ct);
-        if (declaredType is not ("image/png" or "image/jpeg")) return false;
-        using var codec = SKCodec.Create(new MemoryStream(bytes, false));
-        if (codec is null || codec.Info.Width <= 0 || codec.Info.Height <= 0
-            || (long)codec.Info.Width * codec.Info.Height > options.MaxImagePixels
-            || codec.EncodedFormat != (declaredType == "image/png" ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg)) return false;
-        if (declaredType == "image/png" && !bytes.AsSpan().EndsWith(new byte[] { 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130 })) return false;
-        if (declaredType == "image/jpeg" && !bytes.AsSpan().EndsWith(new byte[] { 255, 217 })) return false;
-        using var bitmap = new SKBitmap(new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888));
-        return codec.GetPixels(bitmap.Info, bitmap.GetPixels()) == SKCodecResult.Success;
     }
 }

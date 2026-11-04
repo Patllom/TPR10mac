@@ -21,7 +21,8 @@ public sealed class FieldAdvancePolicyMigrationTests(PostgresFixture postgres)
             db.GetService<IMigrator>().MigrateAsync("20261019142031_AddFieldAdvancePolicyFoundation"));
         Assert.Equal("23514", error.SqlState);
         Assert.Equal(pending.ContentHash, (await db.Set<PolicyReview>().SingleAsync()).ReviewedContentHash);
-        Assert.Equal("Company", (await db.Set<PolicyRevision>().SingleAsync()).Mode);
+        // A later additive migration may already have rolled back before the lifecycle guard stops this downgrade.
+        Assert.Equal("Company", await db.Set<PolicyRevision>().Select(x => x.Mode).SingleAsync());
     }
 
     [Fact]

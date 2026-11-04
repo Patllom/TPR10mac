@@ -11,12 +11,16 @@ public sealed record PolicyHttpCategory(Guid Id, string Name, bool Active, strin
     string[] EvidenceTypes);
 public sealed record PolicyHttpContent(int ClearingDays, PolicyHttpBand[] Bands, PolicyHttpCategory[] Categories)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CorrectionDays { get; init; }
     internal PolicyContent Domain() => new(ClearingDays,
         Bands?.Select(x => x is null ? null! : new ApprovalBand(x.Order, x.LevelCode, x.UpperInclusive)).ToArray()!,
-        Categories?.Select(x => x is null ? null! : new CategoryRule(x.Id, x.Name, x.Active, x.Unit, x.StandardRate, x.EvidenceTypes)).ToArray()!);
+        Categories?.Select(x => x is null ? null! : new CategoryRule(x.Id, x.Name, x.Active, x.Unit, x.StandardRate, x.EvidenceTypes)).ToArray()!)
+    { CorrectionDays = CorrectionDays };
     internal static PolicyHttpContent From(PolicyContent c) => new(c.ClearingDays,
         c.Bands.Select(x => new PolicyHttpBand(x.Order, x.LevelCode, x.UpperInclusive)).ToArray(),
-        c.Categories.Select(x => new PolicyHttpCategory(x.Id, x.Name, x.Active, x.Unit, x.StandardRate, x.EvidenceTypes)).ToArray());
+        c.Categories.Select(x => new PolicyHttpCategory(x.Id, x.Name, x.Active, x.Unit, x.StandardRate, x.EvidenceTypes)).ToArray())
+    { CorrectionDays = c.CorrectionDays };
 }
 public sealed record CreatePolicyHttpRequest(FinanceScope Scope, Guid? BaseCompanyVersionId, PolicyHttpContent Content, CommandMeta Meta);
 public sealed record UpdatePolicyHttpRequest(PolicyHttpContent Content, CommandMeta Meta);
@@ -26,9 +30,12 @@ public sealed record PolicyWireBand(int Order, string LevelCode, string UpperInc
 public sealed record PolicyWireCategory(Guid Id, string Name, bool Active, string? Unit, string? StandardRate, string[] EvidenceTypes);
 public sealed record PolicyWireContent(int ClearingDays, PolicyWireBand[] Bands, PolicyWireCategory[] Categories)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CorrectionDays { get; init; }
     internal static PolicyWireContent From(PolicyContent c) => new(c.ClearingDays,
         c.Bands.Select(x => new PolicyWireBand(x.Order, x.LevelCode, x.UpperInclusive.ToString("0.00", CultureInfo.InvariantCulture))).ToArray(),
-        c.Categories.Select(x => new PolicyWireCategory(x.Id, x.Name, x.Active, x.Unit, x.StandardRate?.ToString("0.00", CultureInfo.InvariantCulture), x.EvidenceTypes)).ToArray());
+        c.Categories.Select(x => new PolicyWireCategory(x.Id, x.Name, x.Active, x.Unit, x.StandardRate?.ToString("0.00", CultureInfo.InvariantCulture), x.EvidenceTypes)).ToArray())
+    { CorrectionDays = c.CorrectionDays };
 }
 public sealed record PolicyHttpView(Guid Id, FinanceScope Scope, string State, long Version, Guid? BaseCompanyVersionId,
     PolicyWireContent Content, string ContentHash, string Mode, Guid? SourcePolicyRevisionId,
