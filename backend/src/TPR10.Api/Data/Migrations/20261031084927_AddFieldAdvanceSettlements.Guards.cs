@@ -65,6 +65,9 @@ public partial class AddFieldAdvanceSettlements
     private const string SettlementDowngradeGuard = """
         DO $$ DECLARE t text; populated boolean; BEGIN
             FOREACH t IN ARRAY ARRAY['settlement_rounds','settlement_revisions','settlement_lines','settlement_approval_steps','expense_documents','expense_allocations','expense_duplicate_cases','work_completions','submission_declarations','refunds','refund_corrections','settlement_expense_adjustments','settlement_adjustment_cases','payment_incident_resolutions','payment_incident_recoveries','closure_records'] LOOP
+                -- Hold the same table lock needed by DROP through the migration transaction.
+                -- Otherwise a writer can insert after the empty check and before DROP.
+                EXECUTE format('LOCK TABLE field_advance_%I IN ACCESS EXCLUSIVE MODE',t);
                 EXECUTE format('SELECT EXISTS (SELECT 1 FROM field_advance_%I)',t) INTO populated;
                 IF populated THEN RAISE EXCEPTION 'Settlement history prevents destructive downgrade' USING ERRCODE='23514'; END IF;
             END LOOP;

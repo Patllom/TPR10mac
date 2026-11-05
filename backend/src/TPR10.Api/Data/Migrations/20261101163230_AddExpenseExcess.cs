@@ -447,6 +447,9 @@ namespace TPR10.Api.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
+                LOCK TABLE field_advance_settlement_rounds, field_advance_settlement_adjustment_cases,
+                    field_advance_refund_corrections, field_advance_settlement_case_payments,
+                    field_advance_settlement_case_closures, field_advance_settlement_excess_cases IN ACCESS EXCLUSIVE MODE;
                 DO $$ BEGIN
                     IF EXISTS (SELECT 1 FROM field_advance_settlement_excess_cases)
                         OR EXISTS (SELECT 1 FROM field_advance_settlement_rounds WHERE round_kind='Adjustment')

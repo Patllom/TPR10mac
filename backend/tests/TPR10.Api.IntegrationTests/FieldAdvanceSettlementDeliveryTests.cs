@@ -1,12 +1,15 @@
 using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using TPR10.Api.Data.Migrations;
 using TPR10.Api.FieldAdvances.Data;
 using TPR10.Api.FieldAdvances.Evidence;
 using TPR10.Api.FieldAdvances.Settlements;
@@ -23,6 +26,57 @@ namespace TPR10.Api.IntegrationTests;
 [Collection("database")]
 public sealed class FieldAdvanceSettlementDeliveryTests(PostgresFixture postgres)
 {
+    [Fact]
+    public async Task Downgrade_guard_holds_table_locks_until_transaction_ends()
+    {
+        await using var f = await FieldAdvanceFixture.CreateAsync(postgres);
+        await using var db = f.CreateContext();
+        var guard = (string)typeof(AddFieldAdvanceSettlements)
+            .GetField("SettlementDowngradeGuard", BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetRawConstantValue()!;
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync(guard);
+
+        await using var reader = new NpgsqlConnection(f.Database.ConnectionString);
+        await reader.OpenAsync();
+        await using (var command = new NpgsqlCommand("SET lock_timeout='250ms'; SELECT count(*) FROM field_advance_refunds", reader))
+        {
+            var blocked = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteScalarAsync());
+            Assert.Equal("55P03", blocked.SqlState);
+        }
+        await tx.RollbackAsync();
+        await using var after = new NpgsqlCommand("SELECT count(*) FROM field_advance_refunds", reader);
+        Assert.Equal(0L, await after.ExecuteScalarAsync());
+    }
+
+    [Theory]
+    [InlineData(typeof(AddRefundCorrectionCases), "field_advance_settlement_case_payments")]
+    [InlineData(typeof(AddExpenseAdjustments), "field_advance_settlement_case_payments")]
+    [InlineData(typeof(AddExpenseExcess), "field_advance_settlement_case_payments")]
+    public async Task Later_downgrade_guards_hold_checked_tables_until_transaction_ends(Type migrationType, string checkedTable)
+    {
+        await using var f = await FieldAdvanceFixture.CreateAsync(postgres);
+        var migration = (Migration)Activator.CreateInstance(migrationType)!;
+        var operations = new MigrationBuilder("Npgsql.EntityFrameworkCore.PostgreSQL");
+        migrationType.GetMethod("Down", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(migration, [operations]);
+        var guard = Assert.IsType<SqlOperation>(operations.Operations[0]).Sql;
+
+        await using var db = f.CreateContext();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync(guard);
+        await using var reader = new NpgsqlConnection(f.Database.ConnectionString);
+        await reader.OpenAsync();
+        await using (var command = new NpgsqlCommand($"SET lock_timeout='250ms'; SELECT count(*) FROM {checkedTable}", reader))
+        {
+            var blocked = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteScalarAsync());
+            Assert.Equal("55P03", blocked.SqlState);
+        }
+        await tx.RollbackAsync();
+        await using var after = new NpgsqlCommand($"SELECT count(*) FROM {checkedTable}", reader);
+        Assert.Equal(0L, await after.ExecuteScalarAsync());
+    }
+
     // T17-M1: actual registered work-proof route, actual private file bytes. A removed
     // post-I/O or response-delivery guard must leak the PNG and fail this test.
     [Theory]
