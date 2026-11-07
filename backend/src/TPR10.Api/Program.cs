@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using TPR10.Api.Data;
+using TPR10.Api.Diagnostics;
 using TPR10.Api.Health;
 using TPR10.Api.Correlation;
 using TPR10.Api.Auditing;
@@ -70,6 +71,7 @@ app.UseForwardedHeaders();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseRouting();
+app.UseMiddleware<OpenApiDiagnosticsMiddleware>();
 app.Use(async (context, next) => { RecordingEndpoints.ApplyCaptureBodyLimit(context); CorrectionEndpoints.ApplyBodyLimit(context); await next(context); });
 app.Use(async (context, next) =>
 {
@@ -125,7 +127,8 @@ app.MapAttendanceCorrections();
 app.MapFieldAdvances();
 app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }))
     .ExcludeFromDescription();
-app.MapOpenApi("/api/openapi/{documentName}.json");
+app.MapOpenApi("/api/openapi/{documentName}.json")
+    .WithMetadata(new OpenApiDiagnosticsMetadata());
 app.MapHealthChecks("/api/health/ready", new HealthCheckOptions
 {
     ResponseWriter = (context, report) => context.Response.WriteAsJsonAsync(
