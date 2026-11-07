@@ -1,4 +1,5 @@
  'use client';
+import { holdLabel } from '@/lib/field-advances/ui-labels';
 import { useEffect, useState } from 'react';
 import { createPaymentClient, PaymentError } from '@/lib/field-advances/payment-client';
 import { subscribeAuthChanges } from '@/lib/auth/auth-change';
@@ -35,7 +36,7 @@ export default function PaymentQueue({ userId }: { userId: string }) {
     <button onClick={() => setRefresh(x => x + 1)}>โหลดใหม่</button>
     <label className="block">โครงการ<select className="block w-full border p-2" value={selected || scopes[0]?.scope.projectId || ''} onChange={e => { setSelected(e.target.value); setRows([]); setPage(1); }}>{scopes.map(s => <option key={s.scope.projectId} value={s.scope.projectId!}>{s.workspaceName} · {s.projectName}</option>)}</select></label>
     <div className="flex gap-4"><button disabled={scopePage === 1} onClick={() => { setScopePage(x => x - 1); setSelected(''); setRows([]); }}>โครงการหน้าก่อน</button><button disabled={scopes.length < 25} onClick={() => { setScopePage(x => x + 1); setSelected(''); setRows([]); }}>โครงการหน้าถัดไป</button></div>
-    <ul className="space-y-3">{rows.map(r => <li key={r.requestId} className="rounded border p-3"><button className="break-all text-left underline" onClick={() => setRequestId(r.requestId)}>เปิดงานจ่าย {r.requestId}</button><p>อนุมัติ {r.approved} · กันไว้ {r.reserved} · จ่ายแล้ว {r.paid} · พร้อมจัดงวด {r.available} บาท</p>{r.holdCodes.length > 0 && <p>เหตุระงับ: {r.holdCodes.join(', ')}</p>}</li>)}</ul>
+    <ul className="space-y-3">{rows.map(r => <li key={r.requestId} className="rounded border p-3"><button className="break-all text-left underline" onClick={() => setRequestId(r.requestId)}>เปิดงานจ่าย {r.requestId}</button><p>อนุมัติ {r.approved} · กันไว้ {r.reserved} · จ่ายแล้ว {r.paid} · พร้อมจัดงวด {r.available} บาท</p>{r.holdCodes.length > 0 && <p>เหตุระงับ: {r.holdCodes.map(holdLabel).join(', ')}</p>}</li>)}</ul>
     {!rows.length && !error && <p>ไม่มีงานจ่ายในหน้านี้</p>}
     <div className="flex gap-4"><button disabled={page === 1} onClick={() => { setRows([]); setPage(x => x - 1); }}>หน้าก่อน</button><button disabled={rows.length < 25} onClick={() => { setRows([]); setPage(x => x + 1); }}>หน้าถัดไป</button></div>
   </div>;

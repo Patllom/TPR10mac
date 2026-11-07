@@ -1,4 +1,5 @@
 'use client';
+import { reviewStateLabel } from '@/lib/field-advances/ui-labels';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPaymentClient } from '@/lib/field-advances/payment-client';
@@ -188,7 +189,7 @@ export default function SettlementReviewQueue({ userId }: { userId: string }) {
       onAccessDenied={clear} /> : <>
       <ul className="space-y-3">{rows.map(row => <li key={row.entityId} className="rounded border p-4">
         <button className="break-all text-left underline" onClick={() => setSelected(row)}>เปิดงาน {row.requestId}</button>
-        <p>{laneLabels[lane]} · {row.state}</p>
+        <p>{laneLabels[lane]} · {reviewStateLabel(row.state)}</p>
       </li>)}</ul>
       {rows.length === 0 && !error && <p>ไม่มีงานที่ได้รับมอบหมายในหน้านี้</p>}
       {cursor && <button className="rounded border px-3 py-2" disabled={busy} onClick={() => void refresh(cursor)}>หน้าถัดไป</button>}

@@ -1,4 +1,5 @@
 'use client';
+import { reviewStateLabel } from '@/lib/field-advances/ui-labels';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { currentAccount, PolicyError } from '@/lib/field-advances/policy-client';
@@ -269,7 +270,7 @@ export default function SettlementReviewDetails({ userId, item, onBack, onDone, 
     <button className="underline" onClick={onBack}>กลับคิวงาน</button>
     <h2 className="text-xl font-semibold">รายละเอียดงานตรวจ</h2>
     <p className="break-all">คำขอ {item.requestId}</p>
-    <p>สถานะ {item.state} · เวอร์ชัน {item.entityVersion}</p>
+    <p>สถานะ {reviewStateLabel(item.state)} · เวอร์ชัน {item.entityVersion}</p>
     {error && <p role="alert" className="rounded border border-red-500 p-3">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {pending && <section className="space-y-2 rounded border border-amber-600 p-3">
