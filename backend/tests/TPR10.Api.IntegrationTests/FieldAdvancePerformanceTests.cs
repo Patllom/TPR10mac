@@ -175,7 +175,9 @@ public sealed partial class FieldAdvancePerformanceTests(PostgresFixture postgre
         foreach (var size in new[] { 4, 20 })
         {
             var counter = new QueryCounter();
-            await using var db = new Tpr10DbContext(new DbContextOptionsBuilder<Tpr10DbContext>().UseNpgsql(f.Database.ConnectionString).AddInterceptors(counter).Options);
+            await using var db = new Tpr10DbContext(new DbContextOptionsBuilder<Tpr10DbContext>().UseNpgsql(f.Database.ConnectionString)
+                .ConfigureWarnings(w => w.Throw(CoreEventId.RowLimitingOperationWithoutOrderByWarning))
+                .AddInterceptors(counter).Options);
             var timer = Stopwatch.StartNew();
             var result = await RequestReader(f, db, session).HistoryAsync(AuthorId, request.Id, 1, size, default);
             Assert.Equal(200, result.Status); Assert.Equal(size, result.Value!.Length);
