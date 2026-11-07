@@ -124,6 +124,7 @@ public sealed class FieldAdvanceSettlementRaceTests(PostgresFixture postgres)
         var retry = refundFirst ? await Review(f, AliasAccountId, request, round)
             : await FieldAdvanceRefundTests.RefundCall(f, request, "Propose", input: FieldAdvanceRefundTests.RefundInputFor(100m, proof.Id));
         Assert.Equal(409, retry.Status);
+        Assert.Equal("refund-capacity-exceeded", retry.Code);
         var totals = await FieldAdvanceRefundTests.Totals(f, request);
         Assert.Equal(refundFirst ? 0m : 100m, totals.ApprovedExpense);
         Assert.Equal(refundFirst ? 100m : 0m, totals.PendingRefund);
