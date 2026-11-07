@@ -223,7 +223,7 @@ public sealed class RequestReadService(Tpr10DbContext db, FinanceAccess access, 
         var rows = new List<RequestHistory>();
         var humanIds = keys.Where(x => !x.System).Select(x => x.Id).ToArray();
         var systemIds = keys.Where(x => x.System).Select(x => x.Id).ToArray();
-        var humanEvents = await human.Where(x => humanIds.Contains(x.Id)).Take(size).ToDictionaryAsync(x => x.Id, ct);
+        var humanEvents = await human.Where(x => humanIds.Contains(x.Id)).OrderBy(x => x.Id).Take(size).ToDictionaryAsync(x => x.Id, ct);
         var systemMetadata = (await db.AuditMetadata.AsNoTracking().Where(x => systemIds.Contains(x.AuditEventId)
             && (x.Key == "evidence-reference" || x.Key == "assignment-id" || x.Key == "reason")).ToArrayAsync(ct))
             .ToLookup(x => x.AuditEventId);

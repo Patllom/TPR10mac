@@ -42,6 +42,7 @@ public sealed class FinancePersonResolver(Tpr10DbContext db, TimeProvider clock)
                                     on new { link.WorkspaceId, Id = link.PersonId } equals new { person.WorkspaceId, person.Id }
                                 where link.UserId == userId && link.WorkspaceId == workspaceId
                                     && link.CreatedAtUtc <= now && link.EndedAtUtc == null
+                                orderby link.Id
                                 select person.Id).Take(2).ToArrayAsync(ct);
         return identities.Length == 1 && identities[0] != Guid.Empty ? identities[0] : null;
     }
