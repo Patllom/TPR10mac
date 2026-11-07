@@ -96,7 +96,7 @@ public sealed class PaymentDispositionService(Tpr10DbContext db, PaymentCommandE
     private async Task<FinanceResult<PaymentView>> ProposeTerminationAsync(Guid actor, AdvanceRequest request,
         AdvancePaymentAccount account, AdvanceRequestRevision revision, PaymentCommand meta, CancellationToken ct)
     {
-        if (!Approved(request, account, revision) || account.Spendable <= account.Paid
+        if (!Approved(request, account, revision) || account.Spendable <= PaymentCapacity.Usage(account)
             || !await FullyApprovedAsync(revision.Id, ct)) return Conflict();
         var person = await people.ResolveAsync(actor, request.WorkspaceId, ct);
         if (person is null) return Denied();
@@ -174,11 +174,12 @@ public sealed class PaymentDispositionService(Tpr10DbContext db, PaymentCommandE
                     || !await ProposerCurrentAsync(proposal, token)) return Denied();
                 var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == proposal.RequestId, token);
                 if (account.Reserved != 0
-                    || await db.Set<AdvanceInstallment>().AnyAsync(x => x.RequestId == proposal.RequestId && x.State != "Paid" && x.State != "Cancelled", token)
-                    || await db.Set<AdvancePaymentAttempt>().AnyAsync(x => x.RequestId == proposal.RequestId && x.State != "Matched" && x.State != "Unpaid", token)) return Conflict();
+                    || await db.Set<AdvanceInstallment>().AnyAsync(x => x.RequestId == proposal.RequestId && x.State != "Paid" && x.State != "Cancelled" && x.State != "IncidentResolved", token)
+                    || await db.Set<AdvancePaymentAttempt>().AnyAsync(x => x.RequestId == proposal.RequestId && x.State != "Matched" && x.State != "Unpaid"
+                        && !db.Set<IncidentPaymentAdjustment>().Any(a => a.AttemptId == x.Id), token)) return Conflict();
                 PaymentCommandExecutor.RegisterFinalAuthorization(db, proposal.RequestId, null, meta.CommandId,
                     finalToken => ProposerCurrentAsync(proposal, finalToken));
-                account.Spendable = account.Paid; account.Version = checked(account.Version + 1);
+                account.Spendable = PaymentCapacity.Usage(account); account.Version = checked(account.Version + 1);
                 var hold = await db.Set<AdvancePaymentHold>().SingleAsync(x => x.Id == snapshot.HoldId, token);
                 hold.Code = "PaymentTerminated";
                 return CeilingAmendmentService.Success(proposal.RequestId);

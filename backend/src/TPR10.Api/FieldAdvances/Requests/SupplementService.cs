@@ -26,7 +26,7 @@ public sealed class SupplementService(Tpr10DbContext db, RequestAccess access, R
         var hash = Hash(new { action, actor, sourceRequestId, content, meta });
         var replay = await executor.ReplayAsync(actor, scope, action, meta, hash, ct);
         if (replay is not null) return replay;
-        if (meta.ExpectedVersion != 0 || !await EligibleAsync(db, source.FamilyId, ct)) return Conflict();
+        if (meta.ExpectedVersion != 0 || !await CanCreateAsync(db, source.FamilyId, ct)) return Conflict();
         var history = await FamilyParticipation.ReadHistoryAsync(db, source.FamilyId, ct);
         // Becoming a delegate must not erase an earlier incompatible role in this family.
         if (history.ApprovedPersonIds.Contains(person.Value) || history.CheckerPersonIds.Contains(person.Value)
@@ -45,6 +45,7 @@ public sealed class SupplementService(Tpr10DbContext db, RequestAccess access, R
             DelegatePersonId = person == source.OwnerPersonId ? null : person,
             RelationKind = "Supplement",
             SupplementOfRequestId = root.Id,
+            FamilyVersionAtCreation = checked((await db.Set<AdvanceFamily>().SingleAsync(x => x.Id == source.FamilyId, ct)).Version + 1),
             CreatedBy = actor,
             CreatedAtUtc = clock.GetUtcNow()
         };
@@ -91,12 +92,29 @@ public sealed class SupplementService(Tpr10DbContext db, RequestAccess access, R
                 && (await access.CheckAsync(actor, sourceRequestId, "read", ct)).Allowed, ct);
     }, ct);
 
-    internal static async Task<bool> EligibleAsync(Tpr10DbContext db, Guid familyId, CancellationToken ct)
+    internal static async Task<bool> CanCreateAsync(Tpr10DbContext db, Guid familyId, CancellationToken ct)
     {
         var root = await db.Set<AdvanceRequest>().SingleOrDefaultAsync(x => x.FamilyId == familyId && x.RelationKind == "Normal", ct);
         return root is not null && root.State is not ("Rejected" or "Withdrawn" or "Closed")
+            && !await db.Set<ClosureRecord>().AnyAsync(x => x.RequestId == root.Id, ct)
             && await db.Set<AdvancePaymentAccount>().AnyAsync(x => x.RequestId == root.Id && x.ApprovedRevisionId != null
                 && x.EverPaid && x.Approved > 0, ct);
+    }
+
+    internal static async Task<bool> CanContinueAsync(Tpr10DbContext db, Guid supplementId, CancellationToken ct)
+    {
+        var supplement = await db.Set<AdvanceRequest>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == supplementId, ct);
+        if (supplement is null || supplement.RelationKind != "Supplement") return false;
+        var root = await db.Set<AdvanceRequest>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == supplement.SupplementOfRequestId
+            && x.FamilyId == supplement.FamilyId && x.WorkspaceId == supplement.WorkspaceId
+            && x.ProjectId == supplement.ProjectId && x.OwnerPersonId == supplement.OwnerPersonId && x.RelationKind == "Normal", ct);
+        var order = supplement.FamilyVersionAtCreation ?? supplement.LegacyFamilyVersionBaseline;
+        if (root is null || order is null or <= 0 || root.State is "Rejected" or "Withdrawn") return false;
+        var closure = await db.Set<ClosureRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.RequestId == root.Id, ct);
+        if (root.State == "Closed" && closure?.AcceptedAtUtc is null) return false;
+        if (closure is not null && (closure.AcceptedAtUtc is null || order >= closure.FamilyVersion)) return false;
+        return await db.Set<AdvancePaymentAccount>().AnyAsync(x => x.RequestId == root.Id
+            && x.ApprovedRevisionId != null && x.EverPaid && x.Approved > 0, ct);
     }
 
     internal static async Task ReleaseAsync(Tpr10DbContext db, AdvanceRequest request, CancellationToken ct)

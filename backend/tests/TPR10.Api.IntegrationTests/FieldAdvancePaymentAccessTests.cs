@@ -543,6 +543,8 @@ public sealed class FieldAdvancePaymentAccessTests(PostgresFixture postgres)
         decimal basis = 100m, Guid? existingRoot = null)
     {
         await using var db = f.CreateContext();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         var root = existingRoot is { } rootId ? await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == rootId) : new AdvanceRequest
         {
             Id = Guid.NewGuid(),
@@ -552,6 +554,41 @@ public sealed class FieldAdvancePaymentAccessTests(PostgresFixture postgres)
             CreatedBy = AuthorId
         };
         if (existingRoot is null) { db.Add(root); await db.SaveChangesAsync(); }
+        long? creationOrder = null;
+        if (!copy)
+        {
+            var family = await db.Set<AdvanceFamily>().FromSqlInterpolated($"SELECT * FROM field_advance_families WHERE id={root.FamilyId} FOR UPDATE").SingleAsync();
+            creationOrder = ++family.Version;
+            var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == root.Id);
+            if (existingRoot is null)
+            {
+                // Seed only the approved-paid prerequisite, not grants or reviewer history.
+                var rootRevision = new AdvanceRequestRevision
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = WorkspaceId,
+                    ProjectId = ProjectId,
+                    RequestId = root.Id,
+                    RevisionNumber = 1,
+                    IsCurrent = true,
+                    Total = 100m,
+                    ContentJson = "{}",
+                    ContentHash = new('a', 64),
+                    CreatedBy = AuthorId,
+                    CreatedByPersonId = AuthorPersonId,
+                    CompanyPolicyRevisionId = CompanyRevisionId,
+                    PolicySnapshotJson = "{}",
+                    PolicyHash = new('b', 64)
+                };
+                db.Add(rootRevision); await db.SaveChangesAsync();
+                rootRevision.SubmittedAtUtc = f.Clock.GetUtcNow(); rootRevision.ConfirmedByPersonId = AuthorPersonId;
+                root.State = "Approved";
+                account.ApprovedRevisionId = rootRevision.Id;
+                account.Approved = account.Spendable = 100m;
+            }
+            account.Paid = 1m; account.EverPaid = true;
+            await db.SaveChangesAsync();
+        }
         var target = new AdvanceRequest
         {
             Id = Guid.NewGuid(),
@@ -563,6 +600,7 @@ public sealed class FieldAdvancePaymentAccessTests(PostgresFixture postgres)
             FamilyId = copy ? Guid.NewGuid() : root.FamilyId,
             RelationKind = copy ? "Normal" : "Supplement",
             SourceRequestId = copy ? root.Id : null,
+            FamilyVersionAtCreation = creationOrder,
             SupplementOfRequestId = copy ? null : root.Id
         };
         var revision = new AdvanceRequestRevision
@@ -611,6 +649,7 @@ public sealed class FieldAdvancePaymentAccessTests(PostgresFixture postgres)
         await db.SaveChangesAsync();
         revision.SubmittedAtUtc = f.Clock.GetUtcNow(); revision.ConfirmedByPersonId = AuthorPersonId;
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
         return (root.Id, target.Id, revision.Id, step.Id);
     }
 }

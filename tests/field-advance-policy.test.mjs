@@ -100,3 +100,28 @@ test('local validation ส่ง400 ให้แก้ข้อมูลโด�
   await assert.rejects(() => client.savePolicy(null, scope, { ...content, clearingDays: 0 }, meta), e => e.status === 400);
   assert.equal(calls, 0);
 });
+
+test('correction days remain optional, but supplied days must fit a positive integer', () => {
+  for (const correctionDays of [undefined, null, 1, 2147483647])
+    assert.doesNotThrow(() => view.validateContent({ ...content, correctionDays }));
+  for (const correctionDays of [0, -1, 1.5, 2147483648, '3', NaN, Infinity])
+    assert.throws(() => view.validateContent({ ...content, correctionDays }), String(correctionDays));
+});
+test('review comparison shows correction changes and treats absent/null as the same unset value', () => {
+  assert.deepEqual(view.differences(content, { ...content, correctionDays: null }), []);
+  assert.deepEqual(view.differences(content, { ...content, correctionDays: 3 }), ['วันแก้ไข: ไม่กำหนด → 3']);
+  assert.deepEqual(view.differences({ ...content, correctionDays: 3 }, { ...content, correctionDays: 8 }), ['วันแก้ไข: 3 → 8']);
+});
+test('client preserves correction days in save payloads and reads without inventing legacy defaults', async () => {
+  for (const correctionDays of [undefined, null, 2147483647]) {
+    let payload;
+    const value = { ...content, ...(correctionDays === undefined ? {} : { correctionDays }) };
+    const client = createPolicyClient(scope, w, undefined, transport(async (url, options) => {
+      payload = JSON.parse(options.body);
+      return Response.json({ ...policy, content: value });
+    }));
+    const saved = await client.savePolicy(null, scope, value, meta);
+    assert.equal(saved.content.correctionDays, correctionDays);
+    assert.equal(payload.content.correctionDays, correctionDays);
+  }
+});

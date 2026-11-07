@@ -85,6 +85,7 @@ public sealed class InstallmentService(Tpr10DbContext db, PaymentCommandExecutor
 
     internal static async Task<bool> EligibleAsync(Tpr10DbContext db, Guid requestId, Guid? installmentId, CancellationToken ct)
     {
+        if (installmentId is not null && await db.Set<PaymentIncidentResolution>().AnyAsync(x => x.InstallmentId == installmentId && x.AcceptedAtUtc != null, ct)) return false;
         var request = await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == requestId, ct);
         var account = await db.Set<AdvancePaymentAccount>().SingleOrDefaultAsync(x => x.RequestId == requestId, ct);
         if (request.State != "Approved" || request.HoldCode is not null || account?.ApprovedRevisionId is null

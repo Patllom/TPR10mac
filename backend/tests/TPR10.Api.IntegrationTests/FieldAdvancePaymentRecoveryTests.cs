@@ -18,8 +18,8 @@ namespace TPR10.Api.IntegrationTests;
 [Collection("database")]
 public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
 {
-    private static readonly Guid Checker = Guid.Parse("71000000-0000-0000-0000-000000000045");
-    private static readonly Guid CheckerPerson = Guid.Parse("72000000-0000-0000-0000-000000000045");
+    internal static readonly Guid Checker = Guid.Parse("71000000-0000-0000-0000-000000000045");
+    internal static readonly Guid CheckerPerson = Guid.Parse("72000000-0000-0000-0000-000000000045");
     // Removing any outcome transition, or consuming twice, breaks these ledger assertions.
     [Theory]
     [InlineData("Matched", "Paid", 0, 3000)]
@@ -469,8 +469,12 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
     private static async Task<Guid> Sibling(FieldAdvanceFixture f, Guid root)
     {
         await using var db = f.CreateContext();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(7241002)");
         var family = (await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == root)).FamilyId;
-        var request = new AdvanceRequest { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId, ProjectId = ProjectId, OwnerPersonId = AuthorPersonId, CreatedBy = AuthorId, State = "Approved", FamilyId = family, RelationKind = "Supplement", SupplementOfRequestId = root };
+        var familyRow = await db.Set<AdvanceFamily>().FromSqlInterpolated($"SELECT * FROM field_advance_families WHERE id={family} FOR UPDATE").SingleAsync();
+        var order = ++familyRow.Version;
+        var request = new AdvanceRequest { Id = Guid.NewGuid(), WorkspaceId = WorkspaceId, ProjectId = ProjectId, OwnerPersonId = AuthorPersonId, CreatedBy = AuthorId, State = "Approved", FamilyId = family, RelationKind = "Supplement", SupplementOfRequestId = root, FamilyVersionAtCreation = order };
         var revision = new AdvanceRequestRevision
         {
             Id = Guid.NewGuid(),
@@ -510,6 +514,7 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
         var account = await db.Set<AdvancePaymentAccount>().SingleAsync(x => x.RequestId == request.Id);
         account.ApprovedRevisionId = revision.Id; account.Approved = 10000m; account.Spendable = 10000m;
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
         return request.Id;
     }
     private static async Task<Guid> Proposal(FieldAdvanceFixture f, Guid id, string kind)
@@ -517,7 +522,7 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
         await using var db = f.CreateContext(); return (await db.Set<AdvancePaymentProposal>().Where(x => x.InstallmentId == id && x.Kind == kind)
             .OrderByDescending(x => x.InstallmentVersion).FirstAsync()).Id;
     }
-    private static async Task<FinanceResult<PaymentView>> Recover(FieldAdvanceFixture f, Guid request, Guid id, string serviceName, string operation,
+    internal static async Task<FinanceResult<PaymentView>> Recover(FieldAdvanceFixture f, Guid request, Guid id, string serviceName, string operation,
         Files files, object input, PaymentCommand? meta = null, Guid? actor = null, bool forbidIO = false, Func<Task>? beforeBody = null,
         Action? beforeEvidenceLock = null, Action? afterPersistence = null)
     {
@@ -544,7 +549,7 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
     }
     private static PaymentView Value(FinanceResult<PaymentView> result)
     { Assert.Equal(200, result.Status); return Assert.IsType<PaymentView>(result.Value); }
-    private async Task<FieldAdvanceFixture> Ready()
+    internal async Task<FieldAdvanceFixture> Ready()
     {
         var f = await CreateAsync(postgres); await f.SeedPoliciesAsync(); await Grant(f, RecipientId, RecipientPersonId, "payment.record");
         await using (var db = f.CreateContext())
@@ -572,7 +577,7 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
     }
     private static async Task Revoke(FieldAdvanceFixture f)
     { await using var db = f.CreateContext(); (await db.Set<GrantProposal>().SingleAsync(x => x.RecipientId == RecipientId)).EndsAtUtc = f.Clock.GetUtcNow(); await db.SaveChangesAsync(); }
-    private static async Task<PaymentCommand> Meta(FieldAdvanceFixture f, Guid request, Guid? id)
+    internal static async Task<PaymentCommand> Meta(FieldAdvanceFixture f, Guid request, Guid? id)
     {
         await using var db = f.CreateContext(); var r = await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == request);
         return new(Guid.NewGuid(), (await db.Set<AdvanceFamily>().SingleAsync(x => x.Id == r.FamilyId)).Version, r.Version,
@@ -584,7 +589,7 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
         var id = Value(await Prepare(f, request, null, "Create")).InstallmentId!.Value;
         Value(await Prepare(f, request, id, "Submit")); Value(await Prepare(f, request, id, "Approve")); return (request, id);
     }
-    private static async Task<FinanceResult<PaymentView>> Prepare(FieldAdvanceFixture f, Guid request, Guid? id, string operation)
+    internal static async Task<FinanceResult<PaymentView>> Prepare(FieldAdvanceFixture f, Guid request, Guid? id, string operation, string amount = "3000")
     {
         var actor = operation == "Approve" ? Checker : RecipientId; var session = await f.SessionAsync(actor);
         await using var db = f.CreateContext(); var access = FieldAdvanceAccessTests.Access(db, session, f.Clock); var people = new FinancePersonResolver(db, f.Clock);
@@ -593,12 +598,12 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
         var service = new InstallmentService(db, executor, new(db, f.Clock), f.Clock); var meta = await Meta(f, request, id);
         return operation switch
         {
-            "Create" => await service.CreateAsync(actor, request, new("3000", new("Transfer", AuthorPersonId, "test-bank", "owner-account", "owner")), meta, default),
+            "Create" => await service.CreateAsync(actor, request, new(amount, new("Transfer", AuthorPersonId, "test-bank", "owner-account", "owner")), meta, default),
             "Submit" => await service.SubmitAsync(actor, id!.Value, meta, default),
             _ => await new InstallmentReviewService(db, executor, people, f.Clock).ReviewAsync(actor, id!.Value, "Approve", meta, default)
         };
     }
-    private static async Task<FinanceResult<PaymentView>> Call(FieldAdvanceFixture f, Guid request, Guid id, string operation, Files files,
+    internal static async Task<FinanceResult<PaymentView>> Call(FieldAdvanceFixture f, Guid request, Guid id, string operation, Files files,
         ActualPaymentInput? input = null, PaymentCommand? meta = null, Guid? actor = null, bool forbidIO = false, Func<Task>? beforeBody = null)
     {
         var user = actor ?? RecipientId; var session = await f.SessionAsync(user);
@@ -613,9 +618,9 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
         return operation == "Start" ? await service.StartAsync(user, id, meta, default)
             : await service.RecordAsync(user, id, input!, meta, default);
     }
-    private static async Task<ActualPaymentInput> Actual(FieldAdvanceFixture f, Files files, Guid request)
+    internal static async Task<ActualPaymentInput> Actual(FieldAdvanceFixture f, Files files, Guid request, byte[]? content = null)
     {
-        var key = Guid.NewGuid().ToString("N"); var stored = await files.Store.WriteImmutableAsync(files.Options.ActiveStorageId, key, new MemoryStream([1, 2, 3]), default);
+        var key = Guid.NewGuid().ToString("N"); var stored = await files.Store.WriteImmutableAsync(files.Options.ActiveStorageId, key, new MemoryStream(content ?? [1, 2, 3]), default);
         await using var db = f.CreateContext(); var r = await db.Set<AdvanceRequest>().SingleAsync(x => x.Id == request); var id = Guid.NewGuid();
         db.Add(new AdvanceEvidence
         {
@@ -647,7 +652,7 @@ public sealed class FieldAdvancePaymentRecoveryTests(PostgresFixture postgres)
         });
         await db.SaveChangesAsync(); return new("3000", AuthorPersonId, DateOnly.FromDateTime(f.Clock.GetUtcNow().UtcDateTime), "transfer-reference", [id]);
     }
-    private sealed class Files : IDisposable
+    internal sealed class Files : IDisposable
     {
         private readonly string root = Path.Combine(Path.GetTempPath(), "tpr10-execution-" + Guid.NewGuid().ToString("N"));
         public FinanceEvidenceOptions Options { get; }

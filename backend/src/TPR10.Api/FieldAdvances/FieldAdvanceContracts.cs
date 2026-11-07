@@ -5,7 +5,11 @@ public sealed record FinanceDecision(bool Allowed, string Code);
 public sealed record ApprovalBand(int Order, string LevelCode, decimal UpperInclusive);
 public sealed record CategoryRule(Guid Id, string Name, bool Active, string? Unit,
     decimal? StandardRate, string[] EvidenceTypes);
-public sealed record PolicyContent(int ClearingDays, ApprovalBand[] Bands, CategoryRule[] Categories);
+public sealed record PolicyContent(int ClearingDays, ApprovalBand[] Bands, CategoryRule[] Categories)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? CorrectionDays { get; init; }
+}
 public sealed record PolicySnapshot(Guid CompanyVersionId, Guid? ProjectVersionId,
     PolicyContent Content, string ContentHash)
 {

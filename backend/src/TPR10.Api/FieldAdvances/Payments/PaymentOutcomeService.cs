@@ -39,9 +39,10 @@ public sealed class PaymentOutcomeService(Tpr10DbContext db, PaymentCommandExecu
                 var mismatch = input.Actual is not null && PaymentRecovery.Mismatch(input.Actual, revision);
                 var snapshot = new RecoverySnapshot(attempt.Id, revision.Id, revision.ContentHash, owner, input, prepared.Rows,
                     input.Outcome == "Unpaid" ? Guid.NewGuid() : null);
-                db.Add(recovery.Proposal(installment, actor, owner.Person, "PaymentOutcome", snapshot, meta));
+                var proposal = recovery.Proposal(installment, actor, owner.Person, "PaymentOutcome", snapshot, meta);
+                db.Add(proposal);
                 installment.State = "OutcomePending";
-                if (mismatch) recovery.Hold(installment, actor, owner.Person, meta.Reason);
+                if (mismatch) recovery.Hold(installment, actor, owner.Person, meta.Reason, proposal.Id);
                 return Success(requestId.Value, installmentId);
             }, ct);
     }
@@ -291,13 +292,14 @@ internal sealed class PaymentRecovery(Tpr10DbContext db, FinancePersonResolver p
             && proposal.InstallmentVersion == meta.InstallmentVersion;
     internal void Approve(AdvancePaymentProposal proposal, Guid actor, Guid person)
     { proposal.State = "Approved"; proposal.ReviewedBy = actor; proposal.ReviewedByPersonId = person; proposal.ReviewedAtUtc = clock.GetUtcNow(); }
-    internal void Hold(AdvanceInstallment installment, Guid actor, Guid person, string reason)
+    internal void Hold(AdvanceInstallment installment, Guid actor, Guid person, string reason, Guid sourceProposalId)
         => db.Add(new AdvancePaymentHold
         {
             Id = Guid.NewGuid(),
             WorkspaceId = installment.WorkspaceId,
             ProjectId = installment.ProjectId,
             FamilyId = installment.FamilyId,
+            SourceProposalId = sourceProposalId,
             Code = "PaymentMismatch",
             Reason = reason,
             CreatedBy = actor,

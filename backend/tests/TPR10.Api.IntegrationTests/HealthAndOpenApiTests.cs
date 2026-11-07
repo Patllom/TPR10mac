@@ -1,13 +1,12 @@
 using System.Net;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace TPR10.Api.IntegrationTests;
 
-public sealed class HealthAndOpenApiTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthAndOpenApiTests : IClassFixture<OpenApiFactory>
 {
     private readonly HttpClient client;
-    public HealthAndOpenApiTests(WebApplicationFactory<Program> factory) => client = factory.CreateClient();
+    public HealthAndOpenApiTests(OpenApiFactory factory) => client = factory.CreateClient();
 
     [Fact]
     public async Task Liveness_returns_live_without_database()

@@ -4,8 +4,22 @@ using Microsoft.OpenApi;
 
 namespace TPR10.Api.FieldAdvances;
 
-public sealed class FieldAdvanceOpenApiTransformer : IOpenApiOperationTransformer
+public sealed class FieldAdvanceOpenApiTransformer : IOpenApiOperationTransformer, IOpenApiSchemaTransformer
 {
+    public Task TransformAsync(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken cancellationToken)
+    {
+        var property = context.JsonPropertyInfo;
+        var type = property?.PropertyType ?? context.JsonTypeInfo.Type;
+        if (property is not null && property.DeclaringType.Namespace == typeof(Settlements.SettlementCommand).Namespace
+            && (Nullable.GetUnderlyingType(type) ?? type) == typeof(decimal))
+        {
+            schema.Type = JsonSchemaType.String | (Nullable.GetUnderlyingType(type) is null ? (JsonSchemaType)0 : JsonSchemaType.Null);
+            schema.Format = null;
+            schema.Pattern = string.Equals(property.Name, "quantity", StringComparison.OrdinalIgnoreCase)
+                ? @"^-?[0-9]+(\.[0-9]{1,4})?$" : @"^-?[0-9]+(\.[0-9]{1,2})?$";
+        }
+        return Task.CompletedTask;
+    }
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
         if (context.Description.RelativePath?.StartsWith("api/v1/field-advances/", StringComparison.Ordinal) != true)
@@ -36,6 +50,15 @@ public sealed class FieldAdvanceOpenApiTransformer : IOpenApiOperationTransforme
         if (context.Description.RelativePath?.EndsWith("/payment-context", StringComparison.Ordinal) == true
             || context.Description.RelativePath == "api/v1/field-advances/payment-scopes")
             operation.Description += " payment-scopes page เริ่ม1 pageSize1–100 default25 เฉพาะ finance.check/payment.record ตรงโครงการ; payment-context คืน allowedActions ตามสิทธิ์และสถานะปัจจุบัน ไม่มี raw identity/history. ตรวจ projection ทั้งชุดซ้ำก่อนส่ง แม้สิทธิ์อ่านยังอยู่แต่สิทธิ์จ่ายเปลี่ยน; hints ไม่แทน transaction authorization.";
+        if (context.Description.ActionDescriptor.EndpointMetadata.OfType<TPR10.Api.FieldAdvances.Settlements.SettlementApiMetadata>().Any())
+        {
+            operation.Description = "เคลียร์ค่าใช้จ่าย: session/MFA/CSRF และสิทธิ์ปัจจุบันของ SettlementAccess; ตรวจ request/entity/scope/version ก่อน serialize และส่งข้อมูลภายใต้ identity lock. 403 ไม่คืนข้อมูลที่เตรียมไว้; 409 โหลดใหม่. private, no-store. เงินและจำนวนเป็น decimal string; commandId ผูก input ห้าม retry ด้วย ID ใหม่เมื่อไม่ทราบผล. รายการ take 1–100 default25, cursor ผูก request และชนิดรายการ เรียง ID คงที่. family จำกัดทั้ง candidate query และ current-rights checks ต่อหน้า; อาจเป็นหน้าว่างที่ยังมี nextCursor. cursor family เข้ารหัสผูก actor/request/familyVersion; pageTotals รวมเฉพาะ visible requests หน้านี้ (totalsScope=visible-page), pageComplete หมายถึงอ่านได้ครบ scan window นี้, pageSettled รับรองเฉพาะหน้านี้ ไม่ใช่ทั้ง family. หลักฐานเจ้าของ/ผู้ยื่นแทนไม่สร้าง Payer และดาวน์โหลดเฉพาะคำขอที่ระบุ. ไม่มี API ปิดคำขอแทน worker; ปิดเคสปรับปรุงเป็นอีก workflow. สถานะตอบกลับตาม metadata ของแต่ละ endpoint; ไม่ครอบคลุมการแก้ OpenAPI 500 ทั้งระบบ.";
+            if (context.Description.HttpMethod == "POST" && context.Description.RelativePath?.EndsWith("/evidence", StringComparison.Ordinal) == true && operation.RequestBody?.Content is { } media)
+                foreach (var entry in media.Values) entry.Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
+            if (context.Description.HttpMethod == "GET" && context.Description.RelativePath?.Contains("/evidence/", StringComparison.Ordinal) == true
+                && operation.Responses?.TryGetValue("200", out var settlementDownload) == true && settlementDownload.Content is { } downloads)
+                foreach (var entry in downloads.Values) entry.Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
+        }
         return Task.CompletedTask;
     }
 }

@@ -77,6 +77,7 @@ app.Use(async (context, next) =>
         context.Response.OnStarting(() =>
         {
             context.Response.Headers.CacheControl = context.GetEndpoint()?.Metadata.GetMetadata<TPR10.Api.FieldAdvances.Payments.PaymentApiMetadata>() is not null
+                || context.GetEndpoint()?.Metadata.GetMetadata<TPR10.Api.FieldAdvances.Settlements.SettlementApiMetadata>() is not null
                 ? "private, no-store" : "no-store";
             return Task.CompletedTask;
         });

@@ -1,7 +1,7 @@
 import type { FinanceScope, PolicySnapshot } from './policy-types';
 export type { FinanceScope } from './policy-types';
 export type RequestMode = 'mine' | 'delegated' | 'review' | 'report';
-export type RequestState = 'Draft' | 'AwaitingOwner' | 'PendingApproval' | 'Held' | 'Returned' | 'Approved' | 'Rejected' | 'Withdrawn';
+export type RequestState = 'Draft' | 'AwaitingOwner' | 'PendingApproval' | 'Held' | 'Returned' | 'Approved' | 'Rejected' | 'Withdrawn' | 'Closed';
 export interface RequestCommand { commandId: string; expectedVersion: number; reason: string }
 export interface EstimateLineInput { id: string; categoryId: string; description: string; mode: 'QuantityRate' | 'LumpSum'; quantity: string | null; unitRate: string | null; lumpSum: string | null }
 export interface RequestContent { kind: 'Individual' | 'Team'; purpose: string; fieldStart: string; fieldEnd: string; neededOn: string; teamPersonIds: string[]; lines: EstimateLineInput[] }

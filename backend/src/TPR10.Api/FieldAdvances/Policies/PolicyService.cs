@@ -47,6 +47,7 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
             ExpectedActiveVersion = meta.Policy.ExpectedActiveVersion,
             State = "Draft",
             ClearingDays = content.ClearingDays,
+            CorrectionDays = content.CorrectionDays,
             ContentHash = ContentHash(scope, meta.Policy.Mode, baseCompanyVersionId, content),
             CreatedBy = actorId,
             CreatedByPersonId = person,
@@ -83,6 +84,7 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
         db.Attach(row);
         row.Mode = options.Mode; row.BaseCompanyVersionId = options.BaseCompanyVersionId;
         row.ExpectedActiveRevisionId = options.ExpectedActiveRevisionId; row.ExpectedActiveVersion = options.ExpectedActiveVersion;
+        row.CorrectionDays = content.CorrectionDays;
         row.ClearingDays = content.ClearingDays; row.ContentHash = ContentHash(scope, options.Mode, row.BaseCompanyVersionId, content);
         row.State = "Draft"; row.Version++;
         // Remove old composite keys before adding their replacements, within the same transaction.
@@ -284,7 +286,8 @@ public sealed class PolicyService(Tpr10DbContext db, FinanceAccess access, Finan
     internal static PolicyContent Copy(PolicyContent content) => new(content.ClearingDays,
         content.Bands.Select(x => x with { UpperInclusive = CanonicalMoney(x.UpperInclusive) }).ToArray(),
         content.Categories.OrderBy(x => x.Id).Select(x => x with
-        { StandardRate = x.StandardRate is { } rate ? CanonicalMoney(rate) : null, EvidenceTypes = [.. x.EvidenceTypes.Order(StringComparer.Ordinal)] }).ToArray());
+        { StandardRate = x.StandardRate is { } rate ? CanonicalMoney(rate) : null, EvidenceTypes = [.. x.EvidenceTypes.Order(StringComparer.Ordinal)] }).ToArray())
+    { CorrectionDays = content.CorrectionDays };
     private static string Mode(PolicyRevision row) => row.Mode ?? (row.ProjectId is null ? "Company" : "Override");
     private static FinanceScope Scope(PolicyRevision row) => new(row.WorkspaceId, row.ProjectId);
     private static string EditCapability(FinanceScope scope) => scope.ProjectId is null ? "policy.edit.company" : "policy.edit.project";

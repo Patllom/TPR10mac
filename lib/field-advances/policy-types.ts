@@ -1,7 +1,7 @@
 export interface FinanceScope { workspaceId: string; projectId: string | null }
 export interface ApprovalBand { order: number; levelCode: string; upperInclusive: string }
 export interface CategoryRule { id: string; name: string; active: boolean; unit: string | null; standardRate: string | null; evidenceTypes: string[] }
-export interface PolicyContent { clearingDays: number; bands: ApprovalBand[]; categories: CategoryRule[] }
+export interface PolicyContent { clearingDays: number; correctionDays?: number | null; bands: ApprovalBand[]; categories: CategoryRule[] }
 export type PolicyMode = 'Company' | 'Override' | 'Inherit';
 export interface PolicyCommandOptions { mode: PolicyMode; sourcePolicyRevisionId: string | null; baseCompanyVersionId: string | null; expectedActiveRevisionId: string | null; expectedActiveVersion: number; expectedContentHash: string | null }
 export interface CommandMeta { commandId: string; expectedVersion: number; reason: string; policy: PolicyCommandOptions }

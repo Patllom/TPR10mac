@@ -10,6 +10,7 @@ using TPR10.Api.FieldAdvances.Data;
 using TPR10.Api.FieldAdvances.Payments;
 using TPR10.Api.FieldAdvances.Requests;
 using TPR10.Api.FieldAdvances.Evidence;
+using TPR10.Api.FieldAdvances.Settlements;
 using static TPR10.Api.IntegrationTests.FieldAdvanceFixture;
 using L = TPR10.Api.IntegrationTests.FieldAdvanceRequestLifecycleTests;
 using P = TPR10.Api.IntegrationTests.FieldAdvancePolicyTests;
@@ -22,6 +23,123 @@ public sealed class FieldAdvancePaymentTerminationTests(PostgresFixture postgres
     private static readonly Guid Director = Guid.Parse("71000000-0000-0000-0000-000000000051");
     private static readonly Guid Payer = Guid.Parse("71000000-0000-0000-0000-000000000052");
     private static readonly Guid Checker = Guid.Parse("71000000-0000-0000-0000-000000000053");
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Task12_resolved_incident_context_matches_termination_commands(bool paid)
+    {
+        await using var f = await Ready(); using var files = new EvidenceFiles(); using var keys = new TestKeyMaterial();
+        var (request, source, incident) = await Task12Incident(f, files, paid);
+        await using (var db = f.CreateContext())
+        {
+            var bridge = new IncidentPaymentBridge(db, await FieldAdvanceSettlementAccessTests.Access(f, db, Checker),
+                await FieldAdvanceSettlementAccessTests.Executor(f, db, Checker), f.Clock, files.Options);
+            Assert.Equal(200, (await bridge.ReleaseHoldAsync(Checker, request, incident,
+                await FieldAdvancePaymentIncidentTests.Command(f, request, incident), default)).Status);
+        }
+        Guid shortfall;
+        await using (var db = f.CreateContext())
+        {
+            var bridge = new IncidentPaymentBridge(db, await FieldAdvanceSettlementAccessTests.Access(f, db, Payer),
+                await FieldAdvanceSettlementAccessTests.Executor(f, db, Payer), f.Clock, files.Options);
+            var prepared = await bridge.PrepareShortfallAsync(Payer, request, incident, 2000,
+                await FieldAdvanceSettlementAccessTests.Meta(f, request), default);
+            Assert.Equal(201, prepared.Status); shortfall = prepared.Value!.EntityId!.Value;
+        }
+        Value(await Payment(f, request, shortfall, "Review"));
+        Value(await Payment(f, request, shortfall, "Start"));
+        Value(await Record(f, files, request, shortfall));
+        Assert.Equal(409, (await Payment(f, request, source, "Start")).Status);
+        Assert.Equal(409, (await Record(f, files, request, source, amount: paid ? "19000" : "10000")).Status);
+        await using (var db = f.CreateContext())
+        {
+            var account = await db.Set<AdvancePaymentAccount>().SingleAsync();
+            Assert.Equal(20000m, account.Spendable); Assert.Equal(0m, account.Reserved);
+            Assert.Equal(paid ? 21000m : 2000m, account.Paid);
+            Assert.Equal(paid ? 19000m : 10000m, account.EffectiveUsage);
+            Assert.Equal(paid ? "Paid" : "IncidentResolved", (await db.Set<AdvanceInstallment>().SingleAsync(x => x.Id == source)).State);
+            Assert.Equal(paid ? "Matched" : "Mismatch", (await db.Set<AdvancePaymentAttempt>().SingleAsync(x => x.InstallmentId == source)).State);
+            Assert.Equal(paid ? 0m : 10000m, (await db.Set<IncidentPaymentAdjustment>().SingleAsync()).Amount);
+        }
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var checker = await FieldAdvancePolicyHttpTests.Client(factory, f, Checker);
+        var context = await Task12Context(checker, request);
+        if (paid) Assert.Contains("terminate-remaining", Task12Actions(context));
+        var proposal = await ConfirmTermination(f, request);
+        using var director = await FieldAdvancePolicyHttpTests.Client(factory, f, Director);
+        var disposition = await Task12Context(director, request);
+        Assert.Contains("finalize", Task12Actions(disposition.GetProperty("proposals").EnumerateArray().Single(x => x.GetProperty("proposalId").GetGuid() == proposal)));
+        Assert.False(context.GetProperty("workflow").GetProperty("outcomeUnclear").GetBoolean());
+        Assert.Contains("terminate-remaining", Task12Actions(context));
+        Assert.Equal(paid ? 19000m : 10000m, Value(await Disposition(f, request, "Finalize", proposal)).Spendable);
+    }
+
+    [Fact]
+    public async Task Task12_context_without_source_adjustment_stays_fail_closed()
+    {
+        await using var f = await Ready(); using var files = new EvidenceFiles(); using var keys = new TestKeyMaterial();
+        var (request, source, _) = await Task12Incident(f, files, false);
+        await using var factory = new ApiFactory(f.Database.ConnectionString, "Production", f.Clock, keys.Settings);
+        using var checker = await FieldAdvancePolicyHttpTests.Client(factory, f, Checker);
+        Assert.True((await Task12Context(checker, request)).GetProperty("workflow").GetProperty("outcomeUnclear").GetBoolean());
+        var proposal = await ConfirmTermination(f, request);
+        using var director = await FieldAdvancePolicyHttpTests.Client(factory, f, Director);
+        var context = await Task12Context(director, request);
+        Assert.DoesNotContain("finalize", Task12Actions(context.GetProperty("proposals").EnumerateArray().Single(x => x.GetProperty("proposalId").GetGuid() == proposal)));
+        Assert.Equal(409, (await Disposition(f, request, "Finalize", proposal)).Status);
+        Assert.Equal(409, (await Payment(f, request, source, "Start")).Status);
+        Assert.Equal(409, (await Record(f, files, request, source, amount: "10000")).Status);
+        await using var db = f.CreateContext(); Assert.Empty(await db.Set<IncidentPaymentAdjustment>().ToArrayAsync());
+    }
+
+    private static string?[] Task12Actions(JsonElement context)
+        => context.GetProperty("allowedActions").EnumerateArray().Select(x => x.GetString()).ToArray();
+    private static async Task<JsonElement> Task12Context(HttpClient client, Guid request)
+    {
+        var response = await client.GetAsync($"/api/v1/field-advances/requests/{request}/payment-context");
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()); return json.RootElement.Clone();
+    }
+    private static async Task<(Guid Request, Guid Source, Guid Incident)> Task12Incident(FieldAdvanceFixture f, EvidenceFiles files, bool paid)
+    {
+        var root = await Original(f, 200); var amount = paid ? "19000" : "10000";
+        var source = Value(await Payment(f, root.Id, null, "Create", amount: amount)).InstallmentId!.Value;
+        Value(await Payment(f, root.Id, source, "Submit")); Value(await Payment(f, root.Id, source, "Review"));
+        Value(await Payment(f, root.Id, source, "Start"));
+        if (paid) Value(await Record(f, files, root.Id, source, amount: amount));
+        var evidenceId = await Evidence(f, files, root.Id);
+        Guid attempt;
+        await using (var db = f.CreateContext())
+        {
+            using var provider = await Provider(f, db, Payer);
+            var evidence = new FinanceEvidenceService(db, provider.GetRequiredService<PaymentAccess>(), files.Store, new RejectPdf(), files.Options, f.Clock);
+            var hold = new PaymentHoldService(db, provider.GetRequiredService<PaymentCommandExecutor>(),
+                provider.GetRequiredService<FinancePersonResolver>(), evidence, files.Options, f.Clock);
+            Value(await hold.ReportMismatchAsync(Payer, source, new(paid ? "17000" : "8000", AuthorPersonId,
+                new(2026, 10, 24), "ยอดรับจริง", [evidenceId]), await Meta(f, root.Id, source), default));
+            attempt = (await db.Set<AdvancePaymentAttempt>().SingleAsync(x => x.InstallmentId == source)).Id;
+        }
+        Guid incident;
+        await using (var db = f.CreateContext())
+        {
+            var service = new PaymentIncidentService(db, await FieldAdvanceSettlementAccessTests.Access(f, db, Payer),
+                await FieldAdvanceSettlementAccessTests.Executor(f, db, Payer), f.Clock, files.Options);
+            var result = await service.ProposeAsync(Payer, root.Id, new(attempt, paid ? 17000 : 8000, 0, [evidenceId]),
+                await FieldAdvancePaymentIncidentTests.Command(f, root.Id), default);
+            Assert.Equal(201, result.Status); incident = result.Value!.EntityId!.Value;
+        }
+        await using (var db = f.CreateContext())
+        {
+            var service = new PaymentIncidentService(db, await FieldAdvanceSettlementAccessTests.Access(f, db, Checker),
+                await FieldAdvanceSettlementAccessTests.Executor(f, db, Checker), f.Clock, files.Options);
+            Assert.Equal(200, (await service.ConfirmAsync(Checker, root.Id, incident,
+                await FieldAdvancePaymentIncidentTests.Command(f, root.Id, incident), default)).Status);
+            await db.Set<GrantProposal>().Where(x => x.RecipientId == Checker).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "finance.check", "report.read" }));
+            await db.Set<GrantProposal>().Where(x => x.RecipientId == Director).ExecuteUpdateAsync(x => x.SetProperty(p => p.Capabilities, new[] { "request.approve", "report.read" }));
+        }
+        return (root.Id, source, incident);
+    }
 
     [Theory]
     [InlineData("proposer")]
@@ -402,14 +520,14 @@ public sealed class FieldAdvancePaymentTerminationTests(PostgresFixture postgres
         Value(await Record(f, files, root.Id, id)); return root;
     }
     private static async Task<FinanceResult<PaymentView>> Record(FieldAdvanceFixture f, EvidenceFiles files, Guid request, Guid id,
-        PaymentCommand? meta = null, Guid? evidenceId = null)
+        PaymentCommand? meta = null, Guid? evidenceId = null, string amount = "2000")
     {
         evidenceId ??= await Evidence(f, files, request);
         await using var db = f.CreateContext(); using var provider = await Provider(f, db, Payer);
         var evidence = new FinanceEvidenceService(db, provider.GetRequiredService<PaymentAccess>(), files.Store, new RejectPdf(), files.Options, f.Clock);
         var service = new PaymentExecutionService(db, provider.GetRequiredService<PaymentCommandExecutor>(), new(db, f.Clock),
             provider.GetRequiredService<FinancePersonResolver>(), evidence, files.Options, f.Clock);
-        return await service.RecordAsync(Payer, id, new("2000", AuthorPersonId, new(2026, 10, 24), "จ่ายทดสอบ", [evidenceId.Value]),
+        return await service.RecordAsync(Payer, id, new(amount, AuthorPersonId, new(2026, 10, 24), "จ่ายทดสอบ", [evidenceId.Value]),
             meta ?? await Meta(f, request, id), default);
     }
 
@@ -527,10 +645,10 @@ public sealed class FieldAdvancePaymentTerminationTests(PostgresFixture postgres
     }
     private static RequestContent Content(int quantity) => new("Individual", "ปรับวงเงิน", new(2026, 10, 24), new(2026, 10, 25), new(2026, 10, 23), [],
         [new(Guid.NewGuid(), Guid.Parse("78000000-0000-0000-0000-000000000001"), "ค่าเดินทาง", "QuantityRate", quantity.ToString(), null, null)]);
-    private static async Task<RequestView> Original(FieldAdvanceFixture f)
+    private static async Task<RequestView> Original(FieldAdvanceFixture f, int quantity = 100)
     {
         var session = await f.SessionAsync(AuthorId); await using var db = f.CreateContext();
-        var draft = await L.Draft(f, db, session).CreateAsync(AuthorId, new(new(WorkspaceId, ProjectId), AuthorPersonId, Content(100)), L.Meta(0), default);
+        var draft = await L.Draft(f, db, session).CreateAsync(AuthorId, new(new(WorkspaceId, ProjectId), AuthorPersonId, Content(quantity)), L.Meta(0), default);
         Assert.Equal(201, draft.Status);
         return await Approve(f, await L.Submit(f, draft.Value!));
     }
@@ -594,7 +712,7 @@ public sealed class FieldAdvancePaymentTerminationTests(PostgresFixture postgres
             _ => throw new ArgumentOutOfRangeException(nameof(method))
         };
     }
-    private static async Task<FinanceResult<PaymentView>> Payment(FieldAdvanceFixture f, Guid request, Guid? id, string operation, PaymentCommand? meta = null, Guid? proposal = null)
+    private static async Task<FinanceResult<PaymentView>> Payment(FieldAdvanceFixture f, Guid request, Guid? id, string operation, PaymentCommand? meta = null, Guid? proposal = null, string amount = "2000")
     {
         var actor = operation is "Review" or "CancelConfirm" ? Checker : Payer;
         await using var db = f.CreateContext(); using var provider = await Provider(f, db, actor);
@@ -603,7 +721,7 @@ public sealed class FieldAdvancePaymentTerminationTests(PostgresFixture postgres
         var cancellation = new PaymentCancellationService(db, executor, ledger, people, null!, new(), f.Clock);
         return operation switch
         {
-            "Create" => await service.CreateAsync(actor, request, new("2000", new("Cash", AuthorPersonId, null, null, null)), meta, default),
+            "Create" => await service.CreateAsync(actor, request, new(amount, new("Cash", AuthorPersonId, null, null, null)), meta, default),
             "Submit" => await service.SubmitAsync(actor, id!.Value, meta, default),
             "Review" => await new InstallmentReviewService(db, executor, people, f.Clock).ReviewAsync(actor, id!.Value, "Approve", meta, default),
             "CancelPropose" => await cancellation.ProposeAsync(actor, id!.Value, meta, default),

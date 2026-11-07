@@ -10,6 +10,7 @@ public static class PolicyValidation
         if (content is null) return ["ต้องระบุเนื้อหากติกา"];
 
         var errors = new List<string>();
+        if (content.CorrectionDays is <= 0) errors.Add("จำนวนวันแก้ไขต้องเป็นจำนวนเต็มบวก");
         if (content.ClearingDays <= 0) errors.Add("จำนวนวันเคลียร์ต้องเป็นจำนวนเต็มบวก");
 
         if (content.Bands is not { Length: > 0 })

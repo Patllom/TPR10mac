@@ -17,14 +17,16 @@ internal static class PolicyReadData
             .OrderBy(x => x.Id).ToArrayAsync(ct)).ToLookup(x => x.PolicyRevisionId);
         return rows.ToDictionary(x => x.Id, x => new PolicyContent(x.ClearingDays,
             bands[x.Id].Select(b => new ApprovalBand(b.Order, b.LevelCode, b.UpperInclusive)).ToArray(),
-            categories[x.Id].Select(c => new CategoryRule(c.Id, c.Name, c.Active, c.Unit, c.StandardRate, c.EvidenceTypes)).ToArray()));
+            categories[x.Id].Select(c => new CategoryRule(c.Id, c.Name, c.Active, c.Unit, c.StandardRate, c.EvidenceTypes)).ToArray())
+        { CorrectionDays = x.CorrectionDays });
     }
 
     internal static async Task<PolicyContent> Content(Tpr10DbContext db, PolicyRevision row, CancellationToken ct) => new(row.ClearingDays,
         await db.Set<PolicyApprovalBand>().AsNoTracking().Where(x => x.PolicyRevisionId == row.Id).OrderBy(x => x.Order)
             .Select(x => new ApprovalBand(x.Order, x.LevelCode, x.UpperInclusive)).ToArrayAsync(ct),
         await db.Set<PolicyCategoryRule>().AsNoTracking().Where(x => x.PolicyRevisionId == row.Id).OrderBy(x => x.Id)
-            .Select(x => new CategoryRule(x.Id, x.Name, x.Active, x.Unit, x.StandardRate, x.EvidenceTypes)).ToArrayAsync(ct));
+            .Select(x => new CategoryRule(x.Id, x.Name, x.Active, x.Unit, x.StandardRate, x.EvidenceTypes)).ToArrayAsync(ct))
+    { CorrectionDays = row.CorrectionDays };
 
     internal static bool ValidMode(PolicyView view) => view.Scope.ProjectId is null
         ? view.Mode == "Company" && view.BaseCompanyVersionId is null

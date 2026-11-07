@@ -17,6 +17,8 @@ public sealed class RequestAccess(Tpr10DbContext db, FinanceAccess access, Finan
                 or "review" or "revise" or "withdraw" or "copy")) return Denied();
         var request = await db.Set<AdvanceRequest>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == requestId, ct);
         if (request is null) return Denied();
+        if (request.RelationKind == "Supplement" && (action is "edit" or "send-to-owner" or "confirm" or "revise" or "review")
+            && !await SupplementService.CanContinueAsync(db, request.Id, ct)) return Denied();
         var scope = new FinanceScope(request.WorkspaceId, request.ProjectId);
         var person = await people.ResolveAsync(actorId, request.WorkspaceId, ct);
         if (person is null) return Denied();

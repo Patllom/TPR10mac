@@ -22,6 +22,9 @@ public sealed class AdvancePaymentAccount
     public decimal Spendable { get; set; }
     public decimal Reserved { get; set; }
     public decimal Paid { get; set; }
+    public decimal IncidentReservationUsage { get; set; }
+    public decimal ActivatedShortfall { get; set; }
+    public decimal EffectiveUsage { get; private set; }
     public bool EverPaid { get; set; }
     public long Version { get; set; } = 1;
 }
@@ -155,6 +158,7 @@ public sealed class AdvancePaymentParticipation
 
 public sealed class AdvancePaymentHold
 {
+    public Guid? SourceProposalId { get; set; }
     public Guid Id { get; set; }
     public Guid WorkspaceId { get; set; }
     public Guid ProjectId { get; set; }
@@ -218,5 +222,38 @@ public sealed class AdvanceEvidenceLocation
     public required string StorageKey { get; set; }
     public bool IsCurrent { get; set; }
     public DateTimeOffset? VerifiedAtUtc { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+}
+
+// Once-only replacement of a source reservation. Historical Reserve/Consume/Paid stay intact.
+public sealed class IncidentPaymentAdjustment
+{
+    public Guid Id { get; set; }
+    public Guid WorkspaceId { get; set; }
+    public Guid ProjectId { get; set; }
+    public Guid FamilyId { get; set; }
+    public Guid RequestId { get; set; }
+    public Guid InstallmentId { get; set; }
+    public Guid IncidentId { get; set; }
+    public Guid AttemptId { get; set; }
+    public Guid CommandId { get; set; }
+    public decimal Amount { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+}
+
+public sealed class PaymentShortfallClaim
+{
+    public Guid Id { get; set; }
+    public Guid WorkspaceId { get; set; }
+    public Guid ProjectId { get; set; }
+    public Guid FamilyId { get; set; }
+    public Guid RequestId { get; set; }
+    public Guid InstallmentId { get; set; }
+    public Guid IncidentId { get; set; }
+    public Guid SourceInstallmentId { get; set; }
+    public Guid SourceAttemptId { get; set; }
+    public Guid CommandId { get; set; }
+    public decimal Amount { get; set; }
+    public string State { get; set; } = "Reserved";
     public DateTimeOffset CreatedAtUtc { get; set; }
 }

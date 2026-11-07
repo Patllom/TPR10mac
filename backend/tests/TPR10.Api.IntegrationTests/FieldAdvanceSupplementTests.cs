@@ -404,30 +404,30 @@ public sealed class FieldAdvanceSupplementTests(PostgresFixture postgres)
             _ => await new PaymentExecutionService(db, executor, ledger, people, null!, new(), f.Clock).StartAsync(actor, installment!.Value, meta, default)
         };
     }
-    private static async Task<SupplementService> Supplements(FieldAdvanceFixture f, Tpr10DbContext db, Guid actor)
+    internal static async Task<SupplementService> Supplements(FieldAdvanceFixture f, Tpr10DbContext db, Guid actor)
     {
         var session = await f.SessionAsync(actor); var access = FieldAdvanceAccessTests.Access(db, session, f.Clock);
         var people = new FinancePersonResolver(db, f.Clock);
         return new(db, new(db, access, people, f.Clock), L.Draft(f, db, session), new AuditEventWriter(db, new CorrelationContext(), f.Clock), f.Clock);
     }
-    private static async Task<RequestView> CreateSupplement(FieldAdvanceFixture f, RequestView source, int quantity)
+    internal static async Task<RequestView> CreateSupplement(FieldAdvanceFixture f, RequestView source, int quantity)
     {
         await using var db = f.CreateContext(); var service = await Supplements(f, db, AuthorId);
         var result = await service.CreateAsync(AuthorId, source.Id, Content(quantity), L.Meta(0), default);
         Assert.Equal(201, result.Status); return result.Value!;
     }
-    private static async Task<ConfirmationQuote> Quote(FieldAdvanceFixture f, RequestView view)
+    internal static async Task<ConfirmationQuote> Quote(FieldAdvanceFixture f, RequestView view)
     {
         await using var db = f.CreateContext(); var session = await f.SessionAsync(AuthorId);
         var result = await L.Submission(f, db, session).QuoteAsync(AuthorId, view.Id, default);
         Assert.Equal(200, result.Status); return result.Value!;
     }
-    private static async Task<FinanceResult<RequestView>> Confirm(FieldAdvanceFixture f, RequestView view, ConfirmationQuote quote)
+    internal static async Task<FinanceResult<RequestView>> Confirm(FieldAdvanceFixture f, RequestView view, ConfirmationQuote quote)
     {
         await using var db = f.CreateContext(); var session = await f.SessionAsync(AuthorId);
         return await L.Submission(f, db, session).ConfirmAsync(AuthorId, view.Id, quote.ConfirmationHash, L.Meta(view.Version), default);
     }
-    private static async Task<RequestView> PaidRoot(FieldAdvanceFixture f)
+    internal static async Task<RequestView> PaidRoot(FieldAdvanceFixture f)
     {
         var root = await Original(f);
         // Established payment-account fixture: actual-payment history is represented by EverPaid/Paid.
@@ -435,7 +435,7 @@ public sealed class FieldAdvanceSupplementTests(PostgresFixture postgres)
         account.Paid = 2000m; account.EverPaid = true; await db.SaveChangesAsync(); return root;
     }
     private static readonly Guid Director = Guid.Parse("71000000-0000-0000-0000-000000000051");
-    private async Task<FieldAdvanceFixture> Ready()
+    internal async Task<FieldAdvanceFixture> Ready()
     {
         var f = await L.Ready(postgres);
         await using (var db = f.CreateContext())
@@ -458,7 +458,7 @@ public sealed class FieldAdvanceSupplementTests(PostgresFixture postgres)
         await Actor(f, Director, "request.approve", "director");
         return f;
     }
-    private static async Task Actor(FieldAdvanceFixture f, Guid actor, string capability, string? level = null)
+    internal static async Task Actor(FieldAdvanceFixture f, Guid actor, string capability, string? level = null)
     {
         await using var db = f.CreateContext();
         await db.Database.ExecuteSqlAsync($"INSERT INTO users(id,username,normalized_username) VALUES ({actor},{actor.ToString()},{actor.ToString()})");
@@ -472,7 +472,7 @@ public sealed class FieldAdvanceSupplementTests(PostgresFixture postgres)
         proposal.Capabilities = [capability]; proposal.ApprovalLevels = level is null ? [] : [level];
         proposal.PrimaryApprovalLevels = level is null ? [] : [level]; await db.SaveChangesAsync();
     }
-    private static RequestContent Content(int quantity) => new("Individual", "ปรับวงเงิน", new(2026, 10, 24), new(2026, 10, 25), new(2026, 10, 23), [],
+    internal static RequestContent Content(int quantity) => new("Individual", "ปรับวงเงิน", new(2026, 10, 24), new(2026, 10, 25), new(2026, 10, 23), [],
         [new(Guid.NewGuid(), Guid.Parse("78000000-0000-0000-0000-000000000001"), "ค่าเดินทาง", "QuantityRate", quantity.ToString(), null, null)]);
     private static async Task<RequestView> Original(FieldAdvanceFixture f, Guid? actor = null)
     {

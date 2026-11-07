@@ -163,7 +163,7 @@ public sealed class PaymentUiService(Tpr10DbContext db, PaymentAccess access, Fi
         // The pending request's contents and identity are never exposed through this family status hint.
         var pendingState = family.PendingSupplementId is null ? null : await db.Set<AdvanceRequest>().Where(x => x.Id == family.PendingSupplementId).Select(x => x.State).SingleOrDefaultAsync(ct);
         var person = await drafts.AuthorizeCreateAsync(actor, new(request.WorkspaceId, request.ProjectId), request.OwnerPersonId, ct);
-        if (person is not null && family.PendingSupplementId is null && await SupplementService.EligibleAsync(db, request.FamilyId, ct))
+        if (person is not null && family.PendingSupplementId is null && await SupplementService.CanCreateAsync(db, request.FamilyId, ct))
         {
             var history = await FamilyParticipation.ReadHistoryAsync(db, request.FamilyId, ct);
             if (!history.ApprovedPersonIds.Contains(person.Value) && !history.CheckerPersonIds.Contains(person.Value) && !history.PayerPersonIds.Contains(person.Value)) actions.Add("supplements");
@@ -171,11 +171,12 @@ public sealed class PaymentUiService(Tpr10DbContext db, PaymentAccess access, Fi
         if ((await access.CheckAsync(actor, request.Id, "terminate-propose", ct)).Allowed)
         {
             if (request.State == "Approved" && account.ApprovedRevisionId == revision.Id && approved && revision.Total == account.Approved
-                && revision.ApprovalBasisAmount >= account.Approved && account.Spendable > account.Paid) actions.Add("terminate-remaining");
+                && revision.ApprovalBasisAmount >= account.Approved && account.Spendable > PaymentCapacity.Usage(account)) actions.Add("terminate-remaining");
             else if (request.State is "Rejected" or "Withdrawn" && account.ApprovedRevisionId is not null && revision.Id != account.ApprovedRevisionId && hold is not null && unpaid)
             { actions.Add("resume-original"); actions.Add("terminate-remaining"); }
         }
-        return new(account.EverPaid, await db.Set<AdvancePaymentAttempt>().AnyAsync(x => x.RequestId == request.Id && x.State != "Matched" && x.State != "Unpaid", ct),
+        return new(account.EverPaid, await db.Set<AdvancePaymentAttempt>().AnyAsync(x => x.RequestId == request.Id && x.State != "Matched" && x.State != "Unpaid"
+            && !db.Set<IncidentPaymentAdjustment>().Any(a => a.AttemptId == x.Id), ct),
             request.RelationKind, pendingState, hold is null ? null : request.State, approved && request.State == "Approved", cleared,
             request.OwnerPersonId, new(request.WorkspaceId, request.ProjectId));
     }
@@ -227,8 +228,9 @@ public sealed class PaymentUiService(Tpr10DbContext db, PaymentAccess access, Fi
                     || await db.Set<AdvancePaymentProposal>().AnyAsync(x => x.RequestId == r.Id && x.Kind == "PaymentDisposition" && x.RequestVersion > p.RequestVersion, ct)) return [];
                 if (p.State == "Pending" && p.FamilyVersion == familyVersion && p.RequestVersion == requestVersion) return ["confirm"];
                 if (p.State == "Approved" && p.ReviewedAtUtc is not null && p.ReviewedBy == actor && p.ReviewedByPersonId == person && a.Reserved == 0
-                    && !await db.Set<AdvanceInstallment>().AnyAsync(x => x.RequestId == r.Id && x.State != "Paid" && x.State != "Cancelled", ct)
-                    && !await db.Set<AdvancePaymentAttempt>().AnyAsync(x => x.RequestId == r.Id && x.State != "Matched" && x.State != "Unpaid", ct)) return ["finalize"];
+                    && !await db.Set<AdvanceInstallment>().AnyAsync(x => x.RequestId == r.Id && x.State != "Paid" && x.State != "Cancelled" && x.State != "IncidentResolved", ct)
+                    && !await db.Set<AdvancePaymentAttempt>().AnyAsync(x => x.RequestId == r.Id && x.State != "Matched" && x.State != "Unpaid"
+                        && !db.Set<IncidentPaymentAdjustment>().Any(a => a.AttemptId == x.Id), ct)) return ["finalize"];
                 return [];
             }
             var d = JsonSerializer.Deserialize<DispositionSnapshot>(p.BeforeJson);
