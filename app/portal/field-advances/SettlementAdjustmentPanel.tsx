@@ -1,6 +1,7 @@
 'use client';
 
 import type { SettlementWorkItem } from '@/lib/field-advances/settlement-work-client';
+import { recoverySourceLabel } from '@/lib/field-advances/ui-labels';
 
 export default function SettlementAdjustmentPanel({ item, onDownload, disabled }: {
   item: SettlementWorkItem;
@@ -42,7 +43,7 @@ export default function SettlementAdjustmentPanel({ item, onDownload, disabled }
     </>}
     {detail.recovery && <>
       <h3 className="font-semibold">เงินเรียกคืน</h3>
-      <p>{detail.recovery.returnKind} · {detail.recovery.amount} บาท · {detail.recovery.returnedOn}</p>
+      <p>{recoverySourceLabel(detail.recovery.returnKind)} · {detail.recovery.amount} บาท · {detail.recovery.returnedOn}</p>
       <p>หลักฐาน {detail.recovery.evidenceIds.length} ไฟล์</p>
     </>}
     {detail.excess && <>

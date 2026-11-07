@@ -1,4 +1,5 @@
 'use client';
+import { holdLabel, reviewStateLabel } from '@/lib/field-advances/ui-labels';
 import { useEffect, useRef, useState } from 'react';
 import { createPaymentClient, PaymentError } from '@/lib/field-advances/payment-client';
 import { createRequestClient, RequestError } from '@/lib/field-advances/request-client';
@@ -131,9 +132,9 @@ export default function CeilingAmendmentPanel({ userId, requestId, source, onCha
         {source?.state === 'Closed' && hasAdjustment && <p role="status">ปิดแล้ว มีรายการปรับปรุง</p>}
         {workflow.everPaid ? <p>เคยจ่ายเงินจริงแล้ว ขอใหม่เฉพาะส่วนเพิ่ม ไม่ปรับวงเงินเดิม</p> : <p>ก่อนจ่ายเงินจริง สามารถเสนอปรับวงเงินเมื่อเข้าเงื่อนไข</p>}
         {workflow.outcomeUnclear && <p role="status">พักการปรับวงเงิน: ยังมีผลจ่ายไม่ชัดเจน ต้องสะสางก่อน</p>}
-        {workflow.pendingSupplementState && <p>มีส่วนเพิ่มค้าง ({workflow.pendingSupplementState}) รวมส่งกลับ/พัก ต้องพิจารณาให้เสร็จก่อนส่งรายการถัดไป</p>}
-        {workflow.amendmentState && <><p>ผลฉบับปรับวงเงิน: {workflow.amendmentState} ไม่ลบวงเงินอนุมัติเดิม</p><p>อนุมัติฉบับใหม่: {workflow.amendmentApproved ? 'ครบแล้ว' : 'ยังไม่ครบ'} · สะสางงวดเดิม: {workflow.installmentsCleared ? 'ครบแล้ว' : 'ยังไม่ครบ'}</p><p>เปิดใช้วงเงินใหม่เมื่อครบสองเงื่อนไขเท่านั้น และคงเหตุระงับอื่น</p></>}
-        {summary && <p>วงเงินอนุมัติที่ใช้จ่ายอยู่ {summary.approved} บาท · เหตุระงับ {summary.holdCodes.join(', ') || 'ไม่มี'}</p>}
+        {workflow.pendingSupplementState && <p>มีส่วนเพิ่มค้าง ({reviewStateLabel(workflow.pendingSupplementState)}) รวมส่งกลับ/พัก ต้องพิจารณาให้เสร็จก่อนส่งรายการถัดไป</p>}
+        {workflow.amendmentState && <><p>ผลฉบับปรับวงเงิน: {reviewStateLabel(workflow.amendmentState)} ไม่ลบวงเงินอนุมัติเดิม</p><p>อนุมัติฉบับใหม่: {workflow.amendmentApproved ? 'ครบแล้ว' : 'ยังไม่ครบ'} · สะสางงวดเดิม: {workflow.installmentsCleared ? 'ครบแล้ว' : 'ยังไม่ครบ'}</p><p>เปิดใช้วงเงินใหม่เมื่อครบสองเงื่อนไขเท่านั้น และคงเหตุระงับอื่น</p></>}
+        {summary && <p>วงเงินอนุมัติที่ใช้จ่ายอยู่ {summary.approved} บาท · เหตุระงับ {summary.holdCodes.map(holdLabel).join(', ') || 'ไม่มี'}</p>}
         {context.variant === 'request' && !editing && <div className="flex flex-wrap gap-3">
           {source && context.allowedActions.includes('supplements') && <button disabled={busy} onClick={() => void edit('supplement')}>ขอส่วนเพิ่ม</button>}
           {source && context.allowedActions.includes('ceiling-amendment') && <button disabled={busy} onClick={() => void edit('amendment')}>ปรับวงเงินก่อนจ่าย</button>}

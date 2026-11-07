@@ -1,4 +1,5 @@
  'use client';
+import { holdLabel } from '@/lib/field-advances/ui-labels';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPaymentClient, PaymentError } from '@/lib/field-advances/payment-client';
 import { createRequestClient } from '@/lib/field-advances/request-client';
@@ -76,7 +77,7 @@ export default function PaymentDetails({ userId, requestId }: { userId: string; 
     {pending && <div role="status"><p>กำลังตรวจสอบผล ห้ามจ่ายซ้ำ</p><button disabled={busy} onClick={() => void lookup()}>ตรวจผลคำสั่งเดิม</button></div>}
     <button disabled={busy || !!pending} onClick={() => void reload()}>โหลดใหม่</button>
     {screen && <><p className="break-all">คำขอ {requestId}</p><dl className="grid grid-cols-2 gap-3 rounded border p-4">{(['approved', 'reserved', 'paid', 'available'] as const).map((key, i) => <div key={key}><dt>{['วงเงินอนุมัติ', 'ยอดกันไว้', 'จ่ายแล้ว', 'พร้อมจัดงวด'][i]}</dt><dd data-testid={`payment-${key}`}>{screen.summary[key]}</dd></div>)}</dl><p>บาท · การตรวจผ่านและการกันวงเงินไม่เท่ากับจ่ายเงินจริง</p>
-      {screen.summary.holdCodes.length > 0 && <p role="status">เหตุระงับ: {screen.summary.holdCodes.join(', ')}</p>}
+      {screen.summary.holdCodes.length > 0 && <p role="status">เหตุระงับ: {screen.summary.holdCodes.map(holdLabel).join(', ')}</p>}
       {screen.catalog.evidence.length > 0 && <section aria-label="หลักฐานระดับคำขอ"><h2>หลักฐานของคำขอนี้</h2><p>รายการนี้รวมไฟล์ที่เตรียมไว้ การอัปโหลดไม่ได้ยืนยันว่าจ่ายแล้ว</p>{screen.catalog.evidence.map(e => <button className="block break-all text-left" key={e.id} disabled={busy} onClick={() => void download(e.id)}>ดาวน์โหลดหลักฐานคำขอ {e.id}</button>)}</section>}
       <label className="block">งวดจ่าย<select className="block w-full border p-2" value={detail?.summary.installmentId ?? ''} disabled={busy || !!pending} onChange={e => { selected.current = e.target.value; setScreen(null); void reload(); }}>{screen.catalog.installments.map(x => <option key={x.installmentId} value={x.installmentId!}>{states[x.state] ?? x.state} · {x.installmentId}</option>)}</select></label>
       {!pending && screen.context.allowedActions.includes('installments') && <InstallmentEditor key={`new-${screen.context.requestVersion}`} ownerPersonId={screen.owner} busy={busy} save={(input, reason) => void send('installments', input, reason)} />}
